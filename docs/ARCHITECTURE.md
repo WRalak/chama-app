@@ -11,14 +11,32 @@ packages/shared  Zod request schemas, response types, enums, permission matrix, 
 
 Business rules live in the API. The shared package gives both clients the same validation and labels. Its calculators are used by the API as the source of truth; the UIs use them only to preview. For example, the loan calculator calls `GET /loans/quote`.
 
-## Identity and multi-Chama access
+## Identity, roles and multi-Chama access
 
-- One `User` per person (unique phone). `Membership(groupId, userId)` carries a **per-group role**: chairperson, vice chairperson, treasurer, secretary, auditor or member.
-- `GroupAccessGuard` resolves the caller's membership for any route with `:groupId` and checks `@RequirePermission(...)` against **that group's role only**. A chairperson in group A has no extra rights in group B (covered by e2e tests).
-- Non-members get `404` for a group, so its existence does not leak.
-- Platform roles (`SUPPORT`, `SUPER_ADMIN`) manage the SaaS but **do not** see group finances. Read access needs a `SupportAccessGrant` that states its purpose, is approved by that group's chairperson, is read-only, expires, and audits every request.
-- Auth: phone + password (bcrypt). An SMS OTP verifies the phone before any group features unlock. Short-lived JWT access tokens are paired with rotating refresh tokens; reusing an old refresh token revokes the session. Accounts lock after repeated failures. Sessions are checked on every request, so "sign out other devices" takes effect immediately.
-- Admin web: tokens live in httpOnly cookies. The BFF proxy refreshes them and rejects cross-origin state changes.
+- **One account, many Chamas.** One `User` per person (unique phone). `Membership(groupId, userId)` carries a **per-group role** (chairperson, vice chairperson, treasurer, secretary, auditor, member) plus optional `specialRoles` (loan committee, payout approver, read-only member, joint signatory). The group founder is recorded but gets no permanent control.
+- **Backend enforcement.** `GroupAccessGuard` resolves the caller's membership for any route with `:groupId`. It computes `resolvePermissions(role, group.rolePolicy, specialRoles)` (from `packages/shared/src/permissions.ts`) and checks `@RequirePermission(...)` against **that group only**. Hiding buttons in the apps is cosmetic. A chairperson in group A has no extra rights in group B, and non-members get `404`, so a group's existence does not leak. Suspended members are read-only.
+- **Default matrix.**
+  - Treasurer records, prepares and disburses but does not approve expenses.
+  - Chairperson verifies and approves but does not record payments or expenses.
+  - Secretary handles invitations, meetings, minutes and announcements.
+  - Auditor is read-only, sees the full audit log and raises findings.
+  - Members vote, report their own payments (a reference is required and an officer must verify it) and report discrepancies.
+- **Configurable within safeguards.** `PUT /groups/:id/role-policy` (`PERMISSIONS_CONFIGURE`) lets a group adjust each role's permissions. `PERMISSION_SAFEGUARDS` locks some permissions and blocks others per role. For example, auditors can never record or approve money, members can never verify or approve, and configuring permissions always stays with the chairperson. Rejected changes return `422` listing what was refused. Every change needs a reason and is audited.
+- **Maker-checker everywhere.** The recorder cannot verify, the payer cannot verify their own payment, the borrower cannot approve their own loan, the loan preparer cannot approve it, the payout recipient cannot approve their own payout, and whoever raised a finding cannot resolve it.
+- **Votes and findings.**
+  - Proposals have a quorum and pass threshold. Each eligible member (holding `VOTES_CAST`) gets one ballot. Ballots are append-only, and the audit log records participation but not the choice. Expired votes close automatically.
+  - Audit findings are raised by auditors and answered by the chairperson.
+- **Audit visibility is scoped.** Auditors and chairpersons see the full log. Treasurers and secretaries see their area (finance or administration). Everyone else sees only their own actions.
+- **Platform roles never imply group access.**
+  - `SUPPORT`: account help (send a reset code, unlock).
+  - `PLATFORM_ADMIN`: plans, accounts, stats.
+  - `SUPER_ADMIN`: also manages staff and platform settings (channel kill switches, trial length, support-access cap, maintenance notice).
+  - Reading a group needs a `SupportAccessGrant`. The grant states its purpose, is approved by that group's chairperson, is read-only and time-boxed, and every request under it is audited.
+- **Auth.**
+  - Phone + password (bcrypt). An SMS OTP verifies the phone before group features unlock.
+  - Short-lived JWT access tokens are paired with rotating refresh tokens; reusing a refresh token revokes the session.
+  - Accounts lock after repeated failures. Sessions are checked on every request.
+  - Admin web: tokens live in httpOnly cookies behind a BFF proxy.
 
 ## Financial model
 

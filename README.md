@@ -33,6 +33,10 @@ pnpm dev:mobile         # Expo dev server — open in Expo Go or an emulator
 
 - `0700 000 001` / `Demo1234` — Amina: treasurer of *Jitegemee Table Banking*, chairperson of *Mombasa Investment Chama*, member of *Upendo Merry-Go-Round* and *Family Welfare Group*.
 - `0700 000 099` / `Demo1234` — platform super admin.
+- `0700 000 098` / `Demo1234` — platform admin.
+- `0700 000 097` / `Demo1234` — support agent (no access to group finances without a chair-approved grant).
+
+Roles are per group. See `docs/ARCHITECTURE.md` → *Identity, roles and multi-Chama access* for the permission matrix, optional roles and the safeguards that bound what a group can configure.
 
 In development, OTP codes are written to the API log (`DEV_LOG_OTP=true`) because no SMS provider is configured.
 
