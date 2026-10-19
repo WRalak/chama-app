@@ -16,6 +16,7 @@ export default function Home() {
     const managed = groups.find((g) => g.role !== 'MEMBER') ?? groups[0];
     if (managed) router.replace(`/g/${managed.groupId}/overview`);
     else if (platformRoleHas(me.platformRole, 'platform.view_stats')) router.replace('/platform');
+    else if (platformRoleHas(me.platformRole, 'platform.support')) router.replace('/platform/support');
     else router.replace('/chamas');
   }, [me, groups, router]);
   return <LoadingRows rows={4} />;

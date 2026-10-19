@@ -28,17 +28,25 @@ import {
   X,
   CreditCard,
   LifeBuoy,
+  Vote,
+  SearchCheck,
+  KeyRound,
+  UserCog,
+  SlidersHorizontal,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { LABELS, Permission, PlatformPermission } from '@chamahub/shared';
 import { cn } from '@/lib/utils';
 import { useCan, useGroup, useGroupId, useMe, useMyGroups, usePlatformCan } from '@/lib/session';
 import { EmptyState, LoadingRows } from '@/components/ui/states';
 import { Brand } from './brand';
 
-type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; permission?: Permission };
+/** `permission` may be a list: the item shows if the role holds ANY of them. */
+type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; permission?: Permission | Permission[] };
 
 const GROUP_NAV: NavItem[] = [
   { href: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -53,16 +61,23 @@ const GROUP_NAV: NavItem[] = [
   { href: 'distributions', label: 'Distributions', icon: PieChart, permission: Permission.REPORTS_VIEW },
   { href: 'meetings', label: 'Meetings', icon: CalendarDays, permission: Permission.MEETINGS_VIEW },
   { href: 'reports', label: 'Financial Reports', icon: BarChart3, permission: Permission.REPORTS_VIEW },
-  { href: 'imports', label: 'Imports and Migration', icon: FileSpreadsheet, permission: Permission.IMPORTS_MANAGE },
-  { href: 'audit', label: 'Audit Logs', icon: ScrollText, permission: Permission.AUDIT_VIEW },
+  { href: 'decisions', label: 'Decisions & Votes', icon: Vote },
+  { href: 'imports', label: 'Imports and Migration', icon: FileSpreadsheet, permission: [Permission.IMPORTS_MANAGE, Permission.IMPORTS_APPROVE] },
+  { href: 'audit', label: 'Audit Logs', icon: ScrollText },
+  { href: 'findings', label: 'Audit Findings', icon: SearchCheck, permission: [Permission.FINDINGS_RAISE, Permission.FINDINGS_RESOLVE, Permission.AUDIT_VIEW] },
   { href: 'notifications', label: 'Notifications', icon: Bell },
+  { href: 'roles', label: 'Roles & Permissions', icon: KeyRound, permission: Permission.PERMISSIONS_CONFIGURE },
   { href: 'settings', label: 'Settings', icon: Settings, permission: Permission.GROUP_CONFIGURE },
 ];
+
+const allowed = (can: (p: Permission) => boolean, p?: Permission | Permission[]) => !p || (Array.isArray(p) ? p.some(can) : can(p));
 
 const PLATFORM_NAV: (Omit<NavItem, 'permission'> & { permission: PlatformPermission })[] = [
   { href: '/platform', label: 'Platform overview', icon: Shield, permission: PlatformPermission.PLATFORM_VIEW_STATS },
   { href: '/platform/groups', label: 'All Chamas', icon: Building2, permission: PlatformPermission.PLATFORM_VIEW_STATS },
-  { href: '/platform/users', label: 'Accounts', icon: Users, permission: PlatformPermission.PLATFORM_MANAGE_ACCOUNTS },
+  { href: '/platform/users', label: 'Accounts', icon: Users, permission: PlatformPermission.PLATFORM_SUPPORT },
+  { href: '/platform/staff', label: 'Platform staff', icon: UserCog, permission: PlatformPermission.PLATFORM_MANAGE_ADMINS },
+  { href: '/platform/settings', label: 'Platform settings', icon: SlidersHorizontal, permission: PlatformPermission.PLATFORM_CONFIGURE },
   { href: '/platform/subscriptions', label: 'Subscriptions', icon: CreditCard, permission: PlatformPermission.PLATFORM_VIEW_STATS },
   { href: '/platform/security', label: 'Security events', icon: BookOpenCheck, permission: PlatformPermission.PLATFORM_VIEW_SECURITY },
   { href: '/platform/support', label: 'Support', icon: LifeBuoy, permission: PlatformPermission.PLATFORM_SUPPORT },
@@ -89,7 +104,7 @@ function GroupSwitcher() {
       <DM.Trigger className="flex w-full items-center justify-between gap-2 rounded-md border border-white/10 px-2.5 py-2 text-left hover:bg-white/5">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-white">{current?.name ?? 'Select a Chama'}</p>
-          <p className="truncate text-2xs text-slate-400">{current ? `${LABELS.groupRole[current.role]} · ${LABELS.groupType[current.type]}` : `${groups?.length ?? 0} Chamas`}</p>
+          <p className="truncate text-2xs text-slate-400">{current ? `${LABELS.groupRole[current.role]}${current.specialRoles.length ? ' +' : ''} · ${LABELS.groupType[current.type]}` : `${groups?.length ?? 0} Chamas`}</p>
         </div>
         <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
       </DM.Trigger>
@@ -127,7 +142,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div className="space-y-0.5">
         <NavLink href="/chamas" label="Chamas" icon={ClipboardList} active={pathname === '/chamas'} onClick={onNavigate} />
         {groupId &&
-          GROUP_NAV.filter((i) => !i.permission || can(i.permission)).map((i) => (
+          GROUP_NAV.filter((i) => allowed(can, i.permission)).map((i) => (
             <NavLink key={i.href} href={`/g/${groupId}/${i.href}`} label={i.label} icon={i.icon} active={pathname.startsWith(`/g/${groupId}/${i.href}`)} onClick={onNavigate} />
           ))}
       </div>
@@ -166,6 +181,7 @@ function UserMenu() {
           <div className="px-2 py-1.5">
             <p className="text-sm font-medium text-navy">{me?.fullName}</p>
             <p className="text-xs text-muted">{me?.phone}</p>
+            {me && me.platformRole !== 'USER' && <p className="mt-1 text-2xs font-medium uppercase tracking-wide text-forest">{LABELS.platformRole[me.platformRole]}</p>}
           </div>
           <DM.Separator className="my-1 h-px bg-line" />
           <DM.Item onSelect={signOut} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-danger outline-none data-[highlighted]:bg-red-50">
@@ -188,10 +204,16 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   if (!group) return <LoadingRows />;
   const section = pathname.split('/')[3];
   const item = GROUP_NAV.find((i) => i.href === section);
-  if (item?.permission && !can(item.permission)) {
+  if (item && !allowed(can, item.permission)) {
     return <EmptyState title={`${item.label} is not available for your role`} description={`You are ${LABELS.groupRole[group.myMembership.role].toLowerCase()} in ${group.name}. Ask the chairperson if you need access.`} />;
   }
   return <>{children}</>;
+}
+
+function MaintenanceNotice() {
+  const { data } = useQuery({ queryKey: ['platform-notice'], queryFn: () => api<{ maintenanceNotice: string | null }>('platform-notice'), staleTime: 5 * 60_000 });
+  if (!data?.maintenanceNotice) return null;
+  return <div className="bg-amber-50 px-4 py-2 text-center text-sm text-amber-900" role="status">{data.maintenanceNotice}</div>;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -228,6 +250,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <UserMenu />
           </div>
         </header>
+        <MaintenanceNotice />
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-5 lg:px-6">
           <RouteGuard>{children}</RouteGuard>
         </main>

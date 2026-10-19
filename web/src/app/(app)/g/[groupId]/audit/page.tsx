@@ -2,14 +2,14 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { AuditEventRow, Paginated } from '@chamahub/shared';
+import { AuditEventRow, Paginated, Permission } from '@chamahub/shared';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
 import { Sheet } from '@/components/ui/dialog';
 import { Field, Input, Select } from '@/components/ui/input';
 import { KeyValues, PageHeader, Panel, Toolbar } from '@/components/ui/layout-parts';
 import { api, fileUrl } from '@/lib/api';
-import { useGroupId } from '@/lib/session';
+import { useCan, useGroupId } from '@/lib/session';
 import { dateTime } from '@/lib/utils';
 
 const AREAS = ['payment', 'loan', 'expense', 'fine', 'payout', 'rotation', 'distribution', 'member', 'invitation', 'schedule', 'obligation', 'ledger', 'import', 'meeting', 'minutes', 'statement', 'group', 'support'];
@@ -21,6 +21,7 @@ function Json({ value }: { value: unknown }) {
 
 export default function AuditPage() {
   const groupId = useGroupId();
+  const can = useCan();
   const [page, setPage] = useState(1);
   const [f, setF] = useState({ action: '', from: '', to: '' });
   const [sel, setSel] = useState<AuditEventRow | null>(null);
@@ -28,7 +29,7 @@ export default function AuditPage() {
   const events = useQuery({ queryKey: ['audit', groupId, query], queryFn: () => api<Paginated<AuditEventRow>>(`groups/${groupId}/audit`, { query }), placeholderData: (p) => p });
   return (
     <>
-      <PageHeader title="Audit Logs" description="An append-only record of every action. Entries cannot be edited or deleted — not even by ChamaHub staff." actions={<Button variant="secondary" asChild><a href={fileUrl(`groups/${groupId}/reports/audit`, { format: 'csv', from: f.from || undefined, to: f.to || undefined })}>Export CSV</a></Button>} />
+      <PageHeader title="Audit Logs" description={can(Permission.AUDIT_VIEW) ? 'An append-only record of every action. Entries cannot be edited or deleted — not even by ChamaHub staff.' : can(Permission.AUDIT_VIEW_AREA) ? 'Records for the areas you work in, plus your own actions. The full log is available to the chairperson and auditor.' : 'Your own recorded activity in this group.'} actions={<Button variant="secondary" asChild><a href={fileUrl(`groups/${groupId}/reports/audit`, { format: 'csv', from: f.from || undefined, to: f.to || undefined })}>Export CSV</a></Button>} />
       <Panel flush>
         <Toolbar>
           <Field label="Area" htmlFor="a-a"><Select id="a-a" value={f.action} onChange={(e) => { setF({ ...f, action: e.target.value }); setPage(1); }}><option value="">Everything</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}</Select></Field>

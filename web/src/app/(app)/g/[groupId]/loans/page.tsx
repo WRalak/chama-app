@@ -6,7 +6,8 @@ import { addDays, LABELS, LOAN_STATUSES, LoanDetail, LoanQuote, LoanSummary, PAY
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
-import { Sheet } from '@/components/ui/dialog';
+import { Dialog, DialogContent, Sheet } from '@/components/ui/dialog';
+import { MemberSelect } from '@/components/domain/member-select';
 import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { MoneyInput } from '@/components/ui/money-input';
 import { KeyValues, PageHeader, Panel, StatStrip, Toolbar } from '@/components/ui/layout-parts';
@@ -114,8 +115,31 @@ function LoanDrawer({ loanId, onClose }: { loanId: string | null; onClose: () =>
   );
 }
 
+function PrepareLoan({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const groupId = useGroupId();
+  const [f, setF] = useState({ memberId: '', principalCents: undefined as number | undefined, installments: 3, purpose: '' });
+  const prep = useAction(() => api(`groups/${groupId}/loans/prepare`, { body: { ...f, guarantorMemberIds: [] } }), { success: 'Application prepared. Another officer must approve it.', invalidate: [['loans', groupId]], onSuccess: () => onOpenChange(false) });
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent title="Prepare a loan application" description="For a member who applied on paper or at a meeting. You will not be able to approve it yourself.">
+        <div className="space-y-3">
+          <Field label="Member" htmlFor="pl-m"><MemberSelect id="pl-m" value={f.memberId} onChange={(v) => setF({ ...f, memberId: v })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Amount" htmlFor="pl-a"><MoneyInput id="pl-a" value={f.principalCents} onChange={(v) => setF({ ...f, principalCents: v })} /></Field>
+            <Field label="Installments" htmlFor="pl-n"><Input id="pl-n" type="number" min={1} value={f.installments} onChange={(e) => setF({ ...f, installments: Number(e.target.value) })} /></Field>
+          </div>
+          <Field label="Purpose" htmlFor="pl-p"><Input id="pl-p" value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })} /></Field>
+          <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={() => prep.mutate(undefined)} loading={prep.isPending} disabled={!f.memberId || !f.principalCents || f.purpose.length < 3}>Submit for approval</Button></div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function LoansPage() {
   const groupId = useGroupId();
+  const can = useCan();
+  const [prepare, setPrepare] = useState(false);
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string | null>(null);
@@ -125,7 +149,7 @@ export default function LoansPage() {
   const active = all.filter((l) => l.status === 'DISBURSED');
   return (
     <>
-      <PageHeader title="Loans" description="Applications, approvals, disbursements and the loan portfolio." />
+      <PageHeader title="Loans" description="Applications, approvals, disbursements and the loan portfolio." actions={can(Permission.LOANS_PREPARE) && <Button onClick={() => setPrepare(true)}>Prepare application for a member</Button>} />
       <StatStrip
         stats={[
           { label: 'Pending approval', value: all.filter((l) => l.status === 'PENDING_APPROVAL').length, tone: all.some((l) => l.status === 'PENDING_APPROVAL') ? 'warning' : 'default' },
@@ -167,6 +191,7 @@ export default function LoansPage() {
         <Calculator />
       </div>
       <LoanDrawer loanId={sel} onClose={() => setSel(null)} />
+      <PrepareLoan open={prepare} onOpenChange={setPrepare} />
     </>
   );
 }

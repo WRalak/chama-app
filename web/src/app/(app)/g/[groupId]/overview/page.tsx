@@ -30,7 +30,18 @@ export default function OverviewPage() {
       <>
         <PageHeader title={group.data.name} description={`${LABELS.groupType[group.data.type]} · You are a ${LABELS.groupRole[group.data.myMembership.role].toLowerCase()}`} />
         <Panel>
-          <EmptyState title="The dashboard is for group officers" description="Your contributions, loans, payouts and statements are in the ChamaHub mobile app." />
+          {group.data.myMembership.role === 'MEMBER' ? (
+            <EmptyState title="Members use the ChamaHub mobile app" description="Your contributions, loans, payouts, votes and statements are in the app." />
+          ) : (
+            <div className="space-y-2 text-sm">
+              <p className="text-navy">Your tools in this group:</p>
+              <ul className="flex flex-wrap gap-2">
+                {[['meetings', 'Meetings', Permission.MEETINGS_MANAGE], ['members', 'Members', Permission.MEMBERS_VIEW], ['decisions', 'Decisions & Votes', Permission.GROUP_VIEW], ['notifications', 'Announcements', Permission.ANNOUNCEMENTS_SEND], ['audit', 'Audit records', Permission.AUDIT_VIEW_AREA]]
+                  .filter(([, , p]) => can(p as Permission))
+                  .map(([href, label]) => <li key={href}><Link className="rounded-md border border-line px-3 py-1.5 text-forest hover:bg-canvas" href={`/g/${groupId}/${href}`}>{label}</Link></li>)}
+              </ul>
+            </div>
+          )}
         </Panel>
       </>
     );

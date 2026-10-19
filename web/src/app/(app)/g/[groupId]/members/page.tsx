@@ -2,8 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { ColumnDef } from '@tanstack/react-table';
-import { useMemo, useState } from 'react';
-import { formatKenyanPhone, GROUP_ROLES, GroupRole, InvitationRow, LABELS, MemberRow, normalizeKenyanPhone, ObligationItem, Permission } from '@chamahub/shared';
+import { useEffect, useMemo, useState } from 'react';
+import { formatKenyanPhone, GROUP_ROLES, GroupRole, InvitationRow, LABELS, MemberRow, normalizeKenyanPhone, ObligationItem, Permission, SPECIAL_ROLE_INFO, SPECIAL_ROLES, SpecialRole } from '@chamahub/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/ui/data-table';
@@ -93,12 +93,15 @@ function MemberDrawer({ member, onClose }: { member: MemberRow | null; onClose: 
   const invalidate = [['members', groupId], ['member', groupId, member?.membershipId]];
   const changeRole = useAction(() => api(`groups/${groupId}/members/${member!.membershipId}/role`, { method: 'PATCH', body: { role, reason } }), { success: 'Role updated', invalidate, onSuccess: () => setReason('') });
   const changeStatus = useAction(() => api(`groups/${groupId}/members/${member!.membershipId}/status`, { method: 'PATCH', body: { status, reason } }), { success: 'Membership status updated', invalidate, onSuccess: () => setReason('') });
+  const [special, setSpecial] = useState<SpecialRole[]>(member?.specialRoles ?? []);
+  useEffect(() => setSpecial(member?.specialRoles ?? []), [member]);
+  const changeSpecial = useAction(() => api(`groups/${groupId}/members/${member!.membershipId}/special-roles`, { method: 'PUT', body: { specialRoles: special, reason } }), { success: 'Optional roles updated', invalidate, onSuccess: () => setReason('') });
   const changeShares = useAction(() => api(`groups/${groupId}/members/${member!.membershipId}/shares`, { method: 'PUT', body: { shares: Number(shares), reason } }), { success: 'Shares updated', invalidate, onSuccess: () => setReason('') });
   if (!member) return null;
   const p = profile.data;
   return (
     <Sheet open={!!member} onOpenChange={(o) => !o && onClose()} title={member.fullName} subtitle={`${LABELS.groupRole[member.role]} · joined ${date(member.joinedAt)}`} width="max-w-2xl">
-      <KeyValues items={[['Phone', member.phone], ['Status', <StatusBadge key="s" status={member.status} />], ['Shares', member.shares]]} />
+      <KeyValues items={[['Phone', member.phone], ['Status', <StatusBadge key="s" status={member.status} />], ['Shares', member.shares], ['Optional roles', member.specialRoles.length ? member.specialRoles.map((r) => SPECIAL_ROLE_INFO[r].label).join(', ') : '—'], ...(member.isFounder ? [['Founder', 'Created this group (no special control)'] as [string, string]] : [])]} />
       {profile.isLoading && <LoadingRows rows={3} />}
       {p?.balances && (
         <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
@@ -206,6 +209,20 @@ function MemberDrawer({ member, onClose }: { member: MemberRow | null; onClose: 
               </>
             )}
           </div>
+          {can(Permission.ROLES_ASSIGN) && (
+            <div className="border-t border-line pt-3">
+              <p className="mb-1.5 text-xs font-medium">Optional roles</p>
+              <div className="flex flex-wrap gap-3">
+                {SPECIAL_ROLES.map((r) => (
+                  <label key={r} className="flex items-center gap-1.5 text-sm" title={SPECIAL_ROLE_INFO[r].description}>
+                    <input type="checkbox" checked={special.includes(r)} onChange={(e) => setSpecial(e.target.checked ? [...special, r] : special.filter((x) => x !== r))} />
+                    {SPECIAL_ROLE_INFO[r].label}
+                  </label>
+                ))}
+              </div>
+              <Button size="sm" variant="secondary" className="mt-2" disabled={reason.length < 5} loading={changeSpecial.isPending} onClick={() => changeSpecial.mutate(undefined)}>Save optional roles</Button>
+            </div>
+          )}
         </div>
       )}
     </Sheet>
@@ -228,7 +245,7 @@ export default function MembersPage() {
     () => [
       { accessorKey: 'fullName', header: 'Member', cell: ({ row }) => <span className="font-medium">{row.original.fullName}</span> },
       { accessorKey: 'phone', header: 'Phone', enableSorting: false, cell: ({ row }) => <span className="tabular-nums">{row.original.phone.startsWith('+') ? formatKenyanPhone(row.original.phone) : row.original.phone}</span> },
-      { accessorKey: 'role', header: 'Role', cell: ({ row }) => <Badge tone={row.original.role === 'MEMBER' ? 'neutral' : 'green'}>{LABELS.groupRole[row.original.role]}</Badge> },
+      { accessorKey: 'role', header: 'Role', cell: ({ row }) => <span className="flex flex-wrap gap-1"><Badge tone={row.original.role === 'MEMBER' ? 'neutral' : 'green'}>{LABELS.groupRole[row.original.role]}</Badge>{row.original.specialRoles.map((r) => <Badge key={r} tone={r === 'READ_ONLY' ? 'neutral' : 'blue'}>{SPECIAL_ROLE_INFO[r].label}</Badge>)}{row.original.isFounder && <Badge tone="neutral">Founder</Badge>}</span> },
       { accessorKey: 'status', header: 'Status', cell: ({ row }) => <StatusBadge status={row.original.status} /> },
       { accessorKey: 'joinedAt', header: 'Joined', cell: ({ row }) => date(row.original.joinedAt) },
       { accessorKey: 'shares', header: 'Shares', meta: { align: 'right' } },
