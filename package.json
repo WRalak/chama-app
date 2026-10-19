@@ -2,18 +2,21 @@
   "name": "chamahub",
   "private": true,
   "version": "0.1.0",
-  "description": "ChamaHub — Every Chama. Every Contribution. One Place.",
+  "description": "ChamaHub \u2014 Every Chama. Every Contribution. One Place.",
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build:shared": "pnpm --filter @chamahub/shared build",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --filter @chamahub/shared build && pnpm -r --filter=!@chamahub/shared typecheck",
     "test": "pnpm -r test",
     "dev:api": "pnpm --filter @chamahub/api dev",
     "dev:admin": "pnpm --filter @chamahub/admin dev",
     "dev:mobile": "pnpm --filter @chamahub/mobile start",
     "db:migrate": "pnpm --filter @chamahub/api prisma:migrate",
-    "db:seed": "pnpm --filter @chamahub/api seed"
+    "db:seed": "pnpm --filter @chamahub/api seed",
+    "dev:setup": "pnpm --filter @chamahub/shared build && pnpm --filter @chamahub/api exec prisma migrate deploy && pnpm db:seed"
   }
 }
