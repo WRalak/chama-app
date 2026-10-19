@@ -16,9 +16,44 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { MembersModule } from './modules/members/members.module';
+import { ContributionsModule } from './modules/contributions/contributions.module';
+import { LoansModule } from './modules/loans/loans.module';
+import { FinesModule } from './modules/fines/fines.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
+import { RotationsModule } from './modules/rotations/rotations.module';
+import { DistributionsModule } from './modules/distributions/distributions.module';
+import { MeetingsModule } from './modules/meetings/meetings.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { GroupAuditModule } from './modules/audit/audit.module';
+import { MeModule } from './modules/me/me.module';
+import { ImportsModule } from './modules/imports/imports.module';
+import { PlatformModule } from './modules/platform/platform.module';
+import { DisputesModule } from './modules/disputes/disputes.module';
+import { MpesaModule } from './modules/mpesa/mpesa.module';
+import { JobsModule } from './modules/jobs/jobs.module';
 import { HealthController } from './health.controller';
 
-const featureModules = [AuthModule, UsersModule, GroupsModule, MembersModule];
+const featureModules = [
+  AuthModule,
+  UsersModule,
+  GroupsModule,
+  MembersModule,
+  ContributionsModule,
+  LoansModule,
+  FinesModule,
+  ExpensesModule,
+  RotationsModule,
+  DistributionsModule,
+  MeetingsModule,
+  ReportsModule,
+  GroupAuditModule,
+  MeModule,
+  ImportsModule,
+  PlatformModule,
+  DisputesModule,
+  MpesaModule,
+  JobsModule,
+];
 
 @Module({
   imports: [
