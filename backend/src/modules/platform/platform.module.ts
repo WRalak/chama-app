@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
-import { PlatformController } from './platform.controller';
+import { PlatformController, PlatformNoticeController } from './platform.controller';
+import { AuthModule } from '../auth/auth.module';
 import { GroupSupportGrantsController } from './support-grants.controller';
 
-@Module({ controllers: [PlatformController, GroupSupportGrantsController] })
+@Module({ imports: [AuthModule], controllers: [PlatformController, PlatformNoticeController, GroupSupportGrantsController] })
 export class PlatformModule {}

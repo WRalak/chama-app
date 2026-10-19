@@ -13,7 +13,7 @@ process.env.DISABLE_JOBS = 'true';
 
 import { NestFactory } from '@nestjs/core';
 import * as bcrypt from 'bcryptjs';
-import { addDays, defaultLoanPolicy, GroupRole, permissionsForRole, todayInNairobi } from '@chamahub/shared';
+import { addDays, defaultLoanPolicy, GroupRole, resolvePermissions, todayInNairobi } from '@chamahub/shared';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { MembershipContext } from '../src/common/request';
@@ -75,7 +75,13 @@ async function main() {
     const u = await prisma.user.create({ data: { fullName, phone, passwordHash, phoneVerifiedAt: new Date(), preferences: DEFAULT_PREFERENCES } });
     users[fullName.split(' ')[0]] = u.id;
   }
-  await prisma.user.create({ data: { fullName: 'ChamaHub Platform Admin', phone: '+254700000099', passwordHash, phoneVerifiedAt: new Date(), platformRole: 'SUPER_ADMIN', preferences: DEFAULT_PREFERENCES } });
+  for (const [fullName, phone, platformRole] of [
+    ['ChamaHub Super Admin', '+254700000099', 'SUPER_ADMIN'],
+    ['ChamaHub Platform Admin', '+254700000098', 'PLATFORM_ADMIN'],
+    ['ChamaHub Support Agent', '+254700000097', 'SUPPORT'],
+  ] as const) {
+    await prisma.user.create({ data: { fullName, phone, passwordHash, phoneVerifiedAt: new Date(), platformRole, preferences: DEFAULT_PREFERENCES } });
+  }
   const plan = await prisma.plan.findUniqueOrThrow({ where: { code: 'GROWTH' } });
 
   async function group(name: string, type: 'MERRY_GO_ROUND' | 'TABLE_BANKING' | 'INVESTMENT' | 'WELFARE', roster: [string, GroupRole][], monthsHistory: number, extra: Record<string, unknown> = {}) {
@@ -96,7 +102,7 @@ async function main() {
     const ctx: Record<string, MembershipContext> = {};
     for (const [first, role] of roster) {
       const m = await prisma.membership.create({ data: { groupId: g.id, userId: users[first], role, joinedAt, shares: role === 'MEMBER' ? 2 : 3 } });
-      ctx[first] = { id: m.id, groupId: g.id, userId: users[first], role, permissions: permissionsForRole(role) };
+      ctx[first] = { id: m.id, groupId: g.id, userId: users[first], role, permissions: resolvePermissions(role) };
     }
     return { id: g.id, ctx };
   }
@@ -104,12 +110,13 @@ async function main() {
   /**
    * Records and verifies a payment through the real two-person flow: the
    * verifier is an officer other than the payer, and the recorder is any
-   * recording officer other than the verifier (possibly the payer).
+   * recording officer other than the verifier, or the payer self-reporting.
    */
   async function settle(ctx: Record<string, MembershipContext>, member: MembershipContext, amountCents: number, paidAt: string, extra: Record<string, unknown> = {}) {
     const officers = Object.values(ctx);
     const verifier = officers.find((c) => c.permissions.includes('contributions.verify') && c.id !== member.id)!;
-    const recorder = officers.find((c) => c.permissions.includes('contributions.record') && c.id !== verifier.id)!;
+    // If no other officer records payments, the payer reports their own (with its M-Pesa code).
+    const recorder = officers.find((c) => c.permissions.includes('contributions.record') && c.id !== verifier.id) ?? member;
     const p = await contributions.record(member.groupId, { memberId: member.id, amountCents, method: 'MPESA', reference: `S${Math.random().toString(36).slice(2, 10).toUpperCase()}`, paidAt, purpose: 'CONTRIBUTION', idempotencyKey: k(), ...extra } as never, recorder, meta);
     await contributions.verify(member.groupId, p.id, 'CONFIRM', undefined, verifier, meta);
     return p.id;
@@ -137,7 +144,7 @@ async function main() {
   await settle(jt.ctx, jt.ctx.Faith, 350_000, addDays(today, -10), { purpose: 'LOAN_REPAYMENT', targetId: loan.id });
   await loans.apply(jt.id, { principalCents: 500_000, installments: 3, purpose: 'School fees', guarantorMemberIds: [] }, jt.ctx.Lucy, meta);
   await contributions.record(jt.id, { memberId: jt.ctx.Brian.id, amountCents: 200_000, method: 'CASH', paidAt: today, purpose: 'CONTRIBUTION', idempotencyKey: k(), notes: 'Paid in cash at the meeting' } as never, jt.ctx.Amina, meta);
-  await fines.issue(jt.id, { memberId: jt.ctx.Brian.id, amountCents: 20_000, reason: 'Late contribution', issuedOn: addDays(today, -5) }, jt.ctx.Samuel, meta);
+  await fines.issue(jt.id, { memberId: jt.ctx.Brian.id, amountCents: 20_000, reason: 'Late contribution', issuedOn: addDays(today, -5) }, jt.ctx.Amina, meta);
 
   // 2) Upendo Merry-Go-Round — Amina is a MEMBER.
   const up = await group('Upendo Merry-Go-Round', 'MERRY_GO_ROUND', [['Peter', 'CHAIRPERSON'], ['Joyce', 'TREASURER'], ['Amina', 'MEMBER'], ['Daniel', 'MEMBER'], ['Mercy', 'MEMBER']], 2);
@@ -177,7 +184,14 @@ async function main() {
   await contributions.createSchedule(fw.id, { name: 'Welfare kitty', amountCents: 50_000, frequency: 'MONTHLY', startDate: addDays(today, -40) }, fw.ctx.Faith, meta);
   for (const o of await pastObligations(fw.id, addDays(today, -20))) await settle(fw.ctx, byMembership(fw.ctx, o.membershipId), 50_000, iso(o.dueDate), { targetId: o.id });
 
-  console.log('Demo data seeded. Sign in with 0700 000 001 / Demo1234 (Amina) or 0700 000 099 (platform admin).');
+  // Optional roles and a group decision so those screens have data.
+  await prisma.membership.update({ where: { id: jt.ctx.Peter.id }, data: { specialRoles: ['LOAN_COMMITTEE'] } });
+  await prisma.proposal.create({ data: { groupId: mi.id, title: 'Buy the Kilifi plot', description: 'Use up to KES 300,000 from the investment fund for a deposit on the Kilifi plot, subject to valuation.', quorumPercent: 60, passPercent: 60, eligibleCount: 5, createdById: users.Amina, closesAt: new Date(Date.now() + 5 * 86_400_000) } });
+  await prisma.auditFinding.create({ data: { groupId: mi.id, raisedByMembershipId: mi.ctx.Lucy.id, title: 'Venue receipt missing', details: 'The AGM venue expense has an M-Pesa code but no receipt from the hall.', severity: 'LOW' } });
+
+  console.log('Demo data seeded. Password for all demo users: Demo1234');
+  console.log('  0700 000 001  Amina — treasurer / chairperson / member in different Chamas');
+  console.log('  0700 000 099  Super Admin · 0700 000 098 Platform Admin · 0700 000 097 Support Agent');
   await app.close();
 }
 

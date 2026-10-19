@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import {
   CreateGroupInput,
@@ -7,7 +8,11 @@ import {
   GroupMembershipSummary,
   GroupOverview,
   GroupRole,
-  permissionsForRole,
+  resolvePermissions,
+  RolePolicy,
+  sanitizeRolePermissions,
+  SpecialRole,
+  Permission,
   updateGroupSchema,
 } from '@chamahub/shared';
 import { z } from 'zod';
@@ -19,6 +24,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { MemberFinanceService } from '../finance/member-finance.service';
 import { DEFAULT_SETTINGS, readLoanPolicy, readSettings } from '../finance/policies';
 import { LedgerService } from '../ledger/ledger.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PlatformSettingsService } from '../platform/platform-settings.service';
 import { defaultLoanPolicy, addMonths } from '@chamahub/shared';
 
 export function newInviteCode() {
@@ -35,6 +42,8 @@ export class GroupsService {
     private readonly audit: AuditService,
     private readonly finance: MemberFinanceService,
     private readonly ledger: LedgerService,
+    private readonly notifications: NotificationsService,
+    private readonly platform: PlatformSettingsService,
   ) {}
 
   async create(userId: string, input: CreateGroupInput, meta: RequestMeta) {
@@ -53,7 +62,7 @@ export class GroupsService {
           loanPolicy: { ...defaultLoanPolicy, enabled: input.type !== 'MERRY_GO_ROUND' },
           createdById: userId,
           memberships: { create: { userId, role: 'CHAIRPERSON' } },
-          ...(plan ? { subscription: { create: { planId: plan.id, status: 'TRIALING', trialEndsAt: new Date(Date.now() + 30 * 86_400_000) } } } : {}),
+          ...(plan ? { subscription: { create: { planId: plan.id, status: 'TRIALING', trialEndsAt: new Date(Date.now() + (await this.platform.get()).trialDays * 86_400_000) } } } : {}),
         },
       });
       await this.audit.log({ groupId: g.id, actorUserId: userId, action: 'group.created', entityType: 'Group', entityId: g.id, after: input, meta }, tx);
@@ -99,7 +108,8 @@ export class GroupsService {
           name: m.group.name,
           type: m.group.type,
           role: m.role as GroupRole,
-          permissions: [...permissionsForRole(m.role as GroupRole)],
+          specialRoles: m.specialRoles as SpecialRole[],
+          permissions: resolvePermissions(m.role as GroupRole, m.group.rolePolicy as RolePolicy | null, m.specialRoles as SpecialRole[]),
           status: m.status,
           memberCount: m.group._count.memberships,
           schedule: s ? { name: s.name, amountCents: n(s.amountCents), frequency: s.frequency as Frequency } : null,
@@ -115,8 +125,9 @@ export class GroupsService {
   async detail(groupId: string, membership: MembershipContext): Promise<GroupDetail> {
     const g = await this.prisma.group.findUnique({
       where: { id: groupId },
-      include: { _count: { select: { memberships: { where: { status: 'ACTIVE' } } } } },
+      include: { _count: { select: { memberships: { where: { status: 'ACTIVE' } } } }, createdBy: { select: { fullName: true } } },
     });
+    const mine = membership.id ? await this.prisma.membership.findUnique({ where: { id: membership.id }, select: { specialRoles: true } }) : null;
     if (!g) throw new NotFoundException('Group not found');
     const canInvite = membership.permissions.includes('members.invite');
     return {
@@ -132,7 +143,10 @@ export class GroupsService {
       loanPolicy: readLoanPolicy(g.loanPolicy),
       memberCount: g._count.memberships,
       createdAt: g.createdAt.toISOString(),
-      myMembership: { membershipId: membership.id, role: membership.role, permissions: [...membership.permissions] },
+      myMembership: { membershipId: membership.id, role: membership.role, specialRoles: (mine?.specialRoles ?? []) as SpecialRole[], permissions: [...membership.permissions] },
+      rolePolicy: membership.permissions.includes(Permission.PERMISSIONS_CONFIGURE) ? ((g.rolePolicy as RolePolicy | null) ?? null) : null,
+      // The founder is recorded for history only; it confers no ongoing control.
+      founderName: g.createdBy.fullName,
     };
   }
 
@@ -170,6 +184,29 @@ export class GroupsService {
       return g;
     });
     return after;
+  }
+
+  /**
+   * Replaces one role's permissions for this group. The request is clamped
+   * to platform safeguards; anything outside them is rejected, not ignored.
+   */
+  async updateRolePolicy(groupId: string, role: GroupRole, permissions: Permission[] | null, reason: string, actor: MembershipContext, meta: RequestMeta) {
+    if (permissions) {
+      const { rejected } = sanitizeRolePermissions(role, permissions);
+      if (rejected.length) throw new UnprocessableEntityException({ message: `These permissions cannot be given to this role: ${rejected.join(', ')}`, details: { rejected } });
+    }
+    const g = await this.prisma.group.findUniqueOrThrow({ where: { id: groupId }, select: { rolePolicy: true } });
+    const before = (g.rolePolicy as RolePolicy | null) ?? {};
+    const next: RolePolicy = { ...before };
+    if (permissions) next[role] = sanitizeRolePermissions(role, permissions).permissions;
+    else delete next[role];
+    await this.prisma.$transaction(async (tx) => {
+      await tx.group.update({ where: { id: groupId }, data: { rolePolicy: Object.keys(next).length ? (next as object) : Prisma.DbNull } });
+      await this.audit.log({ groupId, actorUserId: actor.userId, action: 'group.role_policy_changed', entityType: 'Group', entityId: groupId, before: { [role]: before[role] ?? 'default' }, after: { [role]: next[role] ?? 'default' }, reason, meta }, tx);
+    });
+    const officers = (await this.prisma.membership.findMany({ where: { groupId, status: 'ACTIVE', role: { not: 'MEMBER' } }, select: { userId: true } })).map((m) => m.userId).filter((u) => u !== actor.userId);
+    await this.notifications.notify(officers, { groupId, type: 'ANNOUNCEMENT', title: 'Role permissions changed', body: `Permissions for the ${role.toLowerCase().replace('_', ' ')} role were updated. Reason: ${reason}` });
+    return { role, permissions: resolvePermissions(role, next) };
   }
 
   async rotateInviteCode(groupId: string, disable: boolean, userId: string, meta: RequestMeta) {

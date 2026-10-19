@@ -53,7 +53,9 @@ describe('Financial workflows', () => {
     it('records as PENDING, enforces maker-checker, confirms into the ledger', async () => {
       const key = idem();
       const body = { memberId: ids[alice.id], amountCents: 200_000, method: 'MPESA', reference: 'QWE123RTY', paidAt: today, idempotencyKey: key, targetId: obligationId };
-      await as(app, alice).post(`/v1/groups/${groupId}/payments`, body).expect(403);
+      // Members cannot record payments for others, and must give a code when reporting their own.
+      await as(app, alice).post(`/v1/groups/${groupId}/payments`, { ...body, memberId: ids[bob.id], idempotencyKey: idem() }).expect(403);
+      await as(app, alice).post(`/v1/groups/${groupId}/payments`, { ...body, reference: undefined, idempotencyKey: idem() }).expect(422);
       const rec = await as(app, treasurer).post(`/v1/groups/${groupId}/payments`, body).expect(201);
       expect(rec.body.status).toBe('PENDING');
       expect(await cash()).toBe(0n); // recorded ≠ received
@@ -200,8 +202,8 @@ describe('Financial workflows', () => {
       expect(obligations).toHaveLength(3);
       for (const o of obligations.filter((o) => o.membershipId !== ids[bob.id])) {
         const member = [alice, chair].find((u) => ids[u.id] === o.membershipId)!;
-        // The chair's own payment is recorded by the chair and verified by the treasurer.
-        await pay(member === chair ? chair : treasurer, member === chair ? treasurer : chair, member, 100_000, { targetId: o.id });
+        // The chair reports their own M-Pesa payment; the treasurer verifies it.
+        await pay(member === chair ? chair : treasurer, member === chair ? treasurer : chair, member, 100_000, { targetId: o.id, ...(member === chair ? { method: 'MPESA', reference: `CHAIR${o.id.slice(-6).toUpperCase()}` } : {}) });
       }
       await as(app, alice).post(`/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r1.id}/approve`, {}).expect(403);
       await as(app, chair).post(`/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r1.id}/approve`, {}).expect(422); // short by Bob's share

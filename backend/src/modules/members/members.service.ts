@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { GroupRole, InvitationRow, maskPhone, MemberRow, Permission } from '@chamahub/shared';
+import { GroupRole, InvitationRow, maskPhone, MemberRow, Permission, SPECIAL_ROLE_INFO, SpecialRole } from '@chamahub/shared';
 import { AuditService } from '../../common/audit.service';
 import { n } from '../../common/money';
 import { isoDate } from '../../common/dates';
@@ -23,7 +23,7 @@ export class MembersService {
   ) {}
 
   async list(groupId: string, viewer: MembershipContext, opts: { status?: string; q?: string }): Promise<MemberRow[]> {
-    const group = await this.prisma.group.findUniqueOrThrow({ where: { id: groupId }, select: { settings: true } });
+    const group = await this.prisma.group.findUniqueOrThrow({ where: { id: groupId }, select: { settings: true, createdById: true } });
     const settings = readSettings(group.settings);
     const memberships = await this.prisma.membership.findMany({
       where: {
@@ -46,6 +46,8 @@ export class MembersService {
         fullName: m.user.fullName,
         phone: officerView || self || !hide ? m.user.phone : maskPhone(m.user.phone),
         role: m.role as GroupRole,
+        specialRoles: m.specialRoles as SpecialRole[],
+        isFounder: m.user.id === group.createdById,
         status: m.status,
         joinedAt: m.joinedAt.toISOString(),
         shares: m.shares,
@@ -126,6 +128,24 @@ export class MembersService {
       await this.audit.log({ groupId, actorUserId: actor.userId, action: 'member.status_changed', entityType: 'Membership', entityId: membershipId, before: { status: target.status }, after: { status }, reason, meta }, tx);
     });
     return { membershipId, status };
+  }
+
+  /** Adds optional roles (loan committee, payout approver, joint signatory, read-only) to a membership. */
+  async setSpecialRoles(groupId: string, membershipId: string, specialRoles: SpecialRole[], reason: string, actor: MembershipContext, meta: RequestMeta) {
+    const target = await this.prisma.membership.findFirst({ where: { id: membershipId, groupId } });
+    if (!target) throw new NotFoundException('Member not found');
+    if (target.status !== 'ACTIVE') throw new UnprocessableEntityException('Only active members can hold roles');
+    const roles = [...new Set(specialRoles)];
+    if (roles.includes('READ_ONLY') && roles.length > 1) throw new UnprocessableEntityException('A read-only member cannot also hold approval roles');
+    if (roles.includes('READ_ONLY') && target.role !== 'MEMBER') throw new UnprocessableEntityException('Only ordinary members can be made read-only; change their role first');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.membership.update({ where: { id: membershipId }, data: { specialRoles: roles } });
+      await this.audit.log({ groupId, actorUserId: actor.userId, action: 'member.special_roles_changed', entityType: 'Membership', entityId: membershipId, before: { specialRoles: target.specialRoles }, after: { specialRoles: roles }, reason, meta }, tx);
+    });
+    if (roles.some((r) => !target.specialRoles.includes(r))) {
+      await this.notifications.notify([target.userId], { groupId, type: 'ANNOUNCEMENT', title: 'Your role was updated', body: `You are now: ${roles.map((r) => SPECIAL_ROLE_INFO[r].label).join(', ')}.` });
+    }
+    return { membershipId, specialRoles: roles };
   }
 
   async setShares(groupId: string, membershipId: string, shares: number, reason: string, actor: MembershipContext, meta: RequestMeta) {

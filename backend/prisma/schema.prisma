@@ -21,7 +21,41 @@ datasource db {
 enum PlatformRole {
   USER
   SUPPORT
+  PLATFORM_ADMIN
   SUPER_ADMIN
+}
+
+enum SpecialRole {
+  LOAN_COMMITTEE
+  PAYOUT_APPROVER
+  JOINT_SIGNATORY
+  READ_ONLY
+}
+
+enum ProposalStatus {
+  OPEN
+  PASSED
+  FAILED
+  CANCELLED
+}
+
+enum VoteChoice {
+  YES
+  NO
+  ABSTAIN
+}
+
+enum FindingSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum FindingStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  REJECTED
 }
 
 enum GroupType {
@@ -355,12 +389,12 @@ model User {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  sessions      Session[]
-  memberships   Membership[]
-  notifications Notification[]
-  invitationsSent Invitation[] @relation("InvitedBy")
-  groupsCreated Group[]        @relation("GroupCreatedBy")
-  auditEvents   AuditEvent[]
+  sessions        Session[]
+  memberships     Membership[]
+  notifications   Notification[]
+  invitationsSent Invitation[]   @relation("InvitedBy")
+  groupsCreated   Group[]        @relation("GroupCreatedBy")
+  auditEvents     AuditEvent[]
 
   @@map("users")
 }
@@ -380,19 +414,19 @@ model OtpCode {
 }
 
 model Session {
-  id               String    @id @default(cuid())
-  userId           String
-  refreshTokenHash String    @unique
+  id                String    @id @default(cuid())
+  userId            String
+  refreshTokenHash  String    @unique
   /// Hash of the previous refresh token; presenting it again signals token theft.
-  previousTokenHash String?  @unique
-  deviceName       String?
-  userAgent        String?
-  ipAddress        String?
-  createdAt        DateTime  @default(now())
-  lastUsedAt       DateTime  @default(now())
-  expiresAt        DateTime
-  revokedAt        DateTime?
-  revokedReason    String?
+  previousTokenHash String?   @unique
+  deviceName        String?
+  userAgent         String?
+  ipAddress         String?
+  createdAt         DateTime  @default(now())
+  lastUsedAt        DateTime  @default(now())
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  revokedReason     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -414,11 +448,13 @@ model Group {
   inviteCode              String?     @unique
   settings                Json
   loanPolicy              Json
+  /// Group overrides to the default role → permission matrix (within platform safeguards).
+  rolePolicy              Json?
   createdById             String
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
 
-  createdBy      User                   @relation("GroupCreatedBy", fields: [createdById], references: [id])
+  createdBy      User                     @relation("GroupCreatedBy", fields: [createdById], references: [id])
   memberships    Membership[]
   invitations    Invitation[]
   schedules      ContributionSchedule[]
@@ -440,37 +476,41 @@ model Group {
   unmatched      UnmatchedPayment[]
   supportGrants  SupportAccessGrant[]
   statements     PublishedStatement[]
+  proposals      Proposal[]
+  findings       AuditFinding[]
 
   @@map("groups")
 }
 
 model Membership {
-  id        String           @id @default(cuid())
-  groupId   String
-  userId    String
-  role      GroupRole        @default(MEMBER)
-  status    MembershipStatus @default(ACTIVE)
-  shares    Int              @default(0)
-  joinedAt  DateTime         @default(now())
-  exitedAt  DateTime?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id           String           @id @default(cuid())
+  groupId      String
+  userId       String
+  role         GroupRole        @default(MEMBER)
+  /// Optional extra roles (loan committee, payout approver, joint signatory, read-only).
+  specialRoles SpecialRole[]    @default([])
+  status       MembershipStatus @default(ACTIVE)
+  shares       Int              @default(0)
+  joinedAt     DateTime         @default(now())
+  exitedAt     DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  group        Group                    @relation(fields: [groupId], references: [id])
-  user         User                     @relation(fields: [userId], references: [id])
-  obligations  ContributionObligation[]
-  payments     Payment[]
-  loans        Loan[]
-  fines        Fine[]
-  rounds       PayoutRound[]
-  attendance   Attendance[]
-  allocations  DistributionAllocation[]
-  approvals    Approval[]
-  guarantees   LoanGuarantor[]
-  actionItems  ActionItem[]
-  disputes     Dispute[]
+  group         Group                    @relation(fields: [groupId], references: [id])
+  user          User                     @relation(fields: [userId], references: [id])
+  obligations   ContributionObligation[]
+  payments      Payment[]
+  loans         Loan[]
+  fines         Fine[]
+  rounds        PayoutRound[]
+  attendance    Attendance[]
+  allocations   DistributionAllocation[]
+  approvals     Approval[]
+  guarantees    LoanGuarantor[]
+  actionItems   ActionItem[]
+  disputes      Dispute[]
   scheduleLinks ScheduleMember[]
-  journalLines JournalEntry[]
+  journalLines  JournalEntry[]
 
   @@unique([groupId, userId])
   @@index([userId])
@@ -478,16 +518,16 @@ model Membership {
 }
 
 model Invitation {
-  id           String           @id @default(cuid())
-  groupId      String
-  phone        String
-  fullName     String?
-  role         GroupRole        @default(MEMBER)
-  status       InvitationStatus @default(PENDING)
-  invitedById  String
-  expiresAt    DateTime
-  respondedAt  DateTime?
-  createdAt    DateTime         @default(now())
+  id          String           @id @default(cuid())
+  groupId     String
+  phone       String
+  fullName    String?
+  role        GroupRole        @default(MEMBER)
+  status      InvitationStatus @default(PENDING)
+  invitedById String
+  expiresAt   DateTime
+  respondedAt DateTime?
+  createdAt   DateTime         @default(now())
 
   group     Group @relation(fields: [groupId], references: [id])
   invitedBy User  @relation("InvitedBy", fields: [invitedById], references: [id])
@@ -498,16 +538,16 @@ model Invitation {
 }
 
 model SupportAccessGrant {
-  id                     String             @id @default(cuid())
-  groupId                String
-  requestedByUserId      String
-  purpose                String
-  hours                  Int
-  status                 SupportGrantStatus @default(PENDING)
-  decidedByMembershipId  String?
-  decidedAt              DateTime?
-  expiresAt              DateTime?
-  createdAt              DateTime           @default(now())
+  id                    String             @id @default(cuid())
+  groupId               String
+  requestedByUserId     String
+  purpose               String
+  hours                 Int
+  status                SupportGrantStatus @default(PENDING)
+  decidedByMembershipId String?
+  decidedAt             DateTime?
+  expiresAt             DateTime?
+  createdAt             DateTime           @default(now())
 
   group Group @relation(fields: [groupId], references: [id])
 
@@ -702,11 +742,11 @@ model JournalEntry {
   createdById  String?
   createdAt    DateTime        @default(now())
 
-  group      Group          @relation(fields: [groupId], references: [id])
-  membership Membership?    @relation(fields: [membershipId], references: [id])
+  group      Group         @relation(fields: [groupId], references: [id])
+  membership Membership?   @relation(fields: [membershipId], references: [id])
   lines      JournalLine[]
-  reverses   JournalEntry?  @relation("Reversal", fields: [reversesId], references: [id])
-  reversedBy JournalEntry?  @relation("Reversal")
+  reverses   JournalEntry? @relation("Reversal", fields: [reversesId], references: [id])
+  reversedBy JournalEntry? @relation("Reversal")
 
   @@index([groupId, entryDate])
   @@index([paymentId])
@@ -743,30 +783,32 @@ model PublishedStatement {
 // ───────────────────────────── loans ─────────────────────────────
 
 model Loan {
-  id                    String         @id @default(cuid())
-  groupId               String
-  membershipId          String
-  principalCents        BigInt
-  rateBps               Int
-  interestMethod        InterestMethod
-  installmentsCount     Int
-  frequency             Frequency
-  totalInterestCents    BigInt
-  purpose               String
-  status                LoanStatus     @default(PENDING_APPROVAL)
-  requiredApprovals     Int
-  allowSelfApproval     Boolean        @default(false)
-  policySnapshot        Json
-  appliedAt             DateTime       @default(now())
-  decidedAt             DateTime?
-  disbursedAt           DateTime?      @db.Date
-  disbursementMethod    PaymentMethod?
-  disbursementReference String?
-  disbursementKey       String?        @unique
-  disbursedById         String?
-  closedAt              DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  id                     String         @id @default(cuid())
+  groupId                String
+  membershipId           String
+  principalCents         BigInt
+  rateBps                Int
+  interestMethod         InterestMethod
+  installmentsCount      Int
+  frequency              Frequency
+  totalInterestCents     BigInt
+  purpose                String
+  /// Officer who prepared the application for the member; may not approve it.
+  preparedByMembershipId String?
+  status                 LoanStatus     @default(PENDING_APPROVAL)
+  requiredApprovals      Int
+  allowSelfApproval      Boolean        @default(false)
+  policySnapshot         Json
+  appliedAt              DateTime       @default(now())
+  decidedAt              DateTime?
+  disbursedAt            DateTime?      @db.Date
+  disbursementMethod     PaymentMethod?
+  disbursementReference  String?
+  disbursementKey        String?        @unique
+  disbursedById          String?
+  closedAt               DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   group        Group             @relation(fields: [groupId], references: [id])
   membership   Membership        @relation(fields: [membershipId], references: [id])
@@ -854,21 +896,21 @@ model Fine {
 }
 
 model Expense {
-  id                String        @id @default(cuid())
+  id                String         @id @default(cuid())
   groupId           String
   category          String
   description       String
   amountCents       BigInt
-  incurredOn        DateTime      @db.Date
+  incurredOn        DateTime       @db.Date
   payee             String?
-  status            ExpenseStatus @default(PENDING_APPROVAL)
+  status            ExpenseStatus  @default(PENDING_APPROVAL)
   requiredApprovals Int
   recordedById      String
-  paidAt            DateTime?     @db.Date
+  paidAt            DateTime?      @db.Date
   paymentMethod     PaymentMethod?
   paymentReference  String?
-  paymentKey        String?       @unique
-  createdAt         DateTime      @default(now())
+  paymentKey        String?        @unique
+  createdAt         DateTime       @default(now())
 
   group Group @relation(fields: [groupId], references: [id])
 
@@ -926,15 +968,15 @@ model PayoutRound {
 }
 
 model CycleChange {
-  id                    String         @id @default(cuid())
-  cycleId               String
-  beforeOrder           Json
-  afterOrder            Json
-  reason                String
+  id                     String         @id @default(cuid())
+  cycleId                String
+  beforeOrder            Json
+  afterOrder             Json
+  reason                 String
   proposedByMembershipId String
-  status                ApprovalStatus @default(PENDING)
-  createdAt             DateTime       @default(now())
-  appliedAt             DateTime?
+  status                 ApprovalStatus @default(PENDING)
+  createdAt              DateTime       @default(now())
+  appliedAt              DateTime?
 
   cycle PayoutCycle @relation(fields: [cycleId], references: [id])
 
@@ -1002,18 +1044,18 @@ model InvestmentHolding {
 // ───────────────────────────── meetings ─────────────────────────────
 
 model Meeting {
-  id           String        @id @default(cuid())
-  groupId      String
-  title        String
-  scheduledAt  DateTime
-  location     String?
-  virtualLink  String?
-  status       MeetingStatus @default(SCHEDULED)
-  agenda       Json          @default("[]")
-  requiresRsvp Boolean       @default(true)
+  id             String        @id @default(cuid())
+  groupId        String
+  title          String
+  scheduledAt    DateTime
+  location       String?
+  virtualLink    String?
+  status         MeetingStatus @default(SCHEDULED)
+  agenda         Json          @default("[]")
+  requiresRsvp   Boolean       @default(true)
   reminderSentAt DateTime?
-  createdById  String
-  createdAt    DateTime      @default(now())
+  createdById    String
+  createdAt      DateTime      @default(now())
 
   group       Group        @relation(fields: [groupId], references: [id])
   attendance  Attendance[]
@@ -1167,21 +1209,21 @@ model Subscription {
 }
 
 model AuditEvent {
-  id          String   @id @default(cuid())
-  groupId     String?
-  actorUserId String?
-  action      String
-  entityType  String
-  entityId    String?
-  before      Json?
-  after       Json?
-  reason      String?
-  reference   String?
+  id             String   @id @default(cuid())
+  groupId        String?
+  actorUserId    String?
+  action         String
+  entityType     String
+  entityId       String?
+  before         Json?
+  after          Json?
+  reason         String?
+  reference      String?
   approvalStatus String?
-  ipAddress   String?
-  userAgent   String?
-  requestId   String?
-  createdAt   DateTime @default(now())
+  ipAddress      String?
+  userAgent      String?
+  requestId      String?
+  createdAt      DateTime @default(now())
 
   actor User? @relation(fields: [actorUserId], references: [id])
 
@@ -1257,4 +1299,74 @@ model JobRun {
 
   @@index([name, startedAt])
   @@map("job_runs")
+}
+
+// ───────────────────────────── decisions & audit findings ─────────────────────────────
+
+model Proposal {
+  id            String         @id @default(cuid())
+  groupId       String
+  title         String
+  description   String
+  status        ProposalStatus @default(OPEN)
+  quorumPercent Int
+  passPercent   Int
+  /// Members eligible when the vote opened; fixed so the result is reproducible.
+  eligibleCount Int
+  createdById   String
+  closesAt      DateTime
+  closedAt      DateTime?
+  result        Json?
+  createdAt     DateTime       @default(now())
+
+  group Group  @relation(fields: [groupId], references: [id])
+  votes Vote[]
+
+  @@index([groupId, status])
+  @@map("proposals")
+}
+
+/// One ballot per eligible member; ballots cannot be changed once cast.
+model Vote {
+  proposalId   String
+  membershipId String
+  choice       VoteChoice
+  createdAt    DateTime   @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id])
+
+  @@id([proposalId, membershipId])
+  @@map("votes")
+}
+
+model AuditFinding {
+  id                      String          @id @default(cuid())
+  groupId                 String
+  raisedByMembershipId    String
+  title                   String
+  details                 String
+  severity                FindingSeverity
+  status                  FindingStatus   @default(OPEN)
+  entityType              String?
+  entityId                String?
+  reference               String?
+  response                String?
+  respondedByMembershipId String?
+  resolvedAt              DateTime?
+  createdAt               DateTime        @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@index([groupId, status])
+  @@map("audit_findings")
+}
+
+/// Platform-wide configuration (one row per key), changed only by super admins.
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("platform_settings")
 }

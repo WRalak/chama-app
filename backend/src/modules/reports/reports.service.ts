@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ContributionsService } from '../contributions/contributions.service';
 import { LoansService } from '../loans/loans.service';
 import { StatementsService } from '../statements/statements.service';
+import { auditScope } from '../audit/audit.controller';
 
 export interface Report {
   title: string;
@@ -162,7 +163,7 @@ export class ReportsService {
         };
       }
       case 'audit': {
-        const rows = await this.prisma.auditEvent.findMany({ where: { groupId, createdAt: { gte: dbDate(q.from), lt: new Date(dbDate(q.to).getTime() + 86_400_000) } }, include: { actor: { select: { fullName: true } } }, orderBy: { createdAt: 'asc' } });
+        const rows = await this.prisma.auditEvent.findMany({ where: { groupId, ...auditScope(viewer), createdAt: { gte: dbDate(q.from), lt: new Date(dbDate(q.to).getTime() + 86_400_000) } }, include: { actor: { select: { fullName: true } } }, orderBy: { createdAt: 'asc' } });
         return {
           title: 'Audit report',
           headers: ['Time (UTC)', 'User', 'Action', 'Record', 'Record id', 'Reason', 'Approval', 'Reference'],

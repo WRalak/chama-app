@@ -3,6 +3,7 @@ import { NotificationChannel, NotificationType, Prisma } from '@prisma/client';
 import { NotificationPreferences, notificationPreferencesSchema } from '@chamahub/shared';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { EmailChannel, SmsChannel, WhatsAppChannel } from './channels';
+import { PlatformSettingsService } from '../platform/platform-settings.service';
 
 export const DEFAULT_PREFERENCES: NotificationPreferences = {
   sms: true,
@@ -49,6 +50,7 @@ export class NotificationsService {
     private readonly sms: SmsChannel,
     private readonly whatsapp: WhatsAppChannel,
     private readonly email: EmailChannel,
+    private readonly platform: PlatformSettingsService,
   ) {}
 
   /** Creates in-app notifications and queues external deliveries per user preferences. */
@@ -97,8 +99,14 @@ export class NotificationsService {
     });
     let sent = 0;
     let failed = 0;
+    const switches = await this.platform.get();
+    const enabled = { SMS: switches.smsEnabled, WHATSAPP: switches.whatsappEnabled, EMAIL: switches.emailEnabled } as Record<string, boolean>;
     for (const d of queued) {
       const { notification: note } = d;
+      if (enabled[d.channel] === false) {
+        await this.prisma.notificationDelivery.update({ where: { id: d.id }, data: { status: 'SKIPPED', error: 'Channel disabled by platform administrators' } });
+        continue;
+      }
       const text = `ChamaHub: ${note.title}. ${note.body}`.slice(0, 459);
       const result =
         d.channel === 'SMS'

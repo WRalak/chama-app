@@ -31,7 +31,11 @@ export const GROUP_ROLES = values(GroupRole);
 
 export const PlatformRole = {
   USER: 'USER',
+  /** Support Agent: tickets and account assistance, no financial records. */
   SUPPORT: 'SUPPORT',
+  /** Platform Admin: groups, subscriptions, accounts and operations. */
+  PLATFORM_ADMIN: 'PLATFORM_ADMIN',
+  /** Super Admin: platform configuration, administrators and security. */
   SUPER_ADMIN: 'SUPER_ADMIN',
 } as const;
 export type PlatformRole = (typeof PlatformRole)[keyof typeof PlatformRole];
@@ -322,6 +326,18 @@ export const ReconciliationStatus = {
 } as const;
 export type ReconciliationStatus = (typeof ReconciliationStatus)[keyof typeof ReconciliationStatus];
 
+export const ProposalStatus = { OPEN: 'OPEN', PASSED: 'PASSED', FAILED: 'FAILED', CANCELLED: 'CANCELLED' } as const;
+export type ProposalStatus = (typeof ProposalStatus)[keyof typeof ProposalStatus];
+
+export const VoteChoice = { YES: 'YES', NO: 'NO', ABSTAIN: 'ABSTAIN' } as const;
+export type VoteChoice = (typeof VoteChoice)[keyof typeof VoteChoice];
+
+export const FindingSeverity = { LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH' } as const;
+export type FindingSeverity = (typeof FindingSeverity)[keyof typeof FindingSeverity];
+
+export const FindingStatus = { OPEN: 'OPEN', ACKNOWLEDGED: 'ACKNOWLEDGED', RESOLVED: 'RESOLVED', REJECTED: 'REJECTED' } as const;
+export type FindingStatus = (typeof FindingStatus)[keyof typeof FindingStatus];
+
 export const LABELS = {
   groupType: {
     MERRY_GO_ROUND: 'Merry-Go-Round',
@@ -331,6 +347,12 @@ export const LABELS = {
     SAVINGS: 'Savings',
     HYBRID: 'Hybrid',
   } satisfies Record<GroupType, string>,
+  platformRole: {
+    USER: 'User',
+    SUPPORT: 'Support Agent',
+    PLATFORM_ADMIN: 'Platform Admin',
+    SUPER_ADMIN: 'Super Admin',
+  } satisfies Record<PlatformRole, string>,
   groupRole: {
     CHAIRPERSON: 'Chairperson',
     VICE_CHAIRPERSON: 'Vice Chairperson',

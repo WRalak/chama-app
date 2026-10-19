@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { createGroupSchema, Permission, updateGroupSchema } from '@chamahub/shared';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { createGroupSchema, GroupRole, Permission, rolePolicyUpdateSchema, updateGroupSchema } from '@chamahub/shared';
 import { z } from 'zod';
 import { CurrentMembership, CurrentUser, ReqMeta, RequirePermission } from '../../common/decorators';
 import { AuthContext, MembershipContext, RequestMeta } from '../../common/request';
@@ -38,6 +38,12 @@ export class GroupsController {
   ) {
     await this.groups.update(groupId, body, user.id, meta);
     return this.groups.detail(groupId, m);
+  }
+
+  @RequirePermission(Permission.PERMISSIONS_CONFIGURE)
+  @Put(':groupId/role-policy')
+  rolePolicy(@Param('groupId') groupId: string, @Body(new ZodPipe(rolePolicyUpdateSchema)) body: z.infer<typeof rolePolicyUpdateSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
+    return this.groups.updateRolePolicy(groupId, body.role as GroupRole, body.permissions as never, body.reason, m, meta);
   }
 
   @RequirePermission(Permission.MEMBERS_INVITE)

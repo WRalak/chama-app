@@ -7,6 +7,7 @@ import {
   Permission,
   reasonSchema,
   respondInvitationSchema,
+  specialRolesSchema,
 } from '@chamahub/shared';
 import { z } from 'zod';
 import { CurrentMembership, CurrentUser, ReqMeta, RequirePermission } from '../../common/decorators';
@@ -42,6 +43,12 @@ export class GroupMembersController {
   @Patch('members/:membershipId/status')
   status(@Param('groupId') groupId: string, @Param('membershipId') id: string, @Body(new ZodPipe(changeMemberStatusSchema)) body: z.infer<typeof changeMemberStatusSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.members.changeStatus(groupId, id, body.status, body.reason, m, meta);
+  }
+
+  @RequirePermission(Permission.ROLES_ASSIGN)
+  @Put('members/:membershipId/special-roles')
+  specialRoles(@Param('groupId') groupId: string, @Param('membershipId') id: string, @Body(new ZodPipe(specialRolesSchema)) body: z.infer<typeof specialRolesSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
+    return this.members.setSpecialRoles(groupId, id, body.specialRoles, body.reason, m, meta);
   }
 
   @RequirePermission(Permission.MEMBERS_MANAGE)

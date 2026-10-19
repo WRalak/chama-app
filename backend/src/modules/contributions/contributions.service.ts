@@ -97,7 +97,14 @@ export class ContributionsService {
 
   async record(groupId: string, input: RecordPaymentInput, actor: MembershipContext, meta: RequestMeta) {
     const needed = input.purpose === 'LOAN_REPAYMENT' ? Permission.REPAYMENTS_RECORD : input.purpose === 'FINE' ? Permission.FINES_MANAGE : Permission.CONTRIBUTIONS_RECORD;
-    if (!actor.permissions.includes(needed) && !actor.permissions.includes(Permission.CONTRIBUTIONS_RECORD)) {
+    // Members may report their OWN payment (e.g. an M-Pesa transfer) for an officer to verify.
+    const selfReport = input.memberId === actor.id && !actor.permissions.includes(needed) && !actor.permissions.includes(Permission.CONTRIBUTIONS_RECORD);
+    if (selfReport) {
+      if (!actor.permissions.includes(Permission.LOANS_APPLY) && !actor.permissions.includes(Permission.VOTES_CAST)) {
+        throw new ForbiddenException('Read-only members cannot report payments.');
+      }
+      if (!input.reference) throw new UnprocessableEntityException('Enter the M-Pesa or bank transaction code so the treasurer can verify it.');
+    } else if (!actor.permissions.includes(needed) && !actor.permissions.includes(Permission.CONTRIBUTIONS_RECORD)) {
       throw new ForbiddenException('Your role in this group does not allow recording this payment.');
     }
     const fingerprint = { membershipId: input.memberId, amountCents: input.amountCents, purpose: input.purpose, targetId: input.targetId ?? null };
@@ -129,7 +136,7 @@ export class ContributionsService {
             recordedById: actor.userId,
           },
         });
-        await this.audit.log({ groupId, actorUserId: actor.userId, action: 'payment.recorded', entityType: 'Payment', entityId: p.id, after: p, reference: p.reference, approvalStatus: 'PENDING', meta }, tx);
+        await this.audit.log({ groupId, actorUserId: actor.userId, action: selfReport ? 'payment.self_reported' : 'payment.recorded', entityType: 'Payment', entityId: p.id, after: p, reference: p.reference, approvalStatus: 'PENDING', meta }, tx);
         return p;
       });
       await this.notifyVerifiers(groupId, actor.userId, `${formatKes(input.amountCents)} payment awaiting verification`);

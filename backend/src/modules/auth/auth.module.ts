@@ -6,6 +6,6 @@ import { OtpService } from './otp.service';
 @Module({
   controllers: [AuthController],
   providers: [AuthService, OtpService],
-  exports: [AuthService],
+  exports: [AuthService, OtpService],
 })
 export class AuthModule {}

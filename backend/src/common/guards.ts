@@ -14,8 +14,10 @@ import {
   Permission,
   PlatformPermission,
   PlatformRole,
-  permissionsForRole,
   platformRoleHas,
+  resolvePermissions,
+  RolePolicy,
+  SpecialRole,
 } from '@chamahub/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from './audit.service';
@@ -111,7 +113,7 @@ export class GroupAccessGuard implements CanActivate {
 
     const membership = await this.prisma.membership.findUnique({
       where: { groupId_userId: { groupId, userId: req.user.id } },
-      select: { id: true, role: true, status: true, group: { select: { status: true } } },
+      select: { id: true, role: true, status: true, specialRoles: true, group: { select: { status: true, rolePolicy: true } } },
     });
 
     if (membership && membership.status !== 'EXITED') {
@@ -123,7 +125,11 @@ export class GroupAccessGuard implements CanActivate {
         groupId,
         userId: req.user.id,
         role: membership.role as GroupRole,
-        permissions: membership.status === 'SUSPENDED' ? permissionsForRole('MEMBER') : permissionsForRole(membership.role as GroupRole),
+        // Suspended members keep read access to their own records only.
+        permissions:
+          membership.status === 'SUSPENDED'
+            ? resolvePermissions('MEMBER', null, ['READ_ONLY'])
+            : resolvePermissions(membership.role as GroupRole, membership.group.rolePolicy as RolePolicy | null, membership.specialRoles as SpecialRole[]),
       };
     } else {
       const grant = await this.supportGrant(req, groupId);

@@ -31,6 +31,8 @@ import { PlatformModule } from './modules/platform/platform.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { MpesaModule } from './modules/mpesa/mpesa.module';
 import { JobsModule } from './modules/jobs/jobs.module';
+import { DecisionsModule } from './modules/decisions/decisions.module';
+import { PlatformSettingsModule } from './modules/platform/platform-settings.service';
 import { HealthController } from './health.controller';
 
 const featureModules = [
@@ -52,6 +54,7 @@ const featureModules = [
   PlatformModule,
   DisputesModule,
   MpesaModule,
+  DecisionsModule,
   JobsModule,
 ];
 
@@ -61,6 +64,7 @@ const featureModules = [
     AuditModule,
     LedgerModule,
     FinanceModule,
+    PlatformSettingsModule,
     NotificationsModule,
     JwtModule.registerAsync({
       global: true,

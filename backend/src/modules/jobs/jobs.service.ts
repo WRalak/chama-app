@@ -10,6 +10,7 @@ import { ObligationsService } from '../finance/obligations.service';
 import { readSettings } from '../finance/policies';
 import { installmentStatus } from '../finance/posting.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DecisionsService } from '../decisions/decisions.service';
 
 export const SYSTEM_ACTOR = 'system';
 
@@ -22,6 +23,7 @@ export class JobsService {
     private readonly prisma: PrismaService,
     private readonly obligations: ObligationsService,
     private readonly notifications: NotificationsService,
+    private readonly decisions: DecisionsService,
   ) {}
 
   /** Runs a job once at a time and records the outcome for platform health monitoring. */
@@ -85,7 +87,8 @@ export class JobsService {
         instChanged++;
       }
     }
-    return { groups: groups.length, obligationsCreated: created, finesIssued: fines, installmentsUpdated: instChanged };
+    const votesClosed = await this.decisions.closeExpired();
+    return { groups: groups.length, obligationsCreated: created, finesIssued: fines, installmentsUpdated: instChanged, votesClosed };
   }
 
   /** Daily reminders, de-duplicated per item so nobody is messaged twice for the same thing. */

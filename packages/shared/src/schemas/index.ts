@@ -11,6 +11,7 @@ import {
   TRANSACTION_STATUSES,
 } from '../enums';
 import { isIsoDate } from '../dates';
+import { ALL_PERMISSIONS, SPECIAL_ROLES } from '../permissions';
 import { normalizeKenyanPhone } from '../phone';
 import { MAX_LOAN_INSTALLMENTS } from '../finance/loans';
 
@@ -419,3 +420,58 @@ export const disputeSchema = z.object({
   details: z.string().trim().min(5).max(2000),
 });
 export const resolveDisputeSchema = z.object({ resolution: reasonSchema, status: z.enum(['RESOLVED', 'REJECTED']) });
+
+/* ---------- roles & permissions ---------- */
+
+export const rolePolicyUpdateSchema = z.object({
+  role: z.enum(GROUP_ROLES),
+  /** Full permission list for the role; null restores the platform default. */
+  permissions: z.array(z.enum(ALL_PERMISSIONS as [string, ...string[]])).nullable(),
+  reason: reasonSchema,
+});
+export const specialRolesSchema = z.object({ specialRoles: z.array(z.enum(SPECIAL_ROLES)).max(4), reason: reasonSchema });
+
+export const prepareLoanSchema = loanApplicationSchema.extend({ memberId: z.string().min(1) });
+
+/* ---------- voting ---------- */
+
+export const createProposalSchema = z.object({
+  title: z.string().trim().min(5).max(200),
+  description: z.string().trim().min(5).max(5000),
+  closesAt: z.string().datetime({ offset: true }),
+  /** Share of eligible members who must vote, in percent. */
+  quorumPercent: z.number().int().min(1).max(100).default(50),
+  /** Share of YES among YES+NO needed to pass, in percent. */
+  passPercent: z.number().int().min(50).max(100).default(50),
+});
+export const castVoteSchema = z.object({ choice: z.enum(['YES', 'NO', 'ABSTAIN']) });
+
+/* ---------- audit findings ---------- */
+
+export const createFindingSchema = z.object({
+  title: z.string().trim().min(5).max(200),
+  details: z.string().trim().min(10).max(5000),
+  severity: z.enum(['LOW', 'MEDIUM', 'HIGH']),
+  entityType: z.string().max(60).optional(),
+  entityId: z.string().max(60).optional(),
+  reference: z.string().trim().max(60).optional(),
+});
+export const respondFindingSchema = z.object({ status: z.enum(['ACKNOWLEDGED', 'RESOLVED', 'REJECTED']), response: reasonSchema });
+
+/* ---------- platform administration ---------- */
+
+export const platformRoleSchema = z.object({ platformRole: z.enum(['USER', 'SUPPORT', 'PLATFORM_ADMIN', 'SUPER_ADMIN']), reason: reasonSchema });
+
+export const platformSettingsSchema = z.object({
+  /** Kill switches for outbound channels (e.g. if a provider misbehaves). */
+  smsEnabled: z.boolean(),
+  whatsappEnabled: z.boolean(),
+  emailEnabled: z.boolean(),
+  /** Longest support access a chairperson can grant. */
+  maxSupportAccessHours: z.number().int().min(1).max(72),
+  trialDays: z.number().int().min(0).max(180),
+  /** Shown to every user when set. */
+  maintenanceNotice: z.string().trim().max(300).nullable(),
+});
+export type PlatformSettings = z.infer<typeof platformSettingsSchema>;
+export const defaultPlatformSettings: PlatformSettings = { smsEnabled: true, whatsappEnabled: true, emailEnabled: true, maxSupportAccessHours: 24, trialDays: 30, maintenanceNotice: null };

@@ -15,6 +15,20 @@ import { LedgerService } from '../ledger/ledger.service';
 const auditQuery = paginationSchema.extend({ action: z.string().optional(), entityType: z.string().optional(), actorUserId: z.string().optional(), from: isoDateSchema.optional(), to: isoDateSchema.optional() });
 const ledgerQuery = paginationSchema.extend({ from: isoDateSchema.optional(), to: isoDateSchema.optional(), type: z.string().optional() });
 
+const FINANCE_ENTITIES = ['Payment', 'Loan', 'Expense', 'Fine', 'PayoutRound', 'PayoutCycle', 'CycleChange', 'Distribution', 'DistributionAllocation', 'JournalEntry', 'ContributionSchedule', 'ContributionObligation', 'ImportBatch', 'UnmatchedPayment', 'PublishedStatement', 'InvestmentHolding'];
+const ADMIN_ENTITIES = ['Meeting', 'Resolution', 'ActionItem', 'Announcement', 'Membership', 'Invitation', 'Proposal'];
+
+export function auditScope(m: MembershipContext): Prisma.AuditEventWhereInput {
+  if (m.permissions.includes(Permission.AUDIT_VIEW)) return {};
+  if (m.permissions.includes(Permission.AUDIT_VIEW_AREA)) {
+    const finance = [Permission.CONTRIBUTIONS_RECORD, Permission.EXPENSES_RECORD, Permission.LOANS_DISBURSE, Permission.ROTATIONS_MANAGE, Permission.LEDGER_ADJUST].some((p) => m.permissions.includes(p));
+    const admin = [Permission.MEETINGS_MANAGE, Permission.MEMBERS_MANAGE, Permission.MEMBERS_INVITE, Permission.ANNOUNCEMENTS_SEND].some((p) => m.permissions.includes(p));
+    const types = [...(finance ? FINANCE_ENTITIES : []), ...(admin ? ADMIN_ENTITIES : [])];
+    return { OR: [{ entityType: { in: types } }, { actorUserId: m.userId }] };
+  }
+  return { actorUserId: m.userId };
+}
+
 export function toAuditRow(a: Prisma.AuditEventGetPayload<{ include: { actor: { select: { fullName: true } } } }>): AuditEventRow {
   return { id: a.id, at: a.createdAt.toISOString(), actorName: a.actor?.fullName ?? null, action: a.action, entityType: a.entityType, entityId: a.entityId, before: a.before, after: a.after, reason: a.reason, reference: a.reference, ipAddress: a.ipAddress };
 }
@@ -27,11 +41,16 @@ export class GroupAuditController {
     private readonly audit: AuditService,
   ) {}
 
-  @RequirePermission(Permission.AUDIT_VIEW)
+  /**
+   * Full log for AUDIT_VIEW; records in the caller's working areas for
+   * AUDIT_VIEW_AREA; and the caller's own activity for everyone else.
+   */
+  @RequirePermission(Permission.GROUP_VIEW)
   @Get('audit')
-  async list(@Param('groupId') groupId: string, @Query(new ZodPipe(auditQuery)) q: z.infer<typeof auditQuery>) {
+  async list(@Param('groupId') groupId: string, @Query(new ZodPipe(auditQuery)) q: z.infer<typeof auditQuery>, @CurrentMembership() m: MembershipContext) {
     const where: Prisma.AuditEventWhereInput = {
       groupId,
+      ...auditScope(m),
       ...(q.action ? { action: { startsWith: q.action } } : {}),
       ...(q.entityType ? { entityType: q.entityType } : {}),
       ...(q.actorUserId ? { actorUserId: q.actorUserId } : {}),

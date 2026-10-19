@@ -30,7 +30,7 @@ import type {
   ReconciliationStatus,
   TransactionStatus,
 } from './enums';
-import type { Permission } from './permissions';
+import type { Permission, RolePolicy, SpecialRole } from './permissions';
 import type { GroupSettingsInput, LoanPolicyInput, NotificationPreferences } from './schemas';
 import type { DistributionResult } from './finance/distribution';
 import type { LoanSchedule } from './finance/loans';
@@ -96,6 +96,7 @@ export interface GroupMembershipSummary {
   name: string;
   type: GroupType;
   role: GroupRole;
+  specialRoles: SpecialRole[];
   permissions: Permission[];
   status: MembershipStatus;
   memberCount: number;
@@ -119,7 +120,10 @@ export interface GroupDetail {
   loanPolicy: LoanPolicyInput;
   memberCount: number;
   createdAt: string;
-  myMembership: { membershipId: string; role: GroupRole; permissions: Permission[] };
+  myMembership: { membershipId: string; role: GroupRole; specialRoles: SpecialRole[]; permissions: Permission[] };
+  /** Overrides to the default role matrix (visible to holders of permissions.configure). */
+  rolePolicy: RolePolicy | null;
+  founderName: string | null;
 }
 
 export interface GroupOverview {
@@ -140,6 +144,8 @@ export interface MemberRow {
   /** Masked unless the viewer may see member contact details. */
   phone: string;
   role: GroupRole;
+  specialRoles: SpecialRole[];
+  isFounder: boolean;
   status: MembershipStatus;
   joinedAt: string;
   shares: number;
@@ -612,4 +618,50 @@ export interface IntegrationStatus {
   sms: { configured: boolean; provider: string };
   email: { configured: boolean };
   whatsapp: { configured: boolean };
+}
+
+/* ---------- voting & findings ---------- */
+
+export interface ProposalRow {
+  id: string;
+  title: string;
+  description: string;
+  status: 'OPEN' | 'PASSED' | 'FAILED' | 'CANCELLED';
+  createdByName: string;
+  createdAt: string;
+  closesAt: string;
+  closedAt: string | null;
+  quorumPercent: number;
+  passPercent: number;
+  eligibleCount: number;
+  tally: { YES: number; NO: number; ABSTAIN: number };
+  /** Only the caller's own choice is ever returned; ballots are not attributed. */
+  myVote: 'YES' | 'NO' | 'ABSTAIN' | null;
+  canVote: boolean;
+  canClose: boolean;
+}
+
+export interface FindingRow {
+  id: string;
+  title: string;
+  details: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'REJECTED';
+  entityType: string | null;
+  entityId: string | null;
+  reference: string | null;
+  raisedByName: string;
+  response: string | null;
+  respondedByName: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  canRespond: boolean;
+}
+
+export interface PlatformStaffRow {
+  id: string;
+  fullName: string;
+  phone: string;
+  platformRole: PlatformRole;
+  createdAt: string;
 }

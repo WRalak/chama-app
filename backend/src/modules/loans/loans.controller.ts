@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { isoDateSchema, loanApplicationSchema, loanDecisionSchema, loanDisburseSchema, Permission } from '@chamahub/shared';
+import { isoDateSchema, loanApplicationSchema, loanDecisionSchema, loanDisburseSchema, Permission, prepareLoanSchema } from '@chamahub/shared';
 import { z } from 'zod';
 import { CurrentMembership, ReqMeta, RequirePermission } from '../../common/decorators';
 import { MembershipContext, RequestMeta } from '../../common/request';
@@ -27,6 +27,12 @@ export class LoansController {
   @Post()
   apply(@Param('groupId') groupId: string, @Body(new ZodPipe(loanApplicationSchema)) body: z.infer<typeof loanApplicationSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.loans.apply(groupId, body, m, meta);
+  }
+
+  @RequirePermission(Permission.LOANS_PREPARE)
+  @Post('prepare')
+  prepare(@Param('groupId') groupId: string, @Body(new ZodPipe(prepareLoanSchema)) body: z.infer<typeof prepareLoanSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
+    return this.loans.prepare(groupId, body, m, meta);
   }
 
   @RequirePermission(Permission.GROUP_VIEW)

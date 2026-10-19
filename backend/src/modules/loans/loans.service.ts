@@ -74,12 +74,24 @@ export class LoansService {
   }
 
   async apply(groupId: string, input: LoanApplicationInput, actor: MembershipContext, meta: RequestMeta) {
+    return this.createApplication(groupId, actor.id, input, actor, meta, false);
+  }
+
+  /** An officer prepares an application on a member's behalf (e.g. paper form at a meeting). */
+  async prepare(groupId: string, input: LoanApplicationInput & { memberId: string }, actor: MembershipContext, meta: RequestMeta) {
+    const member = await this.prisma.membership.findFirst({ where: { id: input.memberId, groupId, status: 'ACTIVE' } });
+    if (!member) throw new UnprocessableEntityException('Member not found in this group');
+    if (member.specialRoles.includes('READ_ONLY')) throw new UnprocessableEntityException('Read-only members cannot take loans');
+    return this.createApplication(groupId, member.id, input, actor, meta, true);
+  }
+
+  private async createApplication(groupId: string, borrowerId: string, input: LoanApplicationInput, actor: MembershipContext, meta: RequestMeta, prepared: boolean) {
     const policy = await this.policy(groupId);
-    const elig = await this.eligibility(groupId, actor.id, input.principalCents, input.installments);
+    const elig = await this.eligibility(groupId, borrowerId, input.principalCents, input.installments);
     if (!elig.eligible) throw new UnprocessableEntityException({ message: elig.reasons[0] ?? 'Not eligible', details: elig });
-    const open = await this.prisma.loan.count({ where: { membershipId: actor.id, status: { in: ['PENDING_APPROVAL', 'APPROVED'] } } });
-    if (open > 0) throw new UnprocessableEntityException('You already have a loan application in progress.');
-    if (input.guarantorMemberIds.includes(actor.id)) throw new UnprocessableEntityException('You cannot guarantee your own loan.');
+    const open = await this.prisma.loan.count({ where: { membershipId: borrowerId, status: { in: ['PENDING_APPROVAL', 'APPROVED'] } } });
+    if (open > 0) throw new UnprocessableEntityException(prepared ? 'This member already has a loan application in progress.' : 'You already have a loan application in progress.');
+    if (input.guarantorMemberIds.includes(borrowerId)) throw new UnprocessableEntityException('A borrower cannot guarantee their own loan.');
     if (input.guarantorMemberIds.length) {
       const ok = await this.prisma.membership.count({ where: { groupId, id: { in: input.guarantorMemberIds }, status: 'ACTIVE' } });
       if (ok !== new Set(input.guarantorMemberIds).size) throw new UnprocessableEntityException('Guarantors must be active members of this group.');
@@ -96,7 +108,8 @@ export class LoansService {
       const l = await tx.loan.create({
         data: {
           groupId,
-          membershipId: actor.id,
+          membershipId: borrowerId,
+          preparedByMembershipId: prepared ? actor.id : null,
           principalCents: big(input.principalCents),
           rateBps: policy.rateBps,
           interestMethod: policy.interestMethod,
@@ -110,10 +123,12 @@ export class LoansService {
           guarantors: { create: input.guarantorMemberIds.map((membershipId) => ({ membershipId })) },
         },
       });
-      await this.audit.log({ groupId, actorUserId: actor.userId, action: 'loan.applied', entityType: 'Loan', entityId: l.id, after: { ...input, policy }, approvalStatus: 'PENDING', meta }, tx);
+      await this.audit.log({ groupId, actorUserId: actor.userId, action: prepared ? 'loan.prepared' : 'loan.applied', entityType: 'Loan', entityId: l.id, after: { ...input, borrowerMembershipId: borrowerId, policy }, approvalStatus: 'PENDING', meta }, tx);
       return l;
     });
-    const approvers = (await this.notifications.groupUserIds(groupId, ['CHAIRPERSON', 'VICE_CHAIRPERSON', 'TREASURER'])).filter((u) => u !== actor.userId);
+    const borrower = await this.prisma.membership.findUniqueOrThrow({ where: { id: borrowerId }, select: { userId: true } });
+    const approvers = (await this.notifications.groupUserIds(groupId, ['CHAIRPERSON', 'VICE_CHAIRPERSON', 'TREASURER'])).filter((u) => u !== actor.userId && u !== borrower.userId);
+    if (prepared) await this.notifications.notify([borrower.userId], { groupId, type: 'APPROVAL_REQUIRED', title: 'Loan application prepared for you', body: `${formatKes(input.principalCents)} over ${input.installments} installments was submitted on your behalf. Check the details in the app.`, data: { loanId: loan.id } });
     await this.notifications.notify(approvers, { groupId, type: 'APPROVAL_REQUIRED', title: 'Loan application to review', body: `${formatKes(input.principalCents)} over ${input.installments} installments.`, data: { loanId: loan.id } });
     return this.detail(groupId, loan.id, actor);
   }
@@ -196,6 +211,7 @@ export class LoansService {
         l.status === 'PENDING_APPROVAL' &&
         viewer.permissions.includes(Permission.LOANS_APPROVE) &&
         !myDecision &&
+        l.preparedByMembershipId !== viewer.id &&
         (!own || l.allowSelfApproval),
       canDisburse: l.status === 'APPROVED' && viewer.permissions.includes(Permission.LOANS_DISBURSE) && !own,
     };
@@ -208,6 +224,9 @@ export class LoansService {
     const self = loan.membershipId === actor.id;
     if (self && decision === 'APPROVE' && !loan.allowSelfApproval) {
       throw new ForbiddenException('You cannot approve your own loan.');
+    }
+    if (loan.preparedByMembershipId === actor.id && decision === 'APPROVE') {
+      throw new ForbiddenException('You prepared this application, so another officer must approve it.');
     }
     const result = await this.prisma.financial(async (tx) => {
       const r = await this.approvals.decide(tx, {
