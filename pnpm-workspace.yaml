@@ -1,5 +1,7 @@
 packages:
-  - apps/*
+  - backend
+  - web
+  - mobile
   - packages/*
 onlyBuiltDependencies:
   - "@nestjs/core"

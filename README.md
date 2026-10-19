@@ -6,9 +6,9 @@ ChamaHub manages multiple Chamas (savings groups) for the Kenyan market. It has 
 
 | Part | Path | Stack | For |
 | --- | --- | --- | --- |
-| Mobile app | `apps/mobile` | Expo SDK 54, React Native 0.81, Expo Router, TanStack Query, React Hook Form + Zod | Members, and officers on the go |
-| Admin dashboard | `apps/admin` | Next.js 15 App Router, Tailwind, Radix/shadcn-style UI, TanStack Table/Query, Recharts | Chama officers and platform staff |
-| API | `apps/api` | NestJS 11, Prisma 6, PostgreSQL 16 | Shared backend: all money rules and authorization |
+| Mobile app | `mobile` | Expo SDK 54, React Native 0.81, Expo Router, TanStack Query, React Hook Form + Zod | Members, and officers on the go |
+| Admin dashboard | `web` | Next.js 15 App Router, Tailwind, Radix/shadcn-style UI, TanStack Table/Query, Recharts | Chama officers and platform staff |
+| API | `backend` | NestJS 11, Prisma 6, PostgreSQL 16 | Shared backend: all money rules and authorization |
 | Shared | `packages/shared` | TypeScript + Zod | Contracts, enums, permission matrix, integer-cent finance math |
 
 Both apps call the same API, so a payment an officer verifies on the web shows up on a member's phone, and the reverse.
@@ -19,9 +19,9 @@ Prerequisites: Node 20+, pnpm 10, PostgreSQL 16.
 
 ```bash
 pnpm install
-cp apps/api/.env.example apps/api/.env          # set DATABASE_URL and two 32+ char secrets
-cp apps/admin/.env.example apps/admin/.env.local
-cp apps/mobile/.env.example apps/mobile/.env     # EXPO_PUBLIC_API_URL reachable from the phone
+cp backend/.env.example backend/.env          # set DATABASE_URL and two 32+ char secrets
+cp web/.env.example web/.env.local
+cp mobile/.env.example mobile/.env     # EXPO_PUBLIC_API_URL reachable from the phone
 
 pnpm dev:setup          # build shared, apply migrations, load DEMO data
 pnpm dev:api            # http://localhost:4000  (health: /health)
@@ -29,7 +29,7 @@ pnpm dev:admin          # http://localhost:3000
 pnpm dev:mobile         # Expo dev server — open in Expo Go or an emulator
 ```
 
-**Demo data only** (from `apps/api/prisma/seed.ts`; it refuses to run with `NODE_ENV=production`):
+**Demo data only** (from `backend/prisma/seed.ts`; it refuses to run with `NODE_ENV=production`):
 
 - `0700 000 001` / `Demo1234` — Amina: treasurer of *Jitegemee Table Banking*, chairperson of *Mombasa Investment Chama*, member of *Upendo Merry-Go-Round* and *Family Welfare Group*.
 - `0700 000 099` / `Demo1234` — platform super admin.

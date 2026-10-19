@@ -3,9 +3,9 @@
 ## Monorepo
 
 ```
-apps/api       NestJS REST API (/v1), Prisma, PostgreSQL — the only writer of financial data
-apps/admin     Next.js dashboard; browser → same-origin BFF proxy → API
-apps/mobile    Expo app; talks to the API directly with tokens in the OS keystore
+backend       NestJS REST API (/v1), Prisma, PostgreSQL — the only writer of financial data
+web     Next.js dashboard; browser → same-origin BFF proxy → API
+mobile    Expo app; talks to the API directly with tokens in the OS keystore
 packages/shared  Zod request schemas, response types, enums, permission matrix, finance math
 ```
 

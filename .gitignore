@@ -6,9 +6,9 @@ dist/
 .env
 .env.local
 coverage/
-apps/mobile/android/
-apps/mobile/ios/
-apps/mobile/web-build/
+mobile/android/
+mobile/ios/
+mobile/web-build/
 .DS_Store
 storage/
 next-env.d.ts
