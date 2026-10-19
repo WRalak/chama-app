@@ -144,7 +144,7 @@ export class RotationsService {
       nextRound: open[1] ?? null,
       remainingRounds: open.length,
       myRounds: rounds.filter((r) => r.recipientMembershipId === viewer.id),
-      changeLog: c.changes.map((ch) => ({ at: ch.createdAt.toISOString(), byName: pname.get(ch.proposedByMembershipId) ?? '', reason: `${ch.reason} (${ch.status.toLowerCase()})` })),
+      changeLog: c.changes.map((ch) => ({ id: ch.id, at: ch.createdAt.toISOString(), byName: pname.get(ch.proposedByMembershipId) ?? '', reason: ch.reason, status: ch.status, before: ch.beforeOrder as string[], after: ch.afterOrder as string[] })),
     };
   }
 

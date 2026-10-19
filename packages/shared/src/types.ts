@@ -398,7 +398,7 @@ export interface RotationCycle {
   nextRound: RotationRoundRow | null;
   remainingRounds: number;
   myRounds: RotationRoundRow[];
-  changeLog: { at: string; byName: string; reason: string }[];
+  changeLog: { id: string; at: string; byName: string; reason: string; status: ApprovalStatus; before: string[]; after: string[] }[];
 }
 
 /* ---------- distributions ---------- */
