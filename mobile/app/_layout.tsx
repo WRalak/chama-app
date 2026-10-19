@@ -7,7 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApiError } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { Loading } from '@/components/ui';
-import { OfflineBanner } from '@/components/offline-banner';
+import { MaintenanceBanner, OfflineBanner } from '@/components/offline-banner';
 import { colors } from '@/theme';
 
 /** Keeps the navigation tree in step with the auth state. */
@@ -32,6 +32,7 @@ function Gate() {
   return (
     <>
       <OfflineBanner />
+      <MaintenanceBanner />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
     </>
   );

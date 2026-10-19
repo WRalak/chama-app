@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Linking, View } from 'react-native';
-import { MeetingDetail } from '@chamahub/shared';
+import { MeetingDetail, Permission } from '@chamahub/shared';
 import { Button, ErrorView, Loading, Notice, Row, Screen, Section, T } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { date, dateTime, kes } from '@/lib/format';
-import { useAct } from '@/lib/queries';
+import { useAct, useGroup } from '@/lib/queries';
 import { colors, space } from '@/theme';
 
 export default function Meeting() {
@@ -14,6 +14,9 @@ export default function Meeting() {
   const { user } = useAuth();
   const m = useQuery({ queryKey: ['meeting', groupId, meetingId], queryFn: () => api<MeetingDetail>(`groups/${groupId}/meetings/${meetingId}`) });
   const rsvp = useAct((status: 'CONFIRMED' | 'DECLINED' | 'APOLOGY') => api(`groups/${groupId}/meetings/${meetingId}/rsvp`, { method: 'PUT', body: { status } }), { invalidate: [['meeting', groupId, meetingId], ['meetings', groupId]] });
+  const group = useGroup(groupId);
+  const canApproveMinutes = group.data?.myMembership.permissions.includes(Permission.MINUTES_APPROVE);
+  const approve = useAct(() => api(`groups/${groupId}/meetings/${meetingId}/minutes/approve`, { method: 'POST' }), { invalidate: [['meeting', groupId, meetingId]], successMessage: 'Minutes published to members.' });
   const d = m.data;
   const myActions = d?.actions.filter((a) => a.assigneeName === user?.fullName) ?? [];
   return (
@@ -49,6 +52,14 @@ export default function Meeting() {
               <View style={{ padding: space.lg }}>
                 <T variant="body">{d.minutes.body}</T>
                 <T variant="small" style={{ marginTop: space.md }}>{`Approved by ${d.minutes.approvedByName} on ${date(d.minutes.approvedAt)}`}</T>
+              </View>
+            </Section>
+          ) : d.minutes && canApproveMinutes ? (
+            <Section title="Draft minutes — awaiting your approval">
+              <View style={{ padding: space.lg }}>
+                <T variant="body">{d.minutes.body}</T>
+                <Button title="Approve and publish" onPress={() => approve.mutate(undefined)} loading={approve.isPending} style={{ marginTop: space.md }} />
+                <T variant="small" style={{ marginTop: space.sm }}>Minutes must be approved by someone other than whoever wrote them.</T>
               </View>
             </Section>
           ) : d.status === 'HELD' ? <Notice tone="neutral">Minutes will appear once approved.</Notice> : null}

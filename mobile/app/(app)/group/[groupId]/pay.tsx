@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { IntegrationStatus, ObligationItem, parseKes } from '@chamahub/shared';
+import { IntegrationStatus, ObligationItem, parseKes, todayInNairobi } from '@chamahub/shared';
 import { Button, Field, Loading, Notice, Row, Screen, Section, T } from '@/components/ui';
+import { View } from 'react-native';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { kes, date, newKey } from '@/lib/format';
@@ -27,6 +28,11 @@ export default function Pay() {
     cents = null;
   }
   const stk = useAct(() => api<{ message: string }>(`groups/${groupId}/payments/mpesa/stk`, { body: { amountCents: cents, phone, purpose: 'CONTRIBUTION', targetId, idempotencyKey: key } }), { invalidate: [['my-payments', groupId], ['dashboard']], onSuccess: (r) => { router.back(); setTimeout(() => alert(r.message), 50); } });
+  const [reference, setReference] = useState('');
+  const report = useAct(
+    () => api(`groups/${groupId}/payments`, { body: { memberId: group.data!.myMembership.membershipId, amountCents: cents, method: 'MPESA', reference, paidAt: todayInNairobi(), purpose: 'CONTRIBUTION', targetId, idempotencyKey: key } }),
+    { invalidate: [['my-payments', groupId], ['my-obligations', groupId], ['dashboard']], successMessage: 'Reported. It shows as pending until an officer verifies it.', onSuccess: () => router.back() },
+  );
   const settings = group.data?.settings;
   const mpesa = status.data?.mpesa.configured;
 
@@ -55,7 +61,13 @@ export default function Pay() {
                   ? `Pay via M-Pesa Paybill ${settings.paybillNumber}, account ${settings.accountReferencePrefix ?? ''}${user?.phone.slice(-9) ?? ''}. Your treasurer will match and confirm it.`
                   : 'In-app M-Pesa payments are not enabled for this group yet. Pay your treasurer by M-Pesa or cash and they will record it. It will appear here as pending until verified.'}
               </Notice>
-              <Button title="Back" variant="secondary" onPress={() => router.back()} />
+              <Section title="Already paid? Report it">
+                <View style={{ padding: space.lg }}>
+                  <Field label="M-Pesa or bank transaction code" autoCapitalize="characters" value={reference} onChangeText={(t) => setReference(t.toUpperCase())} placeholder="e.g. QBC12XYZ9" />
+                  <Button title={cents ? `Report ${kes(cents)} payment` : 'Report payment'} onPress={() => report.mutate(undefined)} loading={report.isPending} disabled={!cents || cents <= 0 || reference.length < 6} />
+                  <T variant="small" style={{ marginTop: space.sm }}>The treasurer checks the code against the group account before it counts.</T>
+                </View>
+              </Section>
             </>
           )}
         </>
