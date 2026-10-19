@@ -96,7 +96,7 @@ export class GroupsService {
           this.finance.outstandingObligations(m.groupId, [m.id]),
           this.finance.loanBalances(m.groupId, [m.id]),
           this.prisma.payoutRound.findFirst({
-            where: { membershipId: m.id, status: { notIn: ['COMPLETED'] }, cycle: { status: 'ACTIVE' }, payoutDate: { gte: t } },
+            where: { membershipId: m.id, status: { notIn: ['COMPLETED', 'CANCELLED'] }, cycle: { status: 'ACTIVE' }, payoutDate: { gte: t } },
             orderBy: { payoutDate: 'asc' },
             select: { payoutDate: true },
           }),

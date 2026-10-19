@@ -14,6 +14,7 @@ import { isIsoDate } from '../dates';
 import { ALL_PERMISSIONS, SPECIAL_ROLES } from '../permissions';
 import { normalizeKenyanPhone } from '../phone';
 import { MAX_LOAN_INSTALLMENTS } from '../finance/loans';
+import { MISSED_CONTRIBUTION_POLICIES, ROTATION_APPROVAL_MODES, ROTATION_ORDER_METHODS } from '../finance/rotation';
 
 /* ---------- primitives ---------- */
 
@@ -154,6 +155,12 @@ export const groupSettingsSchema = z.object({
   membersCanViewMemberBalances: z.boolean(),
   paybillNumber: z.string().trim().max(20).nullable(),
   accountReferencePrefix: z.string().trim().max(12).nullable(),
+  /** What happens when a round is not fully collected by payout time. */
+  missedContributionPolicy: z.enum(MISSED_CONTRIBUTION_POLICIES),
+  /** Whether a round may be paid before its scheduled date. */
+  allowEarlyPayout: z.boolean(),
+  /** Hold a payout while the recipient has overdue contributions, fines or loan installments. */
+  holdPayoutWhenRecipientInArrears: z.boolean(),
 });
 export type GroupSettingsInput = z.infer<typeof groupSettingsSchema>;
 
@@ -164,6 +171,9 @@ export const defaultGroupSettings: GroupSettingsInput = {
   membersCanViewMemberBalances: false,
   paybillNumber: null,
   accountReferencePrefix: null,
+  missedContributionPolicy: 'PAY_CONFIRMED_WITH_REASON',
+  allowEarlyPayout: false,
+  holdPayoutWhenRecipientInArrears: false,
 };
 
 export const createGroupSchema = z.object({
@@ -309,25 +319,73 @@ export const markPaidSchema = z.object({
 
 /* ---------- rotations ---------- */
 
-export const createCycleSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  contributionCents: amountCentsSchema,
-  frequency: z.enum(FREQUENCIES),
-  startDate: isoDateSchema,
-  memberIdsInOrder: z.array(z.string()).min(2),
-  recipientContributes: z.boolean().default(true),
-});
+export const createCycleSchema = z
+  .object({
+    name: z.string().trim().min(2).max(80),
+    contributionCents: amountCentsSchema,
+    frequency: z.enum(FREQUENCIES),
+    startDate: isoDateSchema,
+    orderMethod: z.enum(ROTATION_ORDER_METHODS).default('AGREED'),
+    /** AGREED: the payout order. RANDOM_DRAW / CARRY_OVER: the participants (order is computed). */
+    memberIds: z.array(z.string().min(1)).min(2).max(500),
+    recipientsPerRound: z.number().int().min(1).max(10).default(1),
+    recipientContributes: z.boolean().default(true),
+    approvalMode: z.enum(ROTATION_APPROVAL_MODES).default('OFFICERS'),
+    /** Required when members approve the schedule by vote. */
+    vote: z
+      .object({
+        closesAt: z.string().datetime({ offset: true }),
+        quorumPercent: z.number().int().min(1).max(100).default(50),
+        passPercent: z.number().int().min(1).max(100).default(50),
+      })
+      .optional(),
+  })
+  .refine((v) => v.approvalMode !== 'MEMBER_VOTE' || !!v.vote, { message: 'Set when the members’ vote closes', path: ['vote'] })
+  .refine((v) => new Set(v.memberIds).size === v.memberIds.length, { message: 'Each member can only appear once', path: ['memberIds'] })
+  .refine((v) => v.memberIds.length % v.recipientsPerRound === 0, { message: 'The number of members must be a multiple of recipients per round', path: ['recipientsPerRound'] });
 export type CreateCycleInput = z.infer<typeof createCycleSchema>;
 
+export const rotationAmendmentSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('REORDER'), order: z.array(z.string().min(1)).min(1), reason: reasonSchema }),
+  z.object({ kind: z.literal('ADD_MEMBERS'), memberIds: z.array(z.string().min(1)).min(1).max(20), reason: reasonSchema }),
+  z.object({ kind: z.literal('REMOVE_MEMBER'), memberId: z.string().min(1), reason: reasonSchema }),
+  z.object({ kind: z.literal('REPLACE_MEMBER'), memberId: z.string().min(1), replacementId: z.string().min(1), reason: reasonSchema }),
+]);
+export type RotationAmendmentInput = z.infer<typeof rotationAmendmentSchema>;
+
+/** Kept for older clients: a reorder proposal. */
 export const reorderCycleSchema = z.object({
   memberIdsInOrder: z.array(z.string()).min(2),
   reason: reasonSchema,
 });
-export const approvePayoutSchema = z.object({
-  comment: z.string().trim().max(500).optional(),
-  /** Required when the confirmed collection is below expected. */
+
+export const preparePayoutSchema = z.object({
+  /** Required when the confirmed collection is below expected and policy allows paying it. */
   shortfallReason: z.string().trim().max(500).optional(),
+  comment: z.string().trim().max(500).optional(),
 });
+export const approvePayoutSchema = z.object({
+  decision: z.enum(['APPROVE', 'REJECT']).default('APPROVE'),
+  comment: z.string().trim().max(500).optional(),
+});
+export const disbursePayoutSchema = z
+  .object({
+    method: z.enum(PAYMENT_METHODS),
+    /** Provider transaction code (e.g. the M-Pesa confirmation code). */
+    reference: z.string().trim().max(60).optional(),
+    /** Where the money was sent, e.g. "M-Pesa 0712 *** 678". */
+    destination: z.string().trim().max(80).optional(),
+    sentAt: isoDateSchema,
+    evidenceNote: z.string().trim().max(500).optional(),
+    idempotencyKey: z.string().min(8).max(100),
+  })
+  .refine((v) => !['MPESA', 'BANK_TRANSFER', 'CHEQUE'].includes(v.method) || (v.reference?.length ?? 0) >= 4, { message: 'Enter the transaction reference so the payout can be verified', path: ['reference'] })
+  .refine((v) => v.method !== 'CASH' || (v.evidenceNote?.length ?? 0) >= 5, { message: 'Describe the cash handover (who witnessed it, where)', path: ['evidenceNote'] });
+export const confirmPayoutSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});
+export const failPayoutSchema = z.object({ reason: reasonSchema });
+export const payoutProblemSchema = z.object({ details: z.string().trim().min(5).max(1000) });
 export const deferRoundSchema = z.object({ reason: reasonSchema });
 
 /* ---------- distributions ---------- */

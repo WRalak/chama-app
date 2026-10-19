@@ -179,6 +179,7 @@ enum ApprovalEntity {
   DISTRIBUTION
   IMPORT
   CYCLE_CHANGE
+  CYCLE_ACTIVATION
   SUPPORT_ACCESS
 }
 
@@ -213,11 +214,41 @@ enum CycleStatus {
 
 enum PayoutStatus {
   SCHEDULED
-  COLLECTING
-  READY
+  AWAITING_APPROVAL
   APPROVED
+  PROCESSING
   COMPLETED
-  DEFERRED
+  FAILED
+  CANCELLED
+}
+
+enum DisbursementStatus {
+  PROCESSING
+  CONFIRMED
+  FAILED
+}
+
+enum PayoutConfirmationKind {
+  RECIPIENT
+  OFFICER_VERIFIED
+}
+
+enum RotationOrderMethod {
+  AGREED
+  RANDOM_DRAW
+  CARRY_OVER
+}
+
+enum RotationApprovalMode {
+  OFFICERS
+  MEMBER_VOTE
+}
+
+enum RotationAmendmentKind {
+  REORDER
+  ADD_MEMBERS
+  REMOVE_MEMBER
+  REPLACE_MEMBER
 }
 
 enum DistributionMethod {
@@ -296,6 +327,10 @@ enum NotificationType {
   ANNOUNCEMENT
   INVITATION
   APPROVAL_REQUIRED
+  PAYOUT_APPROVED
+  PAYOUT_SENT
+  PAYOUT_FAILED
+  ROTATION_UPDATED
 }
 
 enum NotificationChannel {
@@ -583,6 +618,10 @@ model ContributionSchedule {
 model ScheduleMember {
   scheduleId   String
   membershipId String
+  /// Owes contributions due on or after this date (members joining mid-cycle).
+  fromDate     DateTime? @db.Date
+  /// Owes nothing due after this date (members leaving mid-cycle).
+  untilDate    DateTime? @db.Date
 
   schedule   ContributionSchedule @relation(fields: [scheduleId], references: [id])
   membership Membership           @relation(fields: [membershipId], references: [id])
@@ -921,17 +960,30 @@ model Expense {
 // ───────────────────────────── rotations ─────────────────────────────
 
 model PayoutCycle {
-  id                   String      @id @default(cuid())
+  id                   String               @id @default(cuid())
   groupId              String
   name                 String
-  status               CycleStatus @default(ACTIVE)
+  status               CycleStatus          @default(ACTIVE)
   contributionCents    BigInt
   frequency            Frequency
-  startDate            DateTime    @db.Date
-  recipientContributes Boolean     @default(true)
+  startDate            DateTime             @db.Date
+  recipientContributes Boolean              @default(true)
+  recipientsPerRound   Int                  @default(1)
+  orderMethod          RotationOrderMethod  @default(AGREED)
+  /// Server-generated seed for a random draw; published so anyone can re-run it.
+  drawSeed             String?
+  /// Participants fed to the draw (or carry-over), so the result is reproducible.
+  drawParticipants     Json?
+  previousCycleId      String?
+  approvalMode         RotationApprovalMode @default(OFFICERS)
+  /// Members' vote that approves the schedule, when approvalMode = MEMBER_VOTE.
+  proposalId           String?              @unique
+  /// The schedule exactly as approved. Later changes are amendments (cycle_changes).
+  approvedPlan         Json?
+  activatedAt          DateTime?
   createdById          String
   completedAt          DateTime?
-  createdAt            DateTime    @default(now())
+  createdAt            DateTime             @default(now())
 
   group    Group                 @relation(fields: [groupId], references: [id])
   rounds   PayoutRound[]
@@ -943,39 +995,86 @@ model PayoutCycle {
 }
 
 model PayoutRound {
-  id                String         @id @default(cuid())
-  cycleId           String
-  round             Int
-  membershipId      String
-  payoutDate        DateTime       @db.Date
-  expectedCents     BigInt
-  status            PayoutStatus   @default(SCHEDULED)
-  requiredApprovals Int
-  shortfallReason   String?
-  payoutMethod      PaymentMethod?
-  payoutReference   String?
-  payoutKey         String?        @unique
-  payoutAmountCents BigInt?
-  completedAt       DateTime?
-  createdAt         DateTime       @default(now())
+  id                     String         @id @default(cuid())
+  cycleId                String
+  round                  Int
+  /// Position within the round when a round pays several recipients.
+  slot                   Int            @default(1)
+  membershipId           String
+  payoutDate             DateTime       @db.Date
+  /// Projected round collection (all recipients); obligations are authoritative once generated.
+  expectedCents          BigInt
+  status                 PayoutStatus   @default(SCHEDULED)
+  requiredApprovals      Int
+  /// Incremented each time the payout is (re)prepared; approvals are tied to one preparation.
+  preparationNo          Int            @default(0)
+  preparedByMembershipId String?
+  preparedAt             DateTime?
+  preparedAmountCents    BigInt?
+  readinessSnapshot      Json?
+  shortfallReason        String?
+  payoutMethod           PaymentMethod?
+  payoutReference        String?
+  payoutAmountCents      BigInt?
+  completedAt            DateTime?
+  cancelledReason        String?
+  createdAt              DateTime       @default(now())
 
-  cycle       PayoutCycle              @relation(fields: [cycleId], references: [id])
-  membership  Membership               @relation(fields: [membershipId], references: [id])
-  obligations ContributionObligation[]
+  cycle         PayoutCycle              @relation(fields: [cycleId], references: [id])
+  membership    Membership               @relation(fields: [membershipId], references: [id])
+  obligations   ContributionObligation[]
+  disbursements PayoutDisbursement[]
 
-  @@unique([cycleId, round])
+  @@unique([cycleId, round, slot])
   @@map("payout_rounds")
 }
 
+/// Every attempt to send a payout. Rows are never overwritten: a failed
+/// attempt stays FAILED and a retry is a new attempt.
+model PayoutDisbursement {
+  id                     String                  @id @default(cuid())
+  groupId                String
+  roundId                String
+  attempt                Int
+  idempotencyKey         String                  @unique
+  amountCents            BigInt
+  method                 PaymentMethod
+  reference              String?
+  destination            String?
+  sentOn                 DateTime                @db.Date
+  evidenceNote           String?
+  recordedByMembershipId String
+  status                 DisbursementStatus      @default(PROCESSING)
+  confirmationKind       PayoutConfirmationKind?
+  confirmedByUserId      String?
+  confirmedAt            DateTime?
+  confirmationNote       String?
+  failureReason          String?
+  failedByUserId         String?
+  failedAt               DateTime?
+  createdAt              DateTime                @default(now())
+
+  round PayoutRound @relation(fields: [roundId], references: [id])
+
+  @@unique([roundId, attempt])
+  @@unique([groupId, reference])
+  @@index([groupId, status])
+  @@map("payout_disbursements")
+}
+
 model CycleChange {
-  id                     String         @id @default(cuid())
+  id                     String                @id @default(cuid())
   cycleId                String
+  kind                   RotationAmendmentKind @default(REORDER)
+  /// Members joining / leaving with this amendment.
+  joined                 Json?
+  left                   Json?
   beforeOrder            Json
   afterOrder             Json
   reason                 String
   proposedByMembershipId String
-  status                 ApprovalStatus @default(PENDING)
-  createdAt              DateTime       @default(now())
+  status                 ApprovalStatus        @default(PENDING)
+  createdAt              DateTime              @default(now())
   appliedAt              DateTime?
 
   cycle PayoutCycle @relation(fields: [cycleId], references: [id])
@@ -1260,6 +1359,8 @@ model Dispute {
   groupId      String
   membershipId String
   paymentId    String?
+  /// A payout the dispute is about (e.g. a recipient reporting money not received).
+  roundId      String?
   subject      String
   details      String
   status       DisputeStatus @default(OPEN)
@@ -1317,6 +1418,9 @@ model Proposal {
   closesAt      DateTime
   closedAt      DateTime?
   result        Json?
+  /// What the vote decides, e.g. subjectType "PayoutCycle" activates a rotation when passed.
+  subjectType   String?
+  subjectId     String?
   createdAt     DateTime       @default(now())
 
   group Group  @relation(fields: [groupId], references: [id])

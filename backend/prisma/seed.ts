@@ -148,7 +148,12 @@ async function main() {
 
   // 2) Upendo Merry-Go-Round — Amina is a MEMBER.
   const up = await group('Upendo Merry-Go-Round', 'MERRY_GO_ROUND', [['Peter', 'CHAIRPERSON'], ['Joyce', 'TREASURER'], ['Amina', 'MEMBER'], ['Daniel', 'MEMBER'], ['Mercy', 'MEMBER']], 2);
-  const cycle = await rotations.create(up.id, { name: 'Upendo Cycle 3', contributionCents: 100_000, frequency: 'WEEKLY', startDate: addDays(today, -21), memberIdsInOrder: [up.ctx.Daniel.id, up.ctx.Mercy.id, up.ctx.Peter.id, up.ctx.Amina.id, up.ctx.Joyce.id], recipientContributes: true }, up.ctx.Joyce, meta);
+  // Mercy is the group's Payout Approver (an optional role), so payouts to the chair can still be approved independently.
+  await prisma.membership.update({ where: { id: up.ctx.Mercy.id }, data: { specialRoles: ['PAYOUT_APPROVER'] } });
+  up.ctx.Mercy = { ...up.ctx.Mercy, permissions: resolvePermissions('MEMBER', null, ['PAYOUT_APPROVER']) };
+  // The treasurer drafts the schedule; the chair approves it before it becomes binding.
+  const draft = await rotations.create(up.id, { name: 'Upendo Cycle 3', contributionCents: 100_000, frequency: 'WEEKLY', startDate: addDays(today, -21), orderMethod: 'AGREED', memberIds: [up.ctx.Daniel.id, up.ctx.Mercy.id, up.ctx.Peter.id, up.ctx.Amina.id, up.ctx.Joyce.id], recipientsPerRound: 1, recipientContributes: true, approvalMode: 'OFFICERS' }, up.ctx.Joyce, meta);
+  const cycle = await rotations.decideActivation(up.id, draft.id, 'APPROVE', 'Order agreed at the July meeting', up.ctx.Peter, meta);
   for (const round of cycle.rounds.filter((r) => r.payoutDate <= today)) {
     for (const o of await prisma.contributionObligation.findMany({ where: { roundId: round.id } })) {
       const member = byMembership(up.ctx, o.membershipId);
@@ -156,10 +161,15 @@ async function main() {
       await settle(up.ctx, member, 100_000, round.payoutDate, { targetId: o.id });
     }
     if (round.round <= 3) {
-      const officers = [up.ctx.Peter, up.ctx.Joyce];
-      const approver = officers.find((c) => c.id !== round.recipientMembershipId)!;
-      await rotations.approvePayout(up.id, cycle.id, round.id, {}, approver, meta);
-      await rotations.completePayout(up.id, cycle.id, round.id, { method: 'MPESA', reference: `SPAY${round.round}XYZ`, paidAt: round.payoutDate, idempotencyKey: k() }, approver, meta);
+      // Prepared by the treasurer, approved by an officer who is neither the preparer nor the recipient,
+      // sent with an M-Pesa reference, then confirmed independently of the sender.
+      const approver = [up.ctx.Peter, up.ctx.Mercy].find((c) => c.id !== round.recipientMembershipId)!;
+      await rotations.prepare(up.id, cycle.id, round.id, {}, up.ctx.Joyce, meta);
+      await rotations.decidePayout(up.id, cycle.id, round.id, { decision: 'APPROVE' }, approver, meta);
+      await rotations.disburse(up.id, cycle.id, round.id, { method: 'MPESA', reference: `SPAY${round.round}XYZ`, destination: 'M-Pesa (registered number)', sentAt: round.payoutDate, idempotencyKey: k() }, up.ctx.Joyce, meta);
+      const recipient = byMembership(up.ctx, round.recipientMembershipId);
+      if (round.round === 3) await rotations.confirm(up.id, cycle.id, round.id, { note: 'Matched SPAY3XYZ on the till statement' }, up.ctx.Mercy, meta);
+      else await rotations.confirm(up.id, cycle.id, round.id, { note: 'Received, thank you' }, recipient, meta);
     }
   }
 

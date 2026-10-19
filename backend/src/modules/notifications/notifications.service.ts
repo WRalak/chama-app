@@ -29,6 +29,7 @@ const TOPIC: Partial<Record<NotificationType, keyof NotificationPreferences>> = 
   MEETING_REMINDER: 'meetingReminders',
   MEETING_SCHEDULED: 'meetingReminders',
   ANNOUNCEMENT: 'announcements',
+  ROTATION_UPDATED: 'announcements',
 };
 
 export interface NotifyInput {

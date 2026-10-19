@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ActivityItem, addDays, CalendarEntry, PersonalDashboard } from '@chamahub/shared';
+import { ActivityItem, addDays, CalendarEntry, PersonalDashboard, recipientShare } from '@chamahub/shared';
 import { dbDate, isoDate, today } from '../../common/dates';
 import { n } from '../../common/money';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -40,8 +40,8 @@ export class MeService {
       this.prisma.journalLine.findMany({ where: { account: 'MEMBER_CONTRIBUTIONS', entry: { membershipId: { in: ids }, entryDate: { gte: dbDate(monthStart), lte: dbDate(t) } } }, select: { amountCents: true } }),
       this.prisma.journalLine.findMany({ where: { account: 'PAYOUTS', entry: { membershipId: { in: ids } } }, select: { amountCents: true } }),
       this.prisma.payoutRound.findMany({
-        where: { membershipId: { in: ids }, status: { not: 'COMPLETED' }, cycle: { status: 'ACTIVE' } },
-        include: { cycle: { select: { name: true, groupId: true, group: { select: { name: true } } } } },
+        where: { membershipId: { in: ids }, status: { notIn: ['COMPLETED', 'CANCELLED'] }, cycle: { status: 'ACTIVE' } },
+        include: { cycle: { select: { name: true, groupId: true, recipientsPerRound: true, group: { select: { name: true } } } } },
         orderBy: { payoutDate: 'asc' },
         take: 10,
       }),
@@ -72,7 +72,7 @@ export class MeService {
       overdueCents: overdue.reduce((a, o) => a + o.outstandingCents, 0),
       outstandingLoanCents: groups.reduce((a, g) => a + g.loanBalanceCents, 0),
       payoutsReceivedCents: payoutLines.reduce((a, l) => a + n(l.amountCents), 0),
-      upcomingPayouts: rounds.map((r) => ({ groupId: r.cycle.groupId, groupName: r.cycle.group.name, cycleName: r.cycle.name, payoutDate: isoDate(r.payoutDate), expectedCents: n(r.expectedCents), status: r.status })),
+      upcomingPayouts: rounds.map((r) => ({ groupId: r.cycle.groupId, groupName: r.cycle.group.name, cycleName: r.cycle.name, payoutDate: isoDate(r.payoutDate), expectedCents: recipientShare(n(r.expectedCents), r.cycle.recipientsPerRound, r.slot - 1), status: r.status })),
       recentActivity,
       groups,
       pendingInvitations: invitations,
@@ -109,13 +109,13 @@ export class MeService {
     const [obligations, installments, rounds, meetings] = await Promise.all([
       this.finance.obligationItems({ membershipIds: ids, from: q.from, to: q.to }),
       this.prisma.loanInstallment.findMany({ where: { dueDate: range, loan: { membershipId: { in: ids }, status: 'DISBURSED' } }, include: { loan: { select: { groupId: true, group: { select: { name: true } } } } } }),
-      this.prisma.payoutRound.findMany({ where: { membershipId: { in: ids }, payoutDate: range }, include: { cycle: { select: { name: true, groupId: true, group: { select: { name: true } } } } } }),
+      this.prisma.payoutRound.findMany({ where: { membershipId: { in: ids }, payoutDate: range, status: { not: 'CANCELLED' }, cycle: { status: { in: ['ACTIVE', 'COMPLETED'] } } }, include: { cycle: { select: { name: true, groupId: true, recipientsPerRound: true, group: { select: { name: true } } } } } }),
       this.prisma.meeting.findMany({ where: { groupId: { in: groupIds }, scheduledAt: { gte: dbDate(q.from), lt: new Date(dbDate(q.to).getTime() + 86_400_000) }, status: { not: 'CANCELLED' } }, include: { group: { select: { name: true } } } }),
     ]);
     const entries: CalendarEntry[] = [
       ...obligations.map((o) => ({ id: o.id, kind: 'CONTRIBUTION' as const, groupId: o.groupId, groupName: o.groupName, date: o.dueDate, title: `${o.scheduleName} · ${o.periodLabel}`, amountCents: o.status === 'PAID' ? o.amountCents : o.outstandingCents, status: o.status })),
       ...installments.map((i) => ({ id: i.id, kind: 'LOAN_INSTALLMENT' as const, groupId: i.loan.groupId, groupName: i.loan.group.name, date: isoDate(i.dueDate), title: `Loan installment ${i.number}`, amountCents: n(i.principalCents) + n(i.interestCents) - n(i.principalPaidCents) - n(i.interestPaidCents), status: installmentStatus(i, t) })),
-      ...rounds.map((r) => ({ id: r.id, kind: 'PAYOUT' as const, groupId: r.cycle.groupId, groupName: r.cycle.group.name, date: isoDate(r.payoutDate), title: `Your payout · ${r.cycle.name} round ${r.round}`, amountCents: n(r.expectedCents), status: r.status })),
+      ...rounds.map((r) => ({ id: r.id, kind: 'PAYOUT' as const, groupId: r.cycle.groupId, groupName: r.cycle.group.name, date: isoDate(r.payoutDate), title: `Your payout · ${r.cycle.name} round ${r.round}`, amountCents: recipientShare(n(r.expectedCents), r.cycle.recipientsPerRound, r.slot - 1), status: r.status })),
       ...meetings.map((m) => ({ id: m.id, kind: 'MEETING' as const, groupId: m.groupId, groupName: m.group.name, date: isoDate(new Date(m.scheduledAt.getTime() + 3 * 3600_000)), title: m.title, amountCents: null, status: m.status })),
     ];
     return entries.sort((a, b) => (a.date === b.date ? a.kind.localeCompare(b.kind) : a.date < b.date ? -1 : 1));

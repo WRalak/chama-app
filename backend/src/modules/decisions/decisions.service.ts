@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { FindingRow, Permission, ProposalRow, resolvePermissions, RolePolicy, SpecialRole, GroupRole } from '@chamahub/shared';
 import { AuditService } from '../../common/audit.service';
@@ -8,6 +8,9 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 type Choice = 'YES' | 'NO' | 'ABSTAIN';
 
+/** Called when a vote about a subject (e.g. a rotation schedule) closes. */
+export type OutcomeHandler = (p: { id: string; groupId: string; subjectId: string; status: 'PASSED' | 'FAILED' | 'CANCELLED' }) => Promise<void>;
+
 /**
  * Group decisions (member votes) and audit findings. Ballots are final and
  * never attributed in API responses: only tallies and the caller's own
@@ -15,6 +18,14 @@ type Choice = 'YES' | 'NO' | 'ABSTAIN';
  */
 @Injectable()
 export class DecisionsService {
+  private readonly logger = new Logger('Decisions');
+  private readonly handlers = new Map<string, OutcomeHandler>();
+
+  /** Lets another module act on the result of votes about its subjects. */
+  onOutcome(subjectType: string, handler: OutcomeHandler) {
+    this.handlers.set(subjectType, handler);
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
@@ -28,13 +39,13 @@ export class DecisionsService {
     return members.filter((m) => resolvePermissions(m.role as GroupRole, group.rolePolicy as RolePolicy | null, m.specialRoles as SpecialRole[]).includes(Permission.VOTES_CAST));
   }
 
-  async createProposal(groupId: string, input: { title: string; description: string; closesAt: string; quorumPercent: number; passPercent: number }, actor: MembershipContext, meta: RequestMeta) {
+  async createProposal(groupId: string, input: { title: string; description: string; closesAt: string; quorumPercent: number; passPercent: number; subjectType?: string; subjectId?: string }, actor: MembershipContext, meta: RequestMeta) {
     const closesAt = new Date(input.closesAt);
     if (closesAt.getTime() < Date.now() + 60 * 60_000) throw new UnprocessableEntityException('Give members at least one hour to vote');
     const eligible = await this.eligibleMembers(groupId);
     if (eligible.length === 0) throw new UnprocessableEntityException('No members are eligible to vote');
     const p = await this.prisma.proposal.create({
-      data: { groupId, title: input.title, description: input.description, closesAt, quorumPercent: input.quorumPercent, passPercent: input.passPercent, eligibleCount: eligible.length, createdById: actor.userId },
+      data: { groupId, title: input.title, description: input.description, closesAt, quorumPercent: input.quorumPercent, passPercent: input.passPercent, eligibleCount: eligible.length, createdById: actor.userId, subjectType: input.subjectType ?? null, subjectId: input.subjectId ?? null },
     });
     await this.audit.log({ groupId, actorUserId: actor.userId, action: 'vote.opened', entityType: 'Proposal', entityId: p.id, after: input, meta });
     await this.notifications.notify(eligible.map((m) => m.userId), { groupId, type: 'ANNOUNCEMENT', title: `Vote: ${input.title}`, body: 'Open ChamaHub to cast your vote before it closes.', data: { proposalId: p.id } });
@@ -115,6 +126,14 @@ export class DecisionsService {
       // Publish the decision to the whole group.
       const users = (await this.prisma.membership.findMany({ where: { groupId, status: 'ACTIVE' }, select: { userId: true } })).map((m) => m.userId);
       await this.notifications.notify(users, { groupId, type: 'ANNOUNCEMENT', title: `Decision: ${p.title}`, body: `${status === 'PASSED' ? 'Passed' : 'Not passed'} — ${tally.YES} yes, ${tally.NO} no, ${tally.ABSTAIN} abstain (${result.turnout} of ${p.eligibleCount} voted${result.quorumMet ? '' : ', quorum not met'}).` });
+    }
+    const handler = p.subjectType && p.subjectId ? this.handlers.get(p.subjectType) : undefined;
+    if (handler) {
+      // The vote result stands even if acting on it fails; the failure is audited for officers.
+      await handler({ id, groupId, subjectId: p.subjectId!, status }).catch(async (err: Error) => {
+        this.logger.warn(`Acting on vote ${id} failed: ${err.message}`);
+        await this.audit.log({ groupId, actorUserId: null, action: 'vote.outcome_failed', entityType: 'Proposal', entityId: id, reason: err.message });
+      });
     }
     return actor ? this.proposal(groupId, id, actor) : null;
   }

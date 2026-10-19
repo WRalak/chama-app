@@ -121,7 +121,7 @@ export class ReportsService {
         };
       }
       case 'payouts': {
-        const rows = await this.prisma.payoutRound.findMany({ where: { cycle: { groupId }, payoutDate: period }, include: { cycle: { select: { name: true } }, membership: { select: { user: { select: { fullName: true } } } } }, orderBy: [{ cycleId: 'asc' }, { round: 'asc' }] });
+        const rows = await this.prisma.payoutRound.findMany({ where: { cycle: { groupId, status: { in: ['ACTIVE', 'COMPLETED'] } }, payoutDate: period }, include: { cycle: { select: { name: true } }, membership: { select: { user: { select: { fullName: true } } } } }, orderBy: [{ cycleId: 'asc' }, { round: 'asc' }, { slot: 'asc' }] });
         return {
           title: 'Payout report',
           headers: ['Cycle', 'Round', 'Recipient', 'Scheduled date', 'Expected', 'Paid', 'Status', 'Reference', 'Shortfall reason'],

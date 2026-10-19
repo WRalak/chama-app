@@ -182,22 +182,30 @@ describe('Financial workflows', () => {
   describe('merry-go-round', () => {
     let cycleId: string;
 
-    it('creates a cycle with rounds and per-round collections', async () => {
+    it('drafts a cycle that binds nobody until another officer approves it', async () => {
       const c = await as(app, treasurer)
-        .post(`/v1/groups/${groupId}/rotations`, { name: 'MGR 2026', contributionCents: 100_000, frequency: 'WEEKLY', startDate: today, memberIdsInOrder: [ids[alice.id], ids[bob.id], ids[chair.id]], recipientContributes: true })
+        .post(`/v1/groups/${groupId}/rotations`, { name: 'MGR 2026', contributionCents: 100_000, frequency: 'WEEKLY', startDate: today, memberIds: [ids[alice.id], ids[bob.id], ids[chair.id]], recipientContributes: true })
         .expect(201);
       cycleId = c.body.id;
+      expect(c.body).toMatchObject({ status: 'DRAFT', orderMethod: 'AGREED', approvedPlan: null });
       expect(c.body.rounds).toHaveLength(3);
-      expect(c.body.currentRound).toMatchObject({ round: 1, recipientName: 'Alice Member', expectedCents: 300_000, status: 'COLLECTING' });
-      expect(c.body.remainingRounds).toBe(3);
+      expect(await prisma.contributionObligation.count({ where: { round: { cycleId } } })).toBe(0);
+      await as(app, treasurer).post(`/v1/groups/${groupId}/rotations/${cycleId}/activation`, { decision: 'APPROVE' }).expect(403);
+      const active = await as(app, chair).post(`/v1/groups/${groupId}/rotations/${cycleId}/activation`, { decision: 'APPROVE' }).expect(200);
+      expect(active.body.status).toBe('ACTIVE');
+      expect(active.body.approvedPlan.map((p: { memberName: string }) => p.memberName)).toEqual(['Alice Member', 'Bob Member', 'Grace Chair']);
+      expect(active.body.currentRound).toMatchObject({ round: 1, recipientName: 'Alice Member', expectedCents: 300_000, status: 'READINESS_CHECK' });
+      expect(active.body.remainingRounds).toBe(3);
       const bobView = await as(app, bob).get(`/v1/groups/${groupId}/rotations/${cycleId}`).expect(200);
       expect(bobView.body.myRounds.map((r: { round: number }) => r.round)).toEqual([2]);
+      expect(bobView.body.rounds[0].readiness).toBeNull(); // readiness details are for officers and the recipient
     });
 
-    it('never skips rounds, blocks self-approval, requires shortfall reasons', async () => {
+    it('never skips rounds, separates preparation from approval, requires shortfall reasons', async () => {
       const cycle = (await as(app, chair).get(`/v1/groups/${groupId}/rotations/${cycleId}`)).body;
       const [r1, r2] = cycle.rounds;
-      await as(app, chair).post(`/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r2.id}/approve`, {}).expect(422);
+      const url = (r: { id: string }, step: string) => `/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r.id}/${step}`;
+      await as(app, treasurer).post(url(r2, 'prepare'), {}).expect(422);
       const obligations = await prisma.contributionObligation.findMany({ where: { roundId: r1.id } });
       expect(obligations).toHaveLength(3);
       for (const o of obligations.filter((o) => o.membershipId !== ids[bob.id])) {
@@ -205,13 +213,21 @@ describe('Financial workflows', () => {
         // The chair reports their own M-Pesa payment; the treasurer verifies it.
         await pay(member === chair ? chair : treasurer, member === chair ? treasurer : chair, member, 100_000, { targetId: o.id, ...(member === chair ? { method: 'MPESA', reference: `CHAIR${o.id.slice(-6).toUpperCase()}` } : {}) });
       }
-      await as(app, alice).post(`/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r1.id}/approve`, {}).expect(403);
-      await as(app, chair).post(`/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r1.id}/approve`, {}).expect(422); // short by Bob's share
-      const approved = await as(app, chair).post(`/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r1.id}/approve`, { shortfallReason: 'Bob paid late; agreed at meeting to pay out' }).expect(200);
-      expect(approved.body.rounds[0]).toMatchObject({ status: 'APPROVED', shortfallCents: 100_000 });
+      await as(app, alice).post(url(r1, 'prepare'), {}).expect(403);
+      await as(app, treasurer).post(url(r1, 'prepare'), {}).expect(422); // short by Bob's share
+      const prepared = await as(app, treasurer).post(url(r1, 'prepare'), { shortfallReason: 'Bob paid late; agreed at meeting to pay out' }).expect(200);
+      expect(prepared.body.rounds[0]).toMatchObject({ status: 'AWAITING_APPROVAL', preparedAmountCents: 200_000, shortfallCents: 100_000, preparedByName: 'Tom Treasurer' });
+      await as(app, alice).post(url(r1, 'approve'), {}).expect(403);
+      const approved = await as(app, chair).post(url(r1, 'approve'), {}).expect(200);
+      expect(approved.body.rounds[0].status).toBe('APPROVED');
       const before = await cash();
-      const done = await as(app, treasurer).post(`/v1/groups/${groupId}/rotations/${cycleId}/rounds/${r1.id}/complete`, { method: 'MPESA', reference: 'PAYOUT1', paidAt: today, idempotencyKey: idem() }).expect(200);
-      expect(done.body.rounds[0].status).toBe('COMPLETED');
+      await as(app, treasurer).post(url(r1, 'disburse'), { method: 'MPESA', sentAt: today, idempotencyKey: idem() }).expect(400); // reference required
+      const sent = await as(app, treasurer).post(url(r1, 'disburse'), { method: 'MPESA', reference: 'PAYOUT1', destination: 'M-Pesa 07xx', sentAt: today, idempotencyKey: idem() }).expect(200);
+      expect(sent.body.rounds[0].status).toBe('PROCESSING');
+      expect(await cash()).toBe(before); // sent is not completed
+      await as(app, treasurer).post(url(r1, 'confirm'), {}).expect(403); // the sender cannot confirm
+      const done = await as(app, alice).post(url(r1, 'confirm'), { note: 'Received' }).expect(200);
+      expect(done.body.rounds[0]).toMatchObject({ status: 'COMPLETED', payoutAmountCents: 200_000, confirmation: { kind: 'RECIPIENT' } });
       expect(await cash()).toBe(before - 200_000n);
       await as(app, treasurer).post(`/v1/groups/${groupId}/rotations/${cycleId}/close`).expect(422);
     });
@@ -222,6 +238,8 @@ describe('Financial workflows', () => {
       await as(app, treasurer).post(`/v1/groups/${groupId}/rotations/${cycleId}/changes/${p.body.changeId}/decision`, { decision: 'APPROVE' }).expect(403);
       const after = await as(app, chair).post(`/v1/groups/${groupId}/rotations/${cycleId}/changes/${p.body.changeId}/decision`, { decision: 'APPROVE' }).expect(200);
       expect(after.body.rounds.map((r: { recipientName: string }) => r.recipientName)).toEqual(['Alice Member', 'Grace Chair', 'Bob Member']);
+      expect(after.body.approvedPlan.map((p: { memberName: string }) => p.memberName)).toEqual(['Alice Member', 'Bob Member', 'Grace Chair']); // original kept
+      expect(after.body.changeLog[0]).toMatchObject({ kind: 'REORDER', status: 'APPROVED', beforeNames: ['Bob Member', 'Grace Chair'], afterNames: ['Grace Chair', 'Bob Member'] });
       expect(cycle.rounds[1].recipientName).toBe('Bob Member');
     });
   });

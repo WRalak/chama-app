@@ -34,6 +34,7 @@ import type { Permission, RolePolicy, SpecialRole } from './permissions';
 import type { GroupSettingsInput, LoanPolicyInput, NotificationPreferences } from './schemas';
 import type { DistributionResult } from './finance/distribution';
 import type { LoanSchedule } from './finance/loans';
+import type { PayoutReadiness, RotationAmendmentKind, RotationApprovalMode, RotationOrderMethod } from './finance/rotation';
 
 export interface Paginated<T> {
   items: T[];
@@ -371,22 +372,75 @@ export interface ExpenseRow {
 
 /* ---------- rotations ---------- */
 
+/** One recipient's payout within a round (rounds may have several recipients). */
 export interface RotationRoundRow {
   id: string;
   round: number;
+  slot: number;
+  recipientsInRound: number;
   recipientMembershipId: string;
   recipientName: string;
   payoutDate: string;
+  /** Round totals, shared by every recipient of the round. */
   expectedCents: number;
   confirmedCents: number;
+  /** Payments claimed for this round but not yet verified (never counted as received). */
   pendingCents: number;
   shortfallCents: number;
+  /** This recipient's share of the expected collection. */
+  expectedShareCents: number;
   status: PayoutStatus;
   approvals: ApprovalRecord[];
   approvalsRequired: number;
+  /** Readiness evaluation; only for the round whose turn it is, and only for officers and the recipient. */
+  readiness: PayoutReadiness | null;
+  preparedByName: string | null;
+  preparedAt: string | null;
+  /** Amount fixed when the payout was prepared; approvers approve exactly this. */
+  preparedAmountCents: number | null;
+  shortfallReason: string | null;
+  disbursement: {
+    method: PaymentMethod;
+    reference: string | null;
+    destination: string | null;
+    sentAt: string;
+    byName: string;
+    evidenceNote: string | null;
+  } | null;
+  confirmation: { kind: 'RECIPIENT' | 'OFFICER_VERIFIED'; byName: string; at: string; note: string | null } | null;
+  failureReason: string | null;
+  attempts: number;
+  payoutAmountCents: number | null;
   payoutReference: string | null;
   completedAt: string | null;
-  shortfallReason: string | null;
+  /** What the viewer may do now (computed by the API from permissions and maker-checker rules). */
+  can: { prepare: boolean; approve: boolean; disburse: boolean; confirm: boolean; fail: boolean; reportProblem: boolean };
+}
+
+export interface RotationSlotPlan {
+  round: number;
+  slot: number;
+  membershipId: string;
+  memberName: string;
+  payoutDate: string;
+}
+
+export interface RotationAmendmentRow {
+  id: string;
+  kind: RotationAmendmentKind;
+  at: string;
+  byName: string;
+  reason: string;
+  status: ApprovalStatus;
+  /** Recipient membership ids of rounds not yet in payout, before and after. */
+  before: string[];
+  after: string[];
+  beforeNames: string[];
+  afterNames: string[];
+  joinedNames: string[];
+  leftNames: string[];
+  approvals: ApprovalRecord[];
+  appliedAt: string | null;
 }
 
 export interface RotationCycle {
@@ -399,12 +453,27 @@ export interface RotationCycle {
   frequency: Frequency;
   startDate: string;
   recipientContributes: boolean;
+  recipientsPerRound: number;
+  orderMethod: RotationOrderMethod;
+  /** Published seed for a random draw; anyone can re-run drawOrder(participants, seed). */
+  drawSeed: string | null;
+  drawParticipants: string[] | null;
+  approvalMode: RotationApprovalMode;
+  /** Activation approvals (officers) or the linked members' vote. */
+  activationApprovals: ApprovalRecord[];
+  activationApprovalsRequired: number;
+  proposalId: string | null;
+  createdByName: string;
+  activatedAt: string | null;
+  /** The schedule exactly as approved; later changes are amendments. */
+  approvedPlan: RotationSlotPlan[] | null;
   rounds: RotationRoundRow[];
   currentRound: RotationRoundRow | null;
   nextRound: RotationRoundRow | null;
   remainingRounds: number;
   myRounds: RotationRoundRow[];
-  changeLog: { id: string; at: string; byName: string; reason: string; status: ApprovalStatus; before: string[]; after: string[] }[];
+  changeLog: RotationAmendmentRow[];
+  can: { approveActivation: boolean; cancel: boolean; amend: boolean; close: boolean };
 }
 
 /* ---------- distributions ---------- */

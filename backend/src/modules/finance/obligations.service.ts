@@ -40,8 +40,8 @@ export class ObligationsService {
     const schedules = await client.contributionSchedule.findMany({
       where: { groupId, active: true },
       include: {
-        members: { select: { membershipId: true } },
-        cycle: { include: { rounds: { select: { id: true, round: true, payoutDate: true, membershipId: true } } } },
+        members: { select: { membershipId: true, fromDate: true, untilDate: true } },
+        cycle: { include: { rounds: { where: { status: { not: 'CANCELLED' } }, orderBy: [{ round: 'asc' }, { slot: 'asc' }], select: { id: true, round: true, slot: true, payoutDate: true, membershipId: true } } } },
       },
     });
     if (schedules.length === 0) return 0;
@@ -52,18 +52,27 @@ export class ObligationsService {
     let created = 0;
     for (const s of schedules) {
       const until = s.endDate && isoDate(s.endDate) < horizon ? isoDate(s.endDate) : horizon;
+      // Rotations run only once approved; a round's obligations hang off its first slot.
+      if (s.cycle && s.cycle.status !== 'ACTIVE') continue;
       const dates = s.cycle
-        ? s.cycle.rounds.map((r) => isoDate(r.payoutDate)).filter((d) => d <= until)
+        ? [...new Set(s.cycle.rounds.map((r) => isoDate(r.payoutDate)))].filter((d) => d <= until)
         : periodDatesUntil(isoDate(s.startDate), s.frequency as Frequency, until);
       const eligible = s.allMembers ? memberships : memberships.filter((m) => s.members.some((sm) => sm.membershipId === m.id));
       const rows = [];
       for (const m of eligible) {
         const joined = isoDate(m.joinedAt);
+        const sm = s.members.find((x) => x.membershipId === m.id);
+        const from = sm?.fromDate ? isoDate(sm.fromDate) : null;
+        const untilMember = sm?.untilDate ? isoDate(sm.untilDate) : null;
         for (const d of dates) {
-          // Cycle members are explicit, so they owe every round of the cycle they were added to.
+          // Cycle members are explicit, so they owe every round of the cycle they were added to,
+          // except members who joined or left through an approved amendment.
           if (!s.cycle && d < joined) continue;
-          const round = s.cycle?.rounds.find((r) => isoDate(r.payoutDate) === d);
-          if (round && s.cycle && !s.cycle.recipientContributes && round.membershipId === m.id) continue;
+          if (from && d < from) continue;
+          if (untilMember && d > untilMember) continue;
+          const roundSlots = s.cycle?.rounds.filter((r) => isoDate(r.payoutDate) === d) ?? [];
+          const round = roundSlots.find((r) => r.slot === 1) ?? roundSlots[0];
+          if (round && s.cycle && !s.cycle.recipientContributes && roundSlots.some((r) => r.membershipId === m.id)) continue;
           rows.push({
             groupId,
             scheduleId: s.id,

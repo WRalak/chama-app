@@ -172,14 +172,20 @@ export const CycleStatus = {
 } as const;
 export type CycleStatus = (typeof CycleStatus)[keyof typeof CycleStatus];
 
-/** Payout stages are distinct: scheduled ≠ approved ≠ completed. */
+/**
+ * Payout stages are distinct: scheduled ≠ approved ≠ sent ≠ completed.
+ * READINESS_CHECK is derived (the round's turn has come and readiness is
+ * being evaluated); every other value is stored.
+ */
 export const PayoutStatus = {
   SCHEDULED: 'SCHEDULED',
-  COLLECTING: 'COLLECTING',
-  READY: 'READY',
+  READINESS_CHECK: 'READINESS_CHECK',
+  AWAITING_APPROVAL: 'AWAITING_APPROVAL',
   APPROVED: 'APPROVED',
+  PROCESSING: 'PROCESSING',
   COMPLETED: 'COMPLETED',
-  DEFERRED: 'DEFERRED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
 } as const;
 export type PayoutStatus = (typeof PayoutStatus)[keyof typeof PayoutStatus];
 
@@ -271,6 +277,10 @@ export const NotificationType = {
   ANNOUNCEMENT: 'ANNOUNCEMENT',
   INVITATION: 'INVITATION',
   APPROVAL_REQUIRED: 'APPROVAL_REQUIRED',
+  PAYOUT_APPROVED: 'PAYOUT_APPROVED',
+  PAYOUT_SENT: 'PAYOUT_SENT',
+  PAYOUT_FAILED: 'PAYOUT_FAILED',
+  ROTATION_UPDATED: 'ROTATION_UPDATED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -380,6 +390,33 @@ export const LABELS = {
     CHEQUE: 'Cheque',
     OTHER: 'Other',
   } satisfies Record<PaymentMethod, string>,
+  payoutStatus: {
+    SCHEDULED: 'Scheduled',
+    READINESS_CHECK: 'Readiness check',
+    AWAITING_APPROVAL: 'Awaiting approval',
+    APPROVED: 'Approved',
+    PROCESSING: 'Sent, awaiting confirmation',
+    COMPLETED: 'Completed',
+    FAILED: 'Failed',
+    CANCELLED: 'Cancelled',
+  } satisfies Record<PayoutStatus, string>,
+  cycleStatus: {
+    DRAFT: 'Awaiting approval',
+    ACTIVE: 'Active',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+  } satisfies Record<CycleStatus, string>,
+  rotationOrderMethod: {
+    AGREED: 'Agreed order',
+    RANDOM_DRAW: 'Random draw',
+    CARRY_OVER: 'Carried over from the previous cycle',
+  },
+  rotationAmendment: {
+    REORDER: 'Order change',
+    ADD_MEMBERS: 'Members added',
+    REMOVE_MEMBER: 'Member removed',
+    REPLACE_MEMBER: 'Member replaced',
+  },
   distributionMethod: {
     EQUAL: 'Equal shares',
     CONTRIBUTION_PROPORTIONAL: 'Proportional to contributions',

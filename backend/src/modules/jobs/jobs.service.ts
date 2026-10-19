@@ -121,7 +121,7 @@ export class JobsService {
       sent += await this.notifications.notify([i.loan.membership.userId], { groupId: i.loan.groupId, type: 'REPAYMENT_DUE', title: `Loan installment: ${i.loan.group.name}`, body: `${formatKes(owed)} (installment ${i.number}) due ${formatDate(isoDate(i.dueDate))}.`, dedupeKey: `inst:${i.id}:${isoDate(i.dueDate) < t ? 'late' : 'due'}` });
     }
     const rounds = await this.prisma.payoutRound.findMany({
-      where: { status: { notIn: ['COMPLETED'] }, payoutDate: { gte: dbDate(t), lte: dbDate(addDays(t, 7)) }, cycle: { status: 'ACTIVE' } },
+      where: { status: { notIn: ['COMPLETED', 'CANCELLED'] }, payoutDate: { gte: dbDate(t), lte: dbDate(addDays(t, 7)) }, cycle: { status: 'ACTIVE' } },
       include: { cycle: { select: { name: true, groupId: true } }, membership: { select: { userId: true } } },
     });
     for (const r of rounds) {
