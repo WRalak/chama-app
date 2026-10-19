@@ -1,0 +1,1260 @@
+// ChamaHub authoritative data model.
+//
+// Money: every monetary column is BigInt KES cents. Never Float/Decimal-as-float.
+// Group isolation: every group-owned row carries groupId and is only read
+// through group-scoped queries.
+// Immutability: journal entries/lines and audit events are append-only
+// (enforced by database triggers in the initial migration). Corrections are
+// reversal journal entries.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── enums ─────────────────────────────
+
+enum PlatformRole {
+  USER
+  SUPPORT
+  SUPER_ADMIN
+}
+
+enum GroupType {
+  MERRY_GO_ROUND
+  TABLE_BANKING
+  INVESTMENT
+  WELFARE
+  SAVINGS
+  HYBRID
+}
+
+enum GroupStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum GroupRole {
+  CHAIRPERSON
+  VICE_CHAIRPERSON
+  TREASURER
+  SECRETARY
+  AUDITOR
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+  EXITED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  REVOKED
+  EXPIRED
+}
+
+enum OtpPurpose {
+  VERIFY_PHONE
+  RESET_PASSWORD
+  LOGIN
+}
+
+enum Frequency {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
+enum ObligationStatus {
+  UPCOMING
+  DUE
+  PARTIAL
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+enum TransactionStatus {
+  SCHEDULED
+  PENDING
+  CONFIRMED
+  FAILED
+  REVERSED
+  DISPUTED
+}
+
+enum PaymentMethod {
+  CASH
+  MPESA
+  BANK_TRANSFER
+  CHEQUE
+  OTHER
+}
+
+enum PaymentPurpose {
+  CONTRIBUTION
+  LOAN_REPAYMENT
+  FINE
+  OTHER
+}
+
+enum PaymentSource {
+  MANUAL
+  MPESA_STK
+  MPESA_C2B
+  IMPORT
+}
+
+enum InterestMethod {
+  FLAT
+  ONE_OFF
+  REDUCING_BALANCE
+  AMORTIZED
+}
+
+enum LoanStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  DISBURSED
+  REPAID
+  DEFAULTED
+  CANCELLED
+}
+
+enum InstallmentStatus {
+  UPCOMING
+  PARTIAL
+  PAID
+  OVERDUE
+}
+
+enum ApprovalEntity {
+  LOAN
+  EXPENSE
+  PAYOUT
+  DISTRIBUTION
+  IMPORT
+  CYCLE_CHANGE
+  SUPPORT_ACCESS
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum FineStatus {
+  OUTSTANDING
+  PARTIAL
+  PAID
+  WAIVED
+}
+
+enum ExpenseStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PAID
+  REVERSED
+}
+
+enum CycleStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PayoutStatus {
+  SCHEDULED
+  COLLECTING
+  READY
+  APPROVED
+  COMPLETED
+  DEFERRED
+}
+
+enum DistributionMethod {
+  EQUAL
+  CONTRIBUTION_PROPORTIONAL
+  SHARE_BASED
+}
+
+enum DistributionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  HELD
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  CONFIRMED
+  DECLINED
+  PRESENT
+  ABSENT
+  APOLOGY
+}
+
+enum MinutesStatus {
+  DRAFT
+  APPROVED
+}
+
+enum LedgerAccount {
+  CASH
+  MEMBER_CONTRIBUTIONS
+  LOANS_RECEIVABLE
+  INTEREST_INCOME
+  FINE_INCOME
+  EXPENSES
+  PAYOUTS
+  DISTRIBUTIONS
+  OPENING_BALANCE
+  OTHER_INCOME
+}
+
+enum LedgerEntryType {
+  CONTRIBUTION
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT_PRINCIPAL
+  LOAN_REPAYMENT_INTEREST
+  FINE_PAYMENT
+  EXPENSE
+  PAYOUT
+  DISTRIBUTION
+  OPENING_BALANCE
+  ADJUSTMENT
+  REVERSAL
+  OTHER_INCOME
+}
+
+enum NotificationType {
+  CONTRIBUTION_DUE
+  CONTRIBUTION_OVERDUE
+  PAYMENT_CONFIRMED
+  LOAN_APPROVED
+  LOAN_REJECTED
+  REPAYMENT_DUE
+  PAYOUT_UPCOMING
+  PAYOUT_COMPLETED
+  MEETING_SCHEDULED
+  MEETING_REMINDER
+  STATEMENT_PUBLISHED
+  ANNOUNCEMENT
+  INVITATION
+  APPROVAL_REQUIRED
+}
+
+enum NotificationChannel {
+  IN_APP
+  SMS
+  EMAIL
+  WHATSAPP
+  PUSH
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum ImportKind {
+  MEMBERS
+  CONTRIBUTIONS
+  LOANS
+  REPAYMENTS
+  FINES
+  PAYOUTS
+  OPENING_BALANCE
+}
+
+enum ImportStatus {
+  VALIDATED
+  HAS_ERRORS
+  COMMITTED
+  DISCARDED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+enum ReconciliationStatus {
+  UNMATCHED
+  MATCHED
+  DUPLICATE
+  IGNORED
+}
+
+enum MpesaRequestStatus {
+  INITIATED
+  SUCCESS
+  FAILED
+  TIMEOUT
+}
+
+enum SupportGrantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+enum JobStatus {
+  SUCCEEDED
+  FAILED
+}
+
+// ───────────────────────────── identity ─────────────────────────────
+
+model User {
+  id                  String       @id @default(cuid())
+  fullName            String
+  phone               String       @unique
+  email               String?      @unique
+  passwordHash        String
+  phoneVerifiedAt     DateTime?
+  platformRole        PlatformRole @default(USER)
+  preferences         Json         @default("{}")
+  nationalIdLast4     String?
+  failedLoginCount    Int          @default(0)
+  lockedUntil         DateTime?
+  deletionRequestedAt DateTime?
+  deletionReason      String?
+  disabledAt          DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  sessions      Session[]
+  memberships   Membership[]
+  notifications Notification[]
+  invitationsSent Invitation[] @relation("InvitedBy")
+  groupsCreated Group[]        @relation("GroupCreatedBy")
+  auditEvents   AuditEvent[]
+
+  @@map("users")
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  phone      String
+  purpose    OtpPurpose
+  codeHash   String
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([phone, purpose, createdAt])
+  @@map("otp_codes")
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String    @unique
+  /// Hash of the previous refresh token; presenting it again signals token theft.
+  previousTokenHash String?  @unique
+  deviceName       String?
+  userAgent        String?
+  ipAddress        String?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ───────────────────────────── groups ─────────────────────────────
+
+model Group {
+  id                      String      @id @default(cuid())
+  name                    String
+  type                    GroupType
+  status                  GroupStatus @default(ACTIVE)
+  description             String?
+  county                  String?
+  registrationNumber      String?
+  financialYearStartMonth Int         @default(1)
+  inviteCode              String?     @unique
+  settings                Json
+  loanPolicy              Json
+  createdById             String
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
+
+  createdBy      User                   @relation("GroupCreatedBy", fields: [createdById], references: [id])
+  memberships    Membership[]
+  invitations    Invitation[]
+  schedules      ContributionSchedule[]
+  obligations    ContributionObligation[]
+  payments       Payment[]
+  journalEntries JournalEntry[]
+  loans          Loan[]
+  fines          Fine[]
+  expenses       Expense[]
+  cycles         PayoutCycle[]
+  distributions  Distribution[]
+  meetings       Meeting[]
+  announcements  Announcement[]
+  importBatches  ImportBatch[]
+  disputes       Dispute[]
+  holdings       InvestmentHolding[]
+  subscription   Subscription?
+  approvals      Approval[]
+  unmatched      UnmatchedPayment[]
+  supportGrants  SupportAccessGrant[]
+  statements     PublishedStatement[]
+
+  @@map("groups")
+}
+
+model Membership {
+  id        String           @id @default(cuid())
+  groupId   String
+  userId    String
+  role      GroupRole        @default(MEMBER)
+  status    MembershipStatus @default(ACTIVE)
+  shares    Int              @default(0)
+  joinedAt  DateTime         @default(now())
+  exitedAt  DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  group        Group                    @relation(fields: [groupId], references: [id])
+  user         User                     @relation(fields: [userId], references: [id])
+  obligations  ContributionObligation[]
+  payments     Payment[]
+  loans        Loan[]
+  fines        Fine[]
+  rounds       PayoutRound[]
+  attendance   Attendance[]
+  allocations  DistributionAllocation[]
+  approvals    Approval[]
+  guarantees   LoanGuarantor[]
+  actionItems  ActionItem[]
+  disputes     Dispute[]
+  scheduleLinks ScheduleMember[]
+  journalLines JournalEntry[]
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("memberships")
+}
+
+model Invitation {
+  id           String           @id @default(cuid())
+  groupId      String
+  phone        String
+  fullName     String?
+  role         GroupRole        @default(MEMBER)
+  status       InvitationStatus @default(PENDING)
+  invitedById  String
+  expiresAt    DateTime
+  respondedAt  DateTime?
+  createdAt    DateTime         @default(now())
+
+  group     Group @relation(fields: [groupId], references: [id])
+  invitedBy User  @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@index([phone, status])
+  @@index([groupId, status])
+  @@map("invitations")
+}
+
+model SupportAccessGrant {
+  id                     String             @id @default(cuid())
+  groupId                String
+  requestedByUserId      String
+  purpose                String
+  hours                  Int
+  status                 SupportGrantStatus @default(PENDING)
+  decidedByMembershipId  String?
+  decidedAt              DateTime?
+  expiresAt              DateTime?
+  createdAt              DateTime           @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@index([requestedByUserId, groupId])
+  @@map("support_access_grants")
+}
+
+// ───────────────────────────── contributions ─────────────────────────────
+
+model ContributionSchedule {
+  id          String    @id @default(cuid())
+  groupId     String
+  name        String
+  amountCents BigInt
+  frequency   Frequency
+  startDate   DateTime  @db.Date
+  endDate     DateTime? @db.Date
+  active      Boolean   @default(true)
+  allMembers  Boolean   @default(true)
+  cycleId     String?   @unique
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  group       Group                    @relation(fields: [groupId], references: [id])
+  obligations ContributionObligation[]
+  members     ScheduleMember[]
+  cycle       PayoutCycle?             @relation(fields: [cycleId], references: [id])
+
+  @@index([groupId])
+  @@map("contribution_schedules")
+}
+
+model ScheduleMember {
+  scheduleId   String
+  membershipId String
+
+  schedule   ContributionSchedule @relation(fields: [scheduleId], references: [id])
+  membership Membership           @relation(fields: [membershipId], references: [id])
+
+  @@id([scheduleId, membershipId])
+  @@map("schedule_members")
+}
+
+model ContributionObligation {
+  id           String           @id @default(cuid())
+  groupId      String
+  scheduleId   String
+  membershipId String
+  dueDate      DateTime         @db.Date
+  periodLabel  String
+  amountCents  BigInt
+  paidCents    BigInt           @default(0)
+  status       ObligationStatus @default(UPCOMING)
+  roundId      String?
+  waivedReason String?
+  waivedById   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  group       Group                @relation(fields: [groupId], references: [id])
+  schedule    ContributionSchedule @relation(fields: [scheduleId], references: [id])
+  membership  Membership           @relation(fields: [membershipId], references: [id])
+  round       PayoutRound?         @relation(fields: [roundId], references: [id])
+  allocations PaymentAllocation[]
+  fines       Fine[]
+
+  @@unique([scheduleId, membershipId, dueDate])
+  @@index([groupId, dueDate])
+  @@index([membershipId, status])
+  @@map("contribution_obligations")
+}
+
+model Payment {
+  id             String            @id @default(cuid())
+  groupId        String
+  membershipId   String?
+  amountCents    BigInt
+  method         PaymentMethod
+  source         PaymentSource     @default(MANUAL)
+  purpose        PaymentPurpose
+  status         TransactionStatus @default(PENDING)
+  reference      String?
+  paidAt         DateTime          @db.Date
+  idempotencyKey String
+  targetId       String?
+  notes          String?
+  recordedById   String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  failureReason  String?
+  reversedById   String?
+  reversedAt     DateTime?
+  reversalReason String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  group        Group               @relation(fields: [groupId], references: [id])
+  membership   Membership?         @relation(fields: [membershipId], references: [id])
+  allocations  PaymentAllocation[]
+  mpesaRequest MpesaRequest?
+  disputes     Dispute[]
+
+  @@unique([groupId, idempotencyKey])
+  @@index([groupId, status])
+  @@index([groupId, reference])
+  @@index([membershipId])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id             String  @id @default(cuid())
+  paymentId      String
+  obligationId   String?
+  installmentId  String?
+  fineId         String?
+  principalCents BigInt  @default(0)
+  interestCents  BigInt  @default(0)
+  amountCents    BigInt
+
+  payment     Payment                 @relation(fields: [paymentId], references: [id])
+  obligation  ContributionObligation? @relation(fields: [obligationId], references: [id])
+  installment LoanInstallment?        @relation(fields: [installmentId], references: [id])
+  fine        Fine?                   @relation(fields: [fineId], references: [id])
+
+  @@index([paymentId])
+  @@index([obligationId])
+  @@index([installmentId])
+  @@map("payment_allocations")
+}
+
+model MpesaRequest {
+  id                String             @id @default(cuid())
+  groupId           String
+  paymentId         String             @unique
+  merchantRequestId String?
+  checkoutRequestId String?            @unique
+  phone             String
+  amountCents       BigInt
+  status            MpesaRequestStatus @default(INITIATED)
+  resultCode        Int?
+  resultDesc        String?
+  receiptNumber     String?            @unique
+  rawCallback       Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@map("mpesa_requests")
+}
+
+model UnmatchedPayment {
+  id               String               @id @default(cuid())
+  groupId          String?
+  source           String
+  amountCents      BigInt
+  reference        String               @unique
+  payerPhone       String?
+  payerName        String?
+  accountReference String?
+  receivedAt       DateTime
+  status           ReconciliationStatus @default(UNMATCHED)
+  matchedPaymentId String?
+  raw              Json?
+  createdAt        DateTime             @default(now())
+
+  group Group? @relation(fields: [groupId], references: [id])
+
+  @@index([groupId, status])
+  @@map("unmatched_payments")
+}
+
+// ───────────────────────────── ledger ─────────────────────────────
+
+/// A balanced journal entry. Lines always sum to zero (debit +, credit −).
+model JournalEntry {
+  id           String          @id @default(cuid())
+  groupId      String
+  entryDate    DateTime        @db.Date
+  type         LedgerEntryType
+  description  String
+  reference    String?
+  membershipId String?
+  paymentId    String?
+  loanId       String?
+  expenseId    String?
+  fineId       String?
+  roundId      String?
+  allocationId String?
+  reversesId   String?         @unique
+  reason       String?
+  createdById  String?
+  createdAt    DateTime        @default(now())
+
+  group      Group          @relation(fields: [groupId], references: [id])
+  membership Membership?    @relation(fields: [membershipId], references: [id])
+  lines      JournalLine[]
+  reverses   JournalEntry?  @relation("Reversal", fields: [reversesId], references: [id])
+  reversedBy JournalEntry?  @relation("Reversal")
+
+  @@index([groupId, entryDate])
+  @@index([paymentId])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id          String        @id @default(cuid())
+  entryId     String
+  account     LedgerAccount
+  amountCents BigInt
+
+  entry JournalEntry @relation(fields: [entryId], references: [id])
+
+  @@index([entryId])
+  @@map("journal_lines")
+}
+
+model PublishedStatement {
+  id            String   @id @default(cuid())
+  groupId       String
+  periodFrom    DateTime @db.Date
+  periodTo      DateTime @db.Date
+  snapshot      Json
+  publishedById String
+  publishedAt   DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@index([groupId, publishedAt])
+  @@map("published_statements")
+}
+
+// ───────────────────────────── loans ─────────────────────────────
+
+model Loan {
+  id                    String         @id @default(cuid())
+  groupId               String
+  membershipId          String
+  principalCents        BigInt
+  rateBps               Int
+  interestMethod        InterestMethod
+  installmentsCount     Int
+  frequency             Frequency
+  totalInterestCents    BigInt
+  purpose               String
+  status                LoanStatus     @default(PENDING_APPROVAL)
+  requiredApprovals     Int
+  allowSelfApproval     Boolean        @default(false)
+  policySnapshot        Json
+  appliedAt             DateTime       @default(now())
+  decidedAt             DateTime?
+  disbursedAt           DateTime?      @db.Date
+  disbursementMethod    PaymentMethod?
+  disbursementReference String?
+  disbursementKey       String?        @unique
+  disbursedById         String?
+  closedAt              DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  group        Group             @relation(fields: [groupId], references: [id])
+  membership   Membership        @relation(fields: [membershipId], references: [id])
+  installments LoanInstallment[]
+  guarantors   LoanGuarantor[]
+
+  @@index([groupId, status])
+  @@index([membershipId])
+  @@map("loans")
+}
+
+model LoanInstallment {
+  id                 String            @id @default(cuid())
+  loanId             String
+  number             Int
+  dueDate            DateTime          @db.Date
+  principalCents     BigInt
+  interestCents      BigInt
+  principalPaidCents BigInt            @default(0)
+  interestPaidCents  BigInt            @default(0)
+  status             InstallmentStatus @default(UPCOMING)
+
+  loan        Loan                @relation(fields: [loanId], references: [id])
+  allocations PaymentAllocation[]
+
+  @@unique([loanId, number])
+  @@index([dueDate])
+  @@map("loan_installments")
+}
+
+model LoanGuarantor {
+  loanId       String
+  membershipId String
+
+  loan       Loan       @relation(fields: [loanId], references: [id])
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@id([loanId, membershipId])
+  @@map("loan_guarantors")
+}
+
+/// Generic approval record for maker-checker workflows.
+model Approval {
+  id                   String         @id @default(cuid())
+  groupId              String
+  entityType           ApprovalEntity
+  entityId             String
+  approverMembershipId String
+  decision             ApprovalStatus
+  comment              String?
+  createdAt            DateTime       @default(now())
+
+  group    Group      @relation(fields: [groupId], references: [id])
+  approver Membership @relation(fields: [approverMembershipId], references: [id])
+
+  @@unique([entityType, entityId, approverMembershipId])
+  @@index([groupId, entityType, entityId])
+  @@map("approvals")
+}
+
+// ───────────────────────────── fines & expenses ─────────────────────────────
+
+model Fine {
+  id           String     @id @default(cuid())
+  groupId      String
+  membershipId String
+  amountCents  BigInt
+  paidCents    BigInt     @default(0)
+  reason       String
+  issuedOn     DateTime   @db.Date
+  status       FineStatus @default(OUTSTANDING)
+  obligationId String?    @unique
+  issuedById   String
+  waivedById   String?
+  waivedReason String?
+  createdAt    DateTime   @default(now())
+
+  group       Group                   @relation(fields: [groupId], references: [id])
+  membership  Membership              @relation(fields: [membershipId], references: [id])
+  obligation  ContributionObligation? @relation(fields: [obligationId], references: [id])
+  allocations PaymentAllocation[]
+
+  @@index([groupId, status])
+  @@map("fines")
+}
+
+model Expense {
+  id                String        @id @default(cuid())
+  groupId           String
+  category          String
+  description       String
+  amountCents       BigInt
+  incurredOn        DateTime      @db.Date
+  payee             String?
+  status            ExpenseStatus @default(PENDING_APPROVAL)
+  requiredApprovals Int
+  recordedById      String
+  paidAt            DateTime?     @db.Date
+  paymentMethod     PaymentMethod?
+  paymentReference  String?
+  paymentKey        String?       @unique
+  createdAt         DateTime      @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@index([groupId, status])
+  @@map("expenses")
+}
+
+// ───────────────────────────── rotations ─────────────────────────────
+
+model PayoutCycle {
+  id                   String      @id @default(cuid())
+  groupId              String
+  name                 String
+  status               CycleStatus @default(ACTIVE)
+  contributionCents    BigInt
+  frequency            Frequency
+  startDate            DateTime    @db.Date
+  recipientContributes Boolean     @default(true)
+  createdById          String
+  completedAt          DateTime?
+  createdAt            DateTime    @default(now())
+
+  group    Group                 @relation(fields: [groupId], references: [id])
+  rounds   PayoutRound[]
+  schedule ContributionSchedule?
+  changes  CycleChange[]
+
+  @@index([groupId])
+  @@map("payout_cycles")
+}
+
+model PayoutRound {
+  id                String         @id @default(cuid())
+  cycleId           String
+  round             Int
+  membershipId      String
+  payoutDate        DateTime       @db.Date
+  expectedCents     BigInt
+  status            PayoutStatus   @default(SCHEDULED)
+  requiredApprovals Int
+  shortfallReason   String?
+  payoutMethod      PaymentMethod?
+  payoutReference   String?
+  payoutKey         String?        @unique
+  payoutAmountCents BigInt?
+  completedAt       DateTime?
+  createdAt         DateTime       @default(now())
+
+  cycle       PayoutCycle              @relation(fields: [cycleId], references: [id])
+  membership  Membership               @relation(fields: [membershipId], references: [id])
+  obligations ContributionObligation[]
+
+  @@unique([cycleId, round])
+  @@map("payout_rounds")
+}
+
+model CycleChange {
+  id                    String         @id @default(cuid())
+  cycleId               String
+  beforeOrder           Json
+  afterOrder            Json
+  reason                String
+  proposedByMembershipId String
+  status                ApprovalStatus @default(PENDING)
+  createdAt             DateTime       @default(now())
+  appliedAt             DateTime?
+
+  cycle PayoutCycle @relation(fields: [cycleId], references: [id])
+
+  @@map("cycle_changes")
+}
+
+// ───────────────────────────── distributions & investments ─────────────────────────────
+
+model Distribution {
+  id                String             @id @default(cuid())
+  groupId           String
+  title             String
+  method            DistributionMethod
+  periodFrom        DateTime           @db.Date
+  periodTo          DateTime           @db.Date
+  status            DistributionStatus @default(PENDING_APPROVAL)
+  calculation       Json
+  inputs            Json
+  requiredApprovals Int
+  createdById       String
+  createdAt         DateTime           @default(now())
+
+  group       Group                    @relation(fields: [groupId], references: [id])
+  allocations DistributionAllocation[]
+
+  @@index([groupId])
+  @@map("distributions")
+}
+
+model DistributionAllocation {
+  id               String         @id @default(cuid())
+  distributionId   String
+  membershipId     String
+  grossCents       BigInt
+  loanOffsetCents  BigInt         @default(0)
+  netCents         BigInt
+  paidAt           DateTime?      @db.Date
+  paymentMethod    PaymentMethod?
+  paymentReference String?
+  paymentKey       String?        @unique
+
+  distribution Distribution @relation(fields: [distributionId], references: [id])
+  membership   Membership   @relation(fields: [membershipId], references: [id])
+
+  @@unique([distributionId, membershipId])
+  @@map("distribution_allocations")
+}
+
+model InvestmentHolding {
+  id                String   @id @default(cuid())
+  groupId           String
+  name              String
+  kind              String
+  costCents         BigInt
+  currentValueCents BigInt
+  acquiredOn        DateTime @db.Date
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@map("investment_holdings")
+}
+
+// ───────────────────────────── meetings ─────────────────────────────
+
+model Meeting {
+  id           String        @id @default(cuid())
+  groupId      String
+  title        String
+  scheduledAt  DateTime
+  location     String?
+  virtualLink  String?
+  status       MeetingStatus @default(SCHEDULED)
+  agenda       Json          @default("[]")
+  requiresRsvp Boolean       @default(true)
+  reminderSentAt DateTime?
+  createdById  String
+  createdAt    DateTime      @default(now())
+
+  group       Group        @relation(fields: [groupId], references: [id])
+  attendance  Attendance[]
+  minutes     Minutes?
+  resolutions Resolution[]
+  actions     ActionItem[]
+
+  @@index([groupId, scheduledAt])
+  @@map("meetings")
+}
+
+model Attendance {
+  meetingId    String
+  membershipId String
+  status       AttendanceStatus
+  updatedAt    DateTime         @updatedAt
+
+  meeting    Meeting    @relation(fields: [meetingId], references: [id])
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@id([meetingId, membershipId])
+  @@map("attendance")
+}
+
+model Minutes {
+  meetingId    String        @id
+  body         String
+  status       MinutesStatus @default(DRAFT)
+  recordedById String
+  approvedById String?
+  approvedAt   DateTime?
+  updatedAt    DateTime      @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id])
+
+  @@map("minutes")
+}
+
+model Resolution {
+  id          String   @id @default(cuid())
+  meetingId   String
+  title       String
+  details     String?
+  isFinancial Boolean  @default(false)
+  amountCents BigInt?
+  createdAt   DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id])
+
+  @@map("resolutions")
+}
+
+model ActionItem {
+  id                   String    @id @default(cuid())
+  meetingId            String
+  description          String
+  assigneeMembershipId String?
+  dueDate              DateTime? @db.Date
+  done                 Boolean   @default(false)
+  doneAt               DateTime?
+  createdAt            DateTime  @default(now())
+
+  meeting  Meeting     @relation(fields: [meetingId], references: [id])
+  assignee Membership? @relation(fields: [assigneeMembershipId], references: [id])
+
+  @@map("action_items")
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  groupId     String
+  title       String
+  body        String
+  createdById String
+  createdAt   DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@map("announcements")
+}
+
+// ───────────────────────────── notifications ─────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  groupId   String?
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  dedupeKey String?          @unique
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user       User                   @relation(fields: [userId], references: [id])
+  deliveries NotificationDelivery[]
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id             String              @id @default(cuid())
+  notificationId String
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(QUEUED)
+  provider       String?
+  error          String?
+  attempts       Int                 @default(0)
+  sentAt         DateTime?
+  createdAt      DateTime            @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id])
+
+  @@index([status])
+  @@map("notification_deliveries")
+}
+
+// ───────────────────────────── platform ─────────────────────────────
+
+model Plan {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  priceCents BigInt
+  maxMembers Int
+  features   Json     @default("[]")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id               String             @id @default(cuid())
+  groupId          String             @unique
+  planId           String
+  status           SubscriptionStatus @default(TRIALING)
+  trialEndsAt      DateTime?
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id])
+  plan  Plan  @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  groupId     String?
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String?
+  before      Json?
+  after       Json?
+  reason      String?
+  reference   String?
+  approvalStatus String?
+  ipAddress   String?
+  userAgent   String?
+  requestId   String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id])
+
+  @@index([groupId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@map("audit_events")
+}
+
+model ImportBatch {
+  id           String       @id @default(cuid())
+  groupId      String
+  kind         ImportKind
+  fileName     String
+  status       ImportStatus
+  rows         Json
+  summary      Json         @default("{}")
+  rowCount     Int
+  errorCount   Int
+  warningCount Int
+  uploadedById String
+  reviewedById String?
+  committedAt  DateTime?
+  createdAt    DateTime     @default(now())
+
+  group Group @relation(fields: [groupId], references: [id])
+
+  @@index([groupId])
+  @@map("import_batches")
+}
+
+model Dispute {
+  id           String        @id @default(cuid())
+  groupId      String
+  membershipId String
+  paymentId    String?
+  subject      String
+  details      String
+  status       DisputeStatus @default(OPEN)
+  resolution   String?
+  resolvedById String?
+  resolvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  group      Group      @relation(fields: [groupId], references: [id])
+  membership Membership @relation(fields: [membershipId], references: [id])
+  payment    Payment?   @relation(fields: [paymentId], references: [id])
+
+  @@index([groupId, status])
+  @@map("disputes")
+}
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  userId    String?
+  groupId   String?
+  subject   String
+  body      String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+
+  @@map("support_tickets")
+}
+
+model JobRun {
+  id         String    @id @default(cuid())
+  name       String
+  status     JobStatus
+  startedAt  DateTime
+  finishedAt DateTime
+  details    Json?
+  error      String?
+
+  @@index([name, startedAt])
+  @@map("job_runs")
+}
