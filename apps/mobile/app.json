@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "ChamaHub",
+    "slug": "chamahub",
+    "scheme": "chamahub",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "backgroundColor": "#F8FAFC",
+    "primaryColor": "#14532D",
+    "ios": {
+      "bundleIdentifier": "ke.chamahub.app",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "ke.chamahub.app",
+      "softwareKeyboardLayoutMode": "pan",
+      "blockedPermissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "web": { "bundler": "metro", "output": "single" },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": { "typedRoutes": false }
+  }
+}

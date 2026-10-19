@@ -12,3 +12,5 @@ apps/mobile/web-build/
 .DS_Store
 storage/
 next-env.d.ts
+expo-env.d.ts
+dist-android/
