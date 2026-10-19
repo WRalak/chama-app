@@ -66,6 +66,15 @@ export default function SettingsPage() {
             <Field label="M-Pesa account reference prefix" htmlFor="s-p" hint="Used to route paybill payments to this group."><Input id="s-p" value={settings.accountReferencePrefix ?? ''} onChange={(e) => setSettings({ ...settings, accountReferencePrefix: e.target.value.toUpperCase() || null })} /></Field>
             <Field label="Paybill number" htmlFor="s-pb"><Input id="s-pb" value={settings.paybillNumber ?? ''} onChange={(e) => setSettings({ ...settings, paybillNumber: e.target.value || null })} /></Field>
             <div className="sm:col-span-2"><Toggle label="Members can see other members' balances" hint="Off by default. Officers always can." checked={settings.membersCanViewMemberBalances} onChange={(v) => setSettings({ ...settings, membersCanViewMemberBalances: v })} /></div>
+            <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-muted sm:col-span-2">Rotation payouts</p>
+            <Field label="If a round is not fully collected" htmlFor="s-mc" className="sm:col-span-2">
+              <Select id="s-mc" value={settings.missedContributionPolicy} onChange={(e) => setSettings({ ...settings, missedContributionPolicy: e.target.value as GroupSettingsInput['missedContributionPolicy'] })}>
+                <option value="PAY_CONFIRMED_WITH_REASON">Pay what is confirmed, with a recorded reason</option>
+                <option value="HOLD_UNTIL_COMPLETE">Hold the payout until the round is fully collected</option>
+              </Select>
+            </Field>
+            <div className="sm:col-span-2"><Toggle label="Allow payouts before the scheduled date" hint="Off by default: a round is paid on or after its date." checked={settings.allowEarlyPayout} onChange={(v) => setSettings({ ...settings, allowEarlyPayout: v })} /></div>
+            <div className="sm:col-span-2"><Toggle label="Hold a payout while the recipient is in arrears" hint="Overdue contributions, unpaid fines or overdue loan installments in this group. When off, approvers still see the arrears." checked={settings.holdPayoutWhenRecipientInArrears} onChange={(v) => setSettings({ ...settings, holdPayoutWhenRecipientInArrears: v })} /></div>
           </div>
         </Panel>
         <Panel title="Loan policy" actions={<Button size="sm" onClick={() => save.mutate({ loanPolicy: policy })} loading={save.isPending}>Save</Button>}>

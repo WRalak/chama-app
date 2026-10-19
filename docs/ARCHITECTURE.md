@@ -50,7 +50,37 @@ Business rules live in the API. The shared package gives both clients the same v
 - **Idempotency.** Every money-moving POST takes a client `idempotencyKey`, unique per group (or per disbursement, payout or allocation). Replays return the original; a key reused with a different payload gets `409`. Status transitions use guarded `updateMany(where status = X)` inside SERIALIZABLE transactions with retry.
 - **Obligations** are generated from schedules per member per period. Members are never billed for periods before they joined. Generation is idempotent through a unique key. Statuses are computed: upcoming, due, partial, overdue (after grace days), paid, waived.
 - **Loans.** Group policy: flat, one-off, reducing balance (equal principal) or amortized (equal installments, solved by integer binary search, so results are identical on every platform). The policy is snapshotted per loan. Eligibility is a multiple of confirmed savings minus outstanding principal. Approvals are maker-checker: a borrower can never approve their own loan unless the policy explicitly allows it, and even then an independent approval is still required. Disbursement is blocked if ledger cash is insufficient. Repayments go to interest first, then principal, oldest installment first. Overpayments are rejected, never silently absorbed.
-- **Rotations.** A cycle generates rounds and a linked schedule. Each round's obligations are its collection. Payouts can be approved only for the earliest unpaid round (never skipped). A shortfall needs a recorded reason, and the recipient cannot approve their own payout. The amount paid out is the *confirmed* collection. Order changes are proposals that another officer approves. A cycle closes only when every round is complete.
+- **Rotations (merry-go-round engine).** The engine lives in `packages/shared/src/finance/rotation.ts`. It is pure and deterministic, so the API, web and phone compute identical schedules.
+  - **Draft, then approve.** A cycle starts as a `DRAFT` with no contribution obligations. It becomes binding when an officer other than the drafter approves it, or when a members' vote passes (`approvalMode: MEMBER_VOTE`, wired through the decisions module). A rejected or failed draft is `CANCELLED`. On activation the schedule is snapshotted in `approvedPlan`, and every later change is an amendment.
+  - **Order methods.**
+    - `AGREED`: the order the members agreed.
+    - `RANDOM_DRAW`: a server seed is published, and `drawOrder(participants, seed)` is a seeded Fisher–Yates shuffle that anyone can re-run.
+    - `CARRY_OVER`: keeps the previous completed cycle's order and appends newcomers by join date.
+  - **Calendar and amounts.** Several recipients per round are supported; the member count must divide evenly, and shares are split exactly by largest remainder. Round dates always come from the original start date, so month-end and leap-day anchors never drift.
+  - **Payout states.** `SCHEDULED → READINESS_CHECK → AWAITING_APPROVAL → APPROVED → PROCESSING → COMPLETED`, with `FAILED` (retryable) and `CANCELLED`. `READINESS_CHECK` is derived when it is the round's turn; nothing advances automatically.
+  - **Readiness.** `assessPayoutReadiness` checks:
+    - Turn: rounds are never skipped.
+    - Payout date: early payout needs the `allowEarlyPayout` group setting.
+    - Confirmed collection, under the `missedContributionPolicy` setting: pay what is confirmed with a recorded reason, or hold until fully collected.
+    - No unverified payments for the round.
+    - No open disputes about the round.
+    - The recipient's arrears in this group: shown to approvers, and a hold if `holdPayoutWhenRecipientInArrears` is on.
+    - No pending amendment.
+    - Available cash: ledger cash less payouts sent but not yet confirmed.
+  - **Maker-checker at every step.**
+    - Prepare: fixes the amount and snapshots the readiness. Neither the preparer nor the recipient can approve.
+    - Approve: approvals bind to one preparation. If the collection changes, the payout must be prepared again.
+    - Send: records method, provider reference, destination and evidence as an append-only `payout_disbursements` attempt.
+    - Confirm: the recipient confirms receipt, or an officer other than the sender verifies the reference. Only then is the payout posted to the ledger, once.
+  - **Payout safeguards.**
+    - A recipient can report a problem; this opens a dispute that blocks officer confirmation.
+    - A failed attempt stays `FAILED`, and a retry is a new attempt.
+    - The database rejects deleting or rewriting attempts, allows one live attempt per payout, and enforces a unique reference per group.
+  - **Amendments.** Reorder, add members, remove a member, or replace a member. They change only rounds that have not entered payout, and need approval by another officer.
+    - Leavers stop owing rounds that have not entered payout; what is already due stays owed.
+    - Joiners owe only rounds due from the approval date (`schedule_members.fromDate` / `untilDate`).
+    - Shortening the schedule cancels the last round; it is never deleted.
+  - **Closing.** A cycle closes only when every round is completed or cancelled.
 - **Distributions.** Distributable = confirmed cash − liabilities − retained funds. Outstanding loans are shown but are never distributable. Methods: equal, contribution-proportional, share-based. The full calculation is stored before approval. Cash is re-checked at approval. Loan offsets post as real repayments.
 - **Statements.** Group statements are computed from journal lines, classified by account (a reversal counts as the type it reverses). The tests check that opening + inflows − outflows = closing. Members see only published snapshots, with member names hidden unless the group allows it. Personal consolidated statements count each journal entry once and list loans received separately from income.
 

@@ -1,0 +1,41 @@
+# ChamaHub roadmap
+
+This file tracks where ChamaHub stands against the full product specification. The first release is built around merry-go-rounds; table banking, investment and welfare reuse the same membership, ledger, notification and permission core.
+
+Status words: **done** means implemented, tested and in the apps. **Partial** means part of it works and the rest is listed. **Not started** means nothing is built yet.
+
+## Done
+
+| Area | Notes |
+| --- | --- |
+| Accounts, multi-Chama roles, platform staff | Per-group roles plus optional roles. Each group can configure permissions within safeguards. Support access needs a chairperson-approved, audited, time-boxed grant. |
+| Ledger and integrity | Double-entry in integer cents. The database keeps the ledger and audit log append-only and enforces balanced entries. Idempotency keys; maker-checker. |
+| Contributions | Schedules, obligations, partial payments, verification by a second officer, self-reported payments, disputes. |
+| **Rotation engine (phase 1)** | Draft → approval by officers or a members' vote. Order methods: agreed, random draw (published seed) and carry-over. Several recipients per round. Readiness checks; prepare / approve / send / confirm with evidence. Failed attempts and retries; amendments; the original approved plan is kept. 26 engine unit tests and 13 end-to-end tests. |
+| Loans, distributions, statements, imports, meetings, votes, audit findings | See `ARCHITECTURE.md`. |
+
+## Next phases, in priority order
+
+1. **Payment reconciliation**
+   - Daraja STK status query, plus a job that resolves STK requests stuck without a callback.
+   - Callback hardening: the secret token is checked in code; Safaricom IP allow-listing must still be set up at the edge.
+   - Payment status "under reconciliation" shown on each obligation.
+   - Evidence attachments (receipt photos) on manual entries.
+2. **Notifications**
+   - Expo push notifications with deep links for invitations, payment status and payouts.
+   - Group-level channel preferences.
+   - WhatsApp message templates. A sample like "UPENDO CHAMA: KSh 5,000 contribution confirmed…" must come only from ledger data and never expose a member's private loan or balance to the group.
+3. **Group setup wizard and group activation**
+   - A guided setup (type → contributions → rotation → loans → notifications) in plain language.
+   - Groups start as pending until the founding officers confirm the rules.
+4. **Statements and reports.** Payout schedule/history PDF; a collection reconciliation report; monthly statement automation.
+5. **Investment and welfare**
+   - Investment: share register, asset and liability register, realized and unrealized gains, return of capital kept separate from profit.
+   - Welfare: claims with eligibility checks, documents, approvals and benefit history.
+   - Today only the investment holdings list and distributions exist.
+6. **Subscriptions.** Plans and subscription status exist. Still to do: billing history and feature entitlements. Expiry must never block historical statements.
+7. **OCR intake.** Photographed notebooks become *unverified* import rows that go through the existing review-and-approve import queue.
+
+## Not planned without provider onboarding
+
+- **M-Pesa B2C (automatic payouts).** Payouts are recorded with references and independently confirmed. B2C needs a Safaricom initiator account and security credential, plus result and timeout callbacks. Until then the app never claims money was sent automatically.

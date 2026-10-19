@@ -16,7 +16,7 @@ export function Badge({ tone = 'neutral', children, className }: { tone?: Tone; 
 
 const STATUS_TONE: Record<string, Tone> = {
   CONFIRMED: 'green', PAID: 'green', APPROVED: 'green', COMPLETED: 'green', ACTIVE: 'green', REPAID: 'green', DISBURSED: 'blue', MATCHED: 'green', HELD: 'green', RESOLVED: 'green', VALIDATED: 'green', COMMITTED: 'green', SUCCEEDED: 'green', PRESENT: 'green', READY: 'green',
-  PENDING: 'amber', PENDING_APPROVAL: 'amber', PARTIAL: 'amber', DUE: 'amber', COLLECTING: 'amber', UNMATCHED: 'amber', OUTSTANDING: 'amber', TRIALING: 'blue', SCHEDULED: 'neutral', UPCOMING: 'neutral', DRAFT: 'neutral', OPEN: 'amber', CONFIRMED_RSVP: 'green', APOLOGY: 'amber',
+  PENDING: 'amber', PENDING_APPROVAL: 'amber', PARTIAL: 'amber', DUE: 'amber', COLLECTING: 'amber', READINESS_CHECK: 'amber', AWAITING_APPROVAL: 'amber', PROCESSING: 'blue', UNMATCHED: 'amber', OUTSTANDING: 'amber', TRIALING: 'blue', SCHEDULED: 'neutral', UPCOMING: 'neutral', DRAFT: 'neutral', OPEN: 'amber', CONFIRMED_RSVP: 'green', APOLOGY: 'amber',
   FAILED: 'red', REVERSED: 'red', REJECTED: 'red', OVERDUE: 'red', DISPUTED: 'red', DEFAULTED: 'red', HAS_ERRORS: 'red', SUSPENDED: 'red', CANCELLED: 'neutral', EXITED: 'neutral', WAIVED: 'neutral', DISCARDED: 'neutral', IGNORED: 'neutral', DEFERRED: 'neutral', PAST_DUE: 'red', ABSENT: 'red', DECLINED: 'neutral', EXPIRED: 'neutral', REVOKED: 'neutral', DUPLICATE: 'red',
 };
 

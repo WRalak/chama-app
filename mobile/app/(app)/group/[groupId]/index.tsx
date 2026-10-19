@@ -15,7 +15,7 @@ export default function GroupHome() {
   const summary = mine.data?.find((g) => g.groupId === groupId);
   const perms = group.data?.myMembership.permissions ?? [];
   const can = (p: string) => perms.includes(p as never);
-  const approvals = [Permission.CONTRIBUTIONS_VERIFY, Permission.CONTRIBUTIONS_RECORD, Permission.LOANS_APPROVE, Permission.EXPENSES_APPROVE, Permission.PAYOUTS_APPROVE, Permission.DISTRIBUTIONS_APPROVE].some((p) => can(p));
+  const approvals = [Permission.CONTRIBUTIONS_VERIFY, Permission.CONTRIBUTIONS_RECORD, Permission.LOANS_APPROVE, Permission.EXPENSES_APPROVE, Permission.PAYOUTS_APPROVE, Permission.ROTATIONS_MANAGE, Permission.DISTRIBUTIONS_APPROVE].some((p) => can(p));
   const meetingTools = can(Permission.MEETINGS_MANAGE) || can(Permission.MINUTES_APPROVE);
   const findingTools = can(Permission.FINDINGS_RAISE) || can(Permission.FINDINGS_RESOLVE);
   const officer = approvals || meetingTools || findingTools;
@@ -57,7 +57,7 @@ export default function GroupHome() {
           </Section>
           {officer && (
             <Section title={`${roleLabel} tools${extra.length ? ` · ${extra.join(', ')}` : ''}`}>
-              {approvals && <Row icon="clipboard-outline" title="Approvals & recording" subtitle="Verify payments, record cash, approve loans, expenses and payouts" onPress={() => router.push(`/(app)/group/${groupId}/manage`)} last={!meetingTools && !findingTools} />}
+              {approvals && <Row icon="clipboard-outline" title="Approvals & recording" subtitle="Verify payments, record cash, approve loans and expenses, run payouts" onPress={() => router.push(`/(app)/group/${groupId}/manage`)} last={!meetingTools && !findingTools} />}
               {meetingTools && <Row icon="calendar-number-outline" title="Run meetings" subtitle="Schedule meetings, approve minutes" onPress={() => router.push(`/(app)/group/${groupId}/meetings`)} last={!findingTools} />}
               {findingTools && <Row icon="search-outline" title="Audit findings" subtitle={can(Permission.FINDINGS_RAISE) ? 'Flag discrepancies for officers to answer' : 'Respond to the auditor'} onPress={() => router.push(`/(app)/group/${groupId}/findings`)} last />}
             </Section>

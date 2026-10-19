@@ -105,11 +105,11 @@ export type Tone = keyof typeof toneMap;
 const STATUS_TONE: Record<string, Tone> = {
   CONFIRMED: 'green', PAID: 'green', APPROVED: 'green', COMPLETED: 'green', ACTIVE: 'green', REPAID: 'green', READY: 'green', PRESENT: 'green', HELD: 'green',
   DISBURSED: 'blue', SCHEDULED: 'neutral', UPCOMING: 'neutral',
-  PENDING: 'amber', PENDING_APPROVAL: 'amber', PARTIAL: 'amber', DUE: 'amber', COLLECTING: 'amber', OUTSTANDING: 'amber', APOLOGY: 'amber',
+  PENDING: 'amber', PENDING_APPROVAL: 'amber', PARTIAL: 'amber', DUE: 'amber', COLLECTING: 'amber', OUTSTANDING: 'amber', APOLOGY: 'amber', READINESS_CHECK: 'amber', AWAITING_APPROVAL: 'amber', PROCESSING: 'blue', DRAFT: 'amber',
   FAILED: 'red', REVERSED: 'red', REJECTED: 'red', OVERDUE: 'red', DISPUTED: 'red', DECLINED: 'neutral', CANCELLED: 'neutral', WAIVED: 'neutral',
 };
 
-const STATUS_LABEL: Record<string, string> = { PENDING: 'Pending verification', PENDING_APPROVAL: 'Awaiting approval', COLLECTING: 'Collecting', READY: 'Fully collected' };
+const STATUS_LABEL: Record<string, string> = { PENDING: 'Pending verification', PENDING_APPROVAL: 'Awaiting approval', COLLECTING: 'Collecting', READY: 'Fully collected', READINESS_CHECK: 'Readiness check', AWAITING_APPROVAL: 'Awaiting approval', PROCESSING: 'Sent, confirming', DRAFT: 'Awaiting approval' };
 
 export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
   const t = toneMap[tone];

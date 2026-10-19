@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
-import { DistributionRecord, ExpenseRow, LABELS, LoanSummary, MemberRow, Paginated, parseKes, PaymentItem, Permission, RotationCycle, todayInNairobi } from '@chamahub/shared';
+import { DistributionRecord, ExpenseRow, LABELS, LoanSummary, MemberRow, Paginated, parseKes, PaymentItem, Permission, RotationCycle, RotationRoundRow, todayInNairobi } from '@chamahub/shared';
 import { Button, Chips, Empty, Field, Loading, Notice, Row, Screen, Section, T } from '@/components/ui';
 import { api } from '@/lib/api';
 import { date, kes, newKey } from '@/lib/format';
@@ -16,22 +16,23 @@ export default function Manage() {
   const perms = group.data?.myMembership.permissions ?? [];
   const can = (p: Permission) => perms.includes(p);
   const [tab, setTab] = useState<'verify' | 'loans' | 'record' | 'expenses' | 'payouts' | 'distributions'>('verify');
-  const inv = [['manage', groupId], ['dashboard'], ['groups']];
+  const inv = [['manage', groupId], ['rotations', groupId], ['dashboard'], ['groups']];
   const pending = useQuery({ queryKey: ['manage', groupId, 'payments'], queryFn: () => api<Paginated<PaymentItem>>(`groups/${groupId}/payments`, { query: { status: 'PENDING', pageSize: 50 } }), enabled: can(Permission.CONTRIBUTIONS_VERIFY) });
   const loans = useQuery({ queryKey: ['manage', groupId, 'loans'], queryFn: () => api<LoanSummary[]>(`groups/${groupId}/loans`, { query: { status: 'PENDING_APPROVAL' } }), enabled: can(Permission.LOANS_APPROVE) });
   const members = useQuery({ queryKey: ['members', groupId, 'ACTIVE'], queryFn: () => api<MemberRow[]>(`groups/${groupId}/members`, { query: { status: 'ACTIVE' } }), enabled: can(Permission.CONTRIBUTIONS_RECORD) });
   const expenses = useQuery({ queryKey: ['manage', groupId, 'expenses'], queryFn: () => api<ExpenseRow[]>(`groups/${groupId}/expenses`, { query: { status: 'PENDING_APPROVAL' } }), enabled: can(Permission.EXPENSES_APPROVE) });
-  const cycles = useQuery({ queryKey: ['manage', groupId, 'rotations'], queryFn: () => api<RotationCycle[]>(`groups/${groupId}/rotations`), enabled: can(Permission.PAYOUTS_APPROVE) });
+  const payoutOfficer = can(Permission.PAYOUTS_APPROVE) || can(Permission.ROTATIONS_MANAGE);
+  const cycles = useQuery({ queryKey: ['rotations', groupId], queryFn: () => api<RotationCycle[]>(`groups/${groupId}/rotations`), enabled: payoutOfficer });
   const dists = useQuery({ queryKey: ['manage', groupId, 'distributions'], queryFn: () => api<DistributionRecord[]>(`groups/${groupId}/distributions`), enabled: can(Permission.DISTRIBUTIONS_APPROVE) && can(Permission.REPORTS_VIEW) });
   const decideExpense = useAct(({ id, decision }: { id: string; decision: 'APPROVE' | 'REJECT' }) => api(`groups/${groupId}/expenses/${id}/decision`, { body: { decision } }), { invalidate: inv });
-  const approvePayout = useAct(({ cycleId, roundId, shortfallReason }: { cycleId: string; roundId: string; shortfallReason?: string }) => api(`groups/${groupId}/rotations/${cycleId}/rounds/${roundId}/approve`, { body: { shortfallReason } }), { invalidate: inv, successMessage: 'Approval recorded.' });
   const decideChange = useAct(({ cycleId, changeId, decision }: { cycleId: string; changeId: string; decision: 'APPROVE' | 'REJECT' }) => api(`groups/${groupId}/rotations/${cycleId}/changes/${changeId}/decision`, { body: { decision } }), { invalidate: inv });
+  const decideActivation = useAct(({ cycleId, decision }: { cycleId: string; decision: 'APPROVE' | 'REJECT' }) => api(`groups/${groupId}/rotations/${cycleId}/activation`, { body: { decision } }), { invalidate: [...inv, ['rotations', groupId]], successMessage: 'Decision recorded.' });
   const decideDist = useAct(({ id, decision }: { id: string; decision: 'APPROVE' | 'REJECT' }) => api(`groups/${groupId}/distributions/${id}/decision`, { body: { decision } }), { invalidate: inv });
   const activeCycle = cycles.data?.find((c) => c.status === 'ACTIVE');
-  const [shortfall, setShortfall] = useState('');
-  const round = activeCycle?.currentRound;
-  const roundNeedsMe = round && !['APPROVED', 'COMPLETED'].includes(round.status) && round.confirmedCents > 0 && round.recipientMembershipId !== group.data?.myMembership.membershipId;
+  const draftCycle = cycles.data?.find((c) => c.status === 'DRAFT');
+  const actionable = (activeCycle?.rounds ?? []).filter((r) => r.can.prepare || r.can.approve || r.can.disburse || r.can.confirm || r.can.fail);
   const pendingChanges = activeCycle?.changeLog.filter((c) => c.status === 'PENDING') ?? [];
+  const payoutCount = actionable.length + pendingChanges.length + (draftCycle?.can.approveActivation ? 1 : 0);
   const pendingDists = (dists.data ?? []).filter((d) => d.status === 'PENDING_APPROVAL');
   const verify = useAct(({ id, decision }: { id: string; decision: 'CONFIRM' | 'FAIL' }) => api(`groups/${groupId}/payments/${id}/verify`, { body: { decision } }), { invalidate: inv });
   const decide = useAct(({ id, decision }: { id: string; decision: 'APPROVE' | 'REJECT' }) => api(`groups/${groupId}/loans/${id}/decision`, { body: { decision } }), { invalidate: inv });
@@ -57,7 +58,7 @@ export default function Manage() {
     ...(can(Permission.CONTRIBUTIONS_VERIFY) ? [{ value: 'verify' as const, label: `Verify (${pending.data?.total ?? 0})` }] : []),
     ...(can(Permission.LOANS_APPROVE) ? [{ value: 'loans' as const, label: `Loans (${loans.data?.length ?? 0})` }] : []),
     ...(can(Permission.EXPENSES_APPROVE) ? [{ value: 'expenses' as const, label: `Expenses (${expenses.data?.filter((e) => e.canApprove).length ?? 0})` }] : []),
-    ...(can(Permission.PAYOUTS_APPROVE) ? [{ value: 'payouts' as const, label: `Payouts (${(roundNeedsMe ? 1 : 0) + pendingChanges.length})` }] : []),
+    ...(payoutOfficer ? [{ value: 'payouts' as const, label: `Payouts (${payoutCount})` }] : []),
     ...(can(Permission.DISTRIBUTIONS_APPROVE) && can(Permission.REPORTS_VIEW) ? [{ value: 'distributions' as const, label: `Distributions (${pendingDists.length})` }] : []),
     ...(can(Permission.CONTRIBUTIONS_RECORD) ? [{ value: 'record' as const, label: 'Record cash' }] : []),
   ];
@@ -111,28 +112,32 @@ export default function Manage() {
           )}
           {tab === 'payouts' && (
             <>
-              <Section title="Current round">
-                {!cycles.data ? <Loading /> : !round ? <Empty title="No active rotation" /> : (
+              {draftCycle && (
+                <Section title="Rotation awaiting approval">
                   <View style={{ padding: space.lg }}>
-                    <T variant="label">{`Round ${round.round} · ${round.recipientName} · ${date(round.payoutDate)}`}</T>
-                    <T variant="small">{`Confirmed ${kes(round.confirmedCents)} of ${kes(round.expectedCents)} · ${round.approvals.length}/${round.approvalsRequired} approvals · ${round.status.toLowerCase()}`}</T>
-                    {roundNeedsMe ? (
-                      <View style={{ marginTop: space.sm }}>
-                        {round.shortfallCents > 0 && <Field label={`Reason for approving ${kes(round.shortfallCents)} less than expected`} value={shortfall} onChangeText={setShortfall} />}
-                        <Button title={`Approve payout of ${kes(round.confirmedCents)}`} disabled={round.shortfallCents > 0 && shortfall.trim().length < 5} loading={approvePayout.isPending} onPress={() => approvePayout.mutate({ cycleId: activeCycle!.id, roundId: round.id, shortfallReason: shortfall || undefined })} />
+                    <T variant="label">{`${draftCycle.name} · ${draftCycle.rounds.length} payouts from ${date(draftCycle.startDate)}`}</T>
+                    <T variant="small">{`${LABELS.rotationOrderMethod[draftCycle.orderMethod]} · drafted by ${draftCycle.createdByName}`}</T>
+                    {draftCycle.rounds.map((r) => <T key={r.id} variant="small">{`${r.round}. ${r.recipientName} — ${date(r.payoutDate)}`}</T>)}
+                    {draftCycle.can.approveActivation ? (
+                      <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
+                        <Button title="Approve schedule" onPress={() => decideActivation.mutate({ cycleId: draftCycle.id, decision: 'APPROVE' })} style={{ flex: 1 }} loading={decideActivation.isPending} />
+                        <Button title="Reject" variant="secondary" onPress={() => decideActivation.mutate({ cycleId: draftCycle.id, decision: 'REJECT' })} style={{ flex: 1 }} />
                       </View>
-                    ) : (
-                      <T variant="small" style={{ marginTop: space.sm }}>{round.recipientMembershipId === group.data.myMembership.membershipId ? 'This is your own payout — another officer approves it.' : round.confirmedCents <= 0 ? 'Nothing confirmed for this round yet.' : 'No approval needed from you now.'}</T>
-                    )}
+                    ) : <T variant="small" style={{ marginTop: space.sm }}>{draftCycle.approvalMode === 'MEMBER_VOTE' ? 'Members are voting on this schedule.' : 'Another officer approves this schedule.'}</T>}
                   </View>
-                )}
+                </Section>
+              )}
+              <Section title="Payouts needing action">
+                {!cycles.data ? <Loading /> : !activeCycle ? <Empty title="No active rotation" /> : actionable.length === 0 ? (
+                  <Empty title="Nothing for you right now" body={activeCycle.currentRound ? `Round ${activeCycle.currentRound.round} (${activeCycle.currentRound.recipientName}) is ${LABELS.payoutStatus[activeCycle.currentRound.status].toLowerCase()}.` : 'All rounds are paid.'} icon="checkmark-done-outline" />
+                ) : actionable.map((r, i) => <PayoutCard key={r.id} groupId={groupId} cycleId={activeCycle.id} r={r} last={i === actionable.length - 1} />)}
               </Section>
-              {pendingChanges.length > 0 && (
-                <Section title="Proposed order changes">
+              {pendingChanges.length > 0 && can(Permission.PAYOUTS_APPROVE) && (
+                <Section title="Proposed amendments">
                   {pendingChanges.map((c, i) => (
                     <View key={c.id} style={{ padding: space.lg, borderBottomWidth: i === pendingChanges.length - 1 ? 0 : 1, borderBottomColor: colors.border }}>
-                      <T variant="label">{c.reason}</T>
-                      <T variant="small">{`Proposed by ${c.byName}`}</T>
+                      <T variant="label">{`${LABELS.rotationAmendment[c.kind]}: ${c.reason}`}</T>
+                      <T variant="small">{`Proposed by ${c.byName} · new order: ${c.afterNames.join(' → ')}`}</T>
                       <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
                         <Button title="Approve" onPress={() => decideChange.mutate({ cycleId: activeCycle!.id, changeId: c.id, decision: 'APPROVE' })} style={{ flex: 1 }} />
                         <Button title="Reject" variant="secondary" onPress={() => decideChange.mutate({ cycleId: activeCycle!.id, changeId: c.id, decision: 'REJECT' })} style={{ flex: 1 }} />
@@ -177,5 +182,72 @@ export default function Manage() {
         </>
       )}
     </Screen>
+  );
+}
+
+/** One payout step at a time; the API decides which steps this officer may take. */
+function PayoutCard({ groupId, cycleId, r, last }: { groupId: string; cycleId: string; r: RotationRoundRow; last: boolean }) {
+  const inv = [['rotations', groupId], ['dashboard']];
+  const base = `groups/${groupId}/rotations/${cycleId}/rounds/${r.id}`;
+  const [reason, setReason] = useState('');
+  const [method, setMethod] = useState<'MPESA' | 'BANK_TRANSFER' | 'CASH'>('MPESA');
+  const [reference, setReference] = useState('');
+  const [note, setNote] = useState('');
+  const [key] = useState(newKey);
+  const prepare = useAct(() => api(`${base}/prepare`, { body: { shortfallReason: reason || undefined } }), { invalidate: inv, successMessage: 'Prepared. Approvers have been notified.' });
+  const decide = useAct((decision: 'APPROVE' | 'REJECT') => api(`${base}/approve`, { body: { decision, comment: note || undefined } }), { invalidate: inv, successMessage: 'Decision recorded.' });
+  const send = useAct(() => api(`${base}/disburse`, { body: { method, reference: reference || undefined, sentAt: todayInNairobi(), evidenceNote: note || undefined, idempotencyKey: key } }), { invalidate: inv, successMessage: 'Recorded as sent. It completes when the recipient confirms or another officer verifies it.' });
+  const verify = useAct(() => api(`${base}/confirm`, { body: { note: note || undefined } }), { invalidate: inv, successMessage: 'Payout completed.' });
+  const fail = useAct(() => api(`${base}/fail`, { body: { reason } }), { invalidate: inv, successMessage: 'Marked as failed. Send it again when ready.' });
+  const amount = r.preparedAmountCents ?? r.readiness?.payableCents ?? 0;
+  return (
+    <View style={{ padding: space.lg, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.border }}>
+      <T variant="label">{`Round ${r.round} · ${r.recipientName} · ${kes(amount)}`}</T>
+      <T variant="small">{`${date(r.payoutDate)} · ${LABELS.payoutStatus[r.status]} · confirmed ${kes(r.confirmedCents)} of ${kes(r.expectedCents)}`}</T>
+      {r.readiness && !r.readiness.ready && r.readiness.checks.filter((c) => c.status === 'FAIL').map((c) => <T key={c.key} variant="small" style={{ color: colors.error }}>{`• ${c.detail}`}</T>)}
+      {r.readiness?.checks.filter((c) => c.status === 'WARN').map((c) => <T key={c.key} variant="small" style={{ color: colors.warning }}>{`• ${c.detail}`}</T>)}
+      {r.can.prepare && (
+        <View style={{ marginTop: space.sm }}>
+          {r.readiness?.needsShortfallReason && <Field label="Why the group agrees to pay less" value={reason} onChangeText={setReason} />}
+          <Button title={`Prepare payout of ${kes(r.readiness?.payableCents ?? 0)}`} onPress={() => prepare.mutate(undefined)} loading={prepare.isPending} disabled={!!r.readiness?.needsShortfallReason && reason.trim().length < 5} />
+        </View>
+      )}
+      {r.can.approve && (
+        <View style={{ marginTop: space.sm }}>
+          <T variant="small">{`Prepared by ${r.preparedByName}${r.shortfallReason ? ` · short: ${r.shortfallReason}` : ''}`}</T>
+          <Field label="Comment (needed to reject)" value={note} onChangeText={setNote} />
+          <View style={{ flexDirection: 'row', gap: space.sm }}>
+            <Button title="Approve" onPress={() => decide.mutate('APPROVE')} style={{ flex: 1 }} loading={decide.isPending} />
+            <Button title="Reject" variant="secondary" onPress={() => decide.mutate('REJECT')} style={{ flex: 1 }} disabled={note.trim().length < 5} />
+          </View>
+        </View>
+      )}
+      {r.can.disburse && (
+        <View style={{ marginTop: space.sm }}>
+          {r.failureReason && <T variant="small" style={{ color: colors.error }}>{`Last attempt failed: ${r.failureReason}`}</T>}
+          <Chips value={method} onChange={setMethod} options={[{ value: 'MPESA', label: 'M-Pesa' }, { value: 'BANK_TRANSFER', label: 'Bank' }, { value: 'CASH', label: 'Cash' }]} />
+          {method !== 'CASH' && <Field label="Transaction code" autoCapitalize="characters" value={reference} onChangeText={setReference} />}
+          <Field label={method === 'CASH' ? 'Who received it and who witnessed' : 'Note (optional)'} value={note} onChangeText={setNote} />
+          <Button title={`Record ${kes(amount)} as sent`} onPress={() => send.mutate(undefined)} loading={send.isPending} disabled={method === 'CASH' ? note.trim().length < 5 : reference.trim().length < 4} />
+        </View>
+      )}
+      {(r.can.confirm || r.can.fail) && (
+        <View style={{ marginTop: space.sm }}>
+          {r.disbursement && <T variant="small">{`Sent ${date(r.disbursement.sentAt)} by ${r.disbursement.byName}${r.disbursement.reference ? ` · ref ${r.disbursement.reference}` : ''}`}</T>}
+          {r.can.confirm && (
+            <>
+              <Field label="Verification note" value={note} onChangeText={setNote} placeholder="e.g. Matched on the M-Pesa statement" />
+              <Button title="Verify and complete" onPress={() => verify.mutate(undefined)} loading={verify.isPending} />
+            </>
+          )}
+          {r.can.fail && (
+            <>
+              <Field label="If it failed, why?" value={reason} onChangeText={setReason} />
+              <Button title="Mark as failed" variant="secondary" onPress={() => fail.mutate(undefined)} disabled={reason.trim().length < 5} />
+            </>
+          )}
+        </View>
+      )}
+    </View>
   );
 }

@@ -61,6 +61,7 @@ Nothing below is presented to users as working unless it is configured.
 | WhatsApp Business Cloud API | Plain-text sending implemented; production use needs an approved WABA and message templates. |
 | Email | Posts to a configured relay webhook; no provider bundled. |
 | Push notifications | Not yet implemented (in-app notifications work). |
+| Automated payouts (M-Pesa B2C) | **Not implemented.** Payouts are sent through the group's agreed channel and recorded with the transaction reference. Each payout completes only when the recipient confirms or a second officer verifies the reference. B2C needs separate Safaricom onboarding (initiator credentials, result/timeout callbacks). |
 | PDF statements | Working (server-side, pdfkit). |
 | CSV / Excel import, CSV export | Working. Excel is converted to CSV in the browser. |
 | OCR of photographed notebooks | Planned. Extracted figures will always go through the import review queue, never straight into the books. |
