@@ -30,7 +30,8 @@ const AREAS = [...new Set(Object.values(PERMISSION_INFO).map((i) => i.area))];
 export default function RolesPage() {
   const groupId = useGroupId();
   const group = useGroup();
-  const policy = (group.data?.rolePolicy ?? {}) as RolePolicy;
+  const rawPolicy = group.data?.rolePolicy;
+  const policy = useMemo(() => (rawPolicy ?? {}) as RolePolicy, [rawPolicy]);
   const [role, setRole] = useState<GroupRole>('TREASURER');
   const current = useMemo(() => resolvePermissions(role, policy), [role, policy]);
   const [draft, setDraft] = useState<Permission[]>(current);
