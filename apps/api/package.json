@@ -13,11 +13,11 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "seed": "tsx prisma/seed.ts",
+    "seed": "ts-node --transpile-only -P tsconfig.json prisma/seed.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "ts-node --transpile-only -P tsconfig.json prisma/seed.ts"
   },
   "dependencies": {
     "@chamahub/shared": "workspace:*",
@@ -50,7 +50,7 @@
     "prisma": "6.16.2",
     "supertest": "7.1.4",
     "ts-jest": "29.4.15",
-    "tsx": "4.20.6",
+    "ts-node": "10.9.2",
     "typescript": "5.9.3"
   }
 }
