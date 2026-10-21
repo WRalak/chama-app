@@ -2,10 +2,10 @@
 
 ## Deploying
 
-1. PostgreSQL 16 with automated backups (see below). Run migrations with `pnpm --filter @chamahub/api prisma:deploy`. Never use `migrate dev` or `migrate reset` in production.
-2. API: `pnpm --filter @chamahub/api build && node backend/dist/main.js` behind TLS. Set `NODE_ENV=production`, strong `JWT_ACCESS_SECRET` and `OTP_SECRET` (`openssl rand -hex 32`), and `CORS_ORIGINS`. `DEV_LOG_OTP` must be unset (startup fails if it is on in production).
+1. PostgreSQL 16 with automated backups (see below). Run migrations with `npm run prisma:deploy -w @chamahub/api`. Never use `migrate dev` or `migrate reset` in production.
+2. API: `npm run build:shared && npm run build -w @chamahub/api && node backend/dist/main.js` behind TLS. Set `NODE_ENV=production`, strong `JWT_ACCESS_SECRET` and `OTP_SECRET` (`openssl rand -hex 32`), and `CORS_ORIGINS`. `DEV_LOG_OTP` must be unset (startup fails if it is on in production).
 3. Run **one** API instance with jobs enabled, or set `DISABLE_JOBS=true` on all but one instance until jobs move to a queue with locking.
-4. Admin: `pnpm --filter @chamahub/admin build && pnpm --filter @chamahub/admin start` with `API_URL` pointing at the API over a private network.
+4. Admin: `npm run build -w @chamahub/admin && npm run start -w @chamahub/admin` with `API_URL` pointing at the API over a private network.
 5. Mobile: build with EAS (`eas build -p android`). Set `EXPO_PUBLIC_API_URL` to the public HTTPS API.
 
 ## M-Pesa go-live checklist

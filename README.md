@@ -15,18 +15,19 @@ Both apps call the same API, so a payment an officer verifies on the web shows u
 
 ## Quick start (local)
 
-Prerequisites: Node 20+, pnpm 10, PostgreSQL 16.
+Prerequisites: Node 20+ (with npm), PostgreSQL 16. Run every command from the repository root: it is an npm workspace, so one `npm install` installs the backend, web, mobile and shared packages together.
 
 ```bash
-pnpm install
+npm install
 cp backend/.env.example backend/.env          # set DATABASE_URL and two 32+ char secrets
 cp web/.env.example web/.env.local
 cp mobile/.env.example mobile/.env     # EXPO_PUBLIC_API_URL reachable from the phone
+# Windows PowerShell: use `copy` instead of `cp`, with backslashes in the paths.
 
-pnpm dev:setup          # build shared, apply migrations, load DEMO data
-pnpm dev:api            # http://localhost:4000  (health: /health)
-pnpm dev:admin          # http://localhost:3000
-pnpm dev:mobile         # Expo dev server — open in Expo Go or an emulator
+npm run dev:setup          # build shared, apply migrations, load DEMO data
+npm run dev:api         # http://localhost:4000  (health: /health)
+npm run dev:admin       # http://localhost:3000
+npm run dev:mobile      # Expo dev server — open in Expo Go or an emulator
 ```
 
 **Demo data only** (from `backend/prisma/seed.ts`; it refuses to run with `NODE_ENV=production`):
@@ -43,9 +44,9 @@ In development, OTP codes are written to the API log (`DEV_LOG_OTP=true`) becaus
 ## Tests
 
 ```bash
-pnpm --filter @chamahub/shared test   # finance math: loan schedules, distributions, rotations, money parsing
-pnpm --filter @chamahub/api test      # e2e against a real Postgres (TEST_DATABASE_URL, default chamahub_test)
-pnpm typecheck
+npm run test -w @chamahub/shared   # finance math: loan schedules, distributions, rotations, money parsing
+npm run test -w @chamahub/api      # e2e against a real Postgres (TEST_DATABASE_URL, default chamahub_test)
+npm run typecheck
 ```
 
 The API suite covers auth (OTP, lockout, refresh-token reuse detection), group-scoped authorization across multiple groups, maker-checker verification, idempotency (including 10 concurrent submissions), reversals, ledger immutability enforced by the database, loans, rotations, distributions, statement reconciliation, imports, M-Pesa callback handling and platform-admin isolation. GitHub Actions runs all of it (`.github/workflows/ci.yml`).
