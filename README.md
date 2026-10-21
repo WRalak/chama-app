@@ -21,14 +21,18 @@ Prerequisites: Node 20+ (with npm), PostgreSQL 16. Run every command from the re
 npm install
 cp backend/.env.example backend/.env          # set DATABASE_URL and two 32+ char secrets
 cp web/.env.example web/.env.local
-cp mobile/.env.example mobile/.env     # EXPO_PUBLIC_API_URL reachable from the phone
 # Windows PowerShell: use `copy` instead of `cp`, with backslashes in the paths.
 
 npm run dev:setup          # build shared, apply migrations, load DEMO data
-npm run dev:api         # http://localhost:4000  (health: /health)
-npm run dev:admin       # http://localhost:3000
-npm run dev:mobile      # Expo dev server — open in Expo Go or an emulator
+npm run dev                # backend :4000, web dashboard :3000 and the Expo dev server, together
+
+# or one at a time:
+npm run dev:api            # http://localhost:4000
+npm run dev:admin          # http://localhost:3000
+npm run dev:mobile         # Expo: press w for the browser, or scan the QR code with Expo Go
 ```
+
+The mobile app finds the API on the computer running the Expo dev server, so a phone on the same Wi-Fi needs no configuration (allow Node through the Windows firewall when asked). Set `EXPO_PUBLIC_API_URL` only for a deployed API.
 
 **Demo data only** (from `backend/prisma/seed.ts`; it refuses to run with `NODE_ENV=production`):
 

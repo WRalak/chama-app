@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev": "npm run build:shared && concurrently -k -n api,web,mobile -c green,blue,magenta \"npm run dev -w @chamahub/api\" \"npm run dev -w @chamahub/admin\" \"npm run start -w @chamahub/mobile\"",
     "build:shared": "npm run build -w @chamahub/shared",
     "build": "npm run build:shared && npm run build --workspaces --if-present",
     "typecheck": "npm run build:shared && npm run typecheck -w @chamahub/api -w @chamahub/admin -w @chamahub/mobile",
@@ -24,5 +25,8 @@
     "backend",
     "web",
     "mobile"
-  ]
+  ],
+  "devDependencies": {
+    "concurrently": "9.1.2"
+  }
 }

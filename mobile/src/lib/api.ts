@@ -1,7 +1,25 @@
 import type { ApiErrorBody, AuthTokens } from '@chamahub/shared';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { readSession, StoredSession, writeSession } from './storage';
 
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:4000').replace(/\/$/, '');
+/**
+ * Where the ChamaHub API is. EXPO_PUBLIC_API_URL wins when set. Otherwise, in
+ * development the API is assumed to run on the same computer as the Expo dev
+ * server (port 4000): the browser preview uses the page's host, and a phone on
+ * the same Wi-Fi uses the dev server's LAN address, so no IP needs typing.
+ */
+function resolveApiUrl(): string {
+  const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
+  // 10.0.2.2 only works inside the Android emulator; older .env files set it by default.
+  if (configured && !configured.includes('10.0.2.2')) return configured;
+  if (Platform.OS === 'web' && typeof window !== 'undefined') return `${window.location.protocol}//${window.location.hostname}:4000`;
+  const host = Constants.expoConfig?.hostUri?.split(':')[0];
+  if (host) return `http://${host}:4000`;
+  return configured || 'http://10.0.2.2:4000';
+}
+
+export const API_URL = resolveApiUrl().replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(
