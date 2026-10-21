@@ -16,7 +16,8 @@
     "dev:mobile": "npm run start -w @chamahub/mobile",
     "db:migrate": "npm run prisma:migrate -w @chamahub/api",
     "db:seed": "npm run seed -w @chamahub/api",
-    "dev:setup": "npm run build:shared && npm exec -w @chamahub/api -- prisma migrate deploy && npm run db:seed"
+    "dev:setup": "npm run build:shared && npm exec -w @chamahub/api -- prisma migrate deploy && npm run db:seed",
+    "postinstall": "npm run build:shared"
   },
   "workspaces": [
     "packages/*",
