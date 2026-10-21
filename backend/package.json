@@ -14,8 +14,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed": "ts-node --transpile-only -P tsconfig.json prisma/seed.ts",
-    "postinstall": "prisma generate",
-    "predev": "npm run build --prefix ../packages/shared"
+    "postinstall": "prisma generate || node -e \"console.warn('\\nPrisma client not generated (network?). It is retried when you run npm run dev in backend.\\n')\"",
+    "predev": "prisma generate && npm run build --prefix ../packages/shared"
   },
   "prisma": {
     "seed": "ts-node --transpile-only -P tsconfig.json prisma/seed.ts"
