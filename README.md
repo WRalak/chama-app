@@ -6,7 +6,7 @@ ChamaHub manages multiple Chamas (savings groups) for the Kenyan market. It has 
 
 | Part | Path | Stack | For |
 | --- | --- | --- | --- |
-| Mobile app | `mobile` | Expo SDK 54, React Native 0.81, Expo Router, TanStack Query, React Hook Form + Zod | Members, and officers on the go |
+| Mobile app | `mobile` | Expo SDK 57, React Native 0.86, Expo Router, TanStack Query, React Hook Form + Zod | Members, and officers on the go |
 | Admin dashboard | `web` | Next.js 15 App Router, Tailwind, Radix/shadcn-style UI, TanStack Table/Query, Recharts | Chama officers and platform staff |
 | API | `backend` | NestJS 11, Prisma 6, PostgreSQL 16 | Shared backend: all money rules and authorization |
 | Shared | `packages/shared` | TypeScript + Zod | Contracts, enums, permission matrix, integer-cent finance math |
