@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { NotificationChannel, NotificationType, Prisma } from '@prisma/client';
 import { NotificationPreferences, notificationPreferencesSchema } from '@chamahub/shared';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
-import { EmailChannel, SmsChannel, WhatsAppChannel } from './channels';
+import { EmailChannel, PushChannel, SmsChannel, WhatsAppChannel } from './channels';
 import { PlatformSettingsService } from '../platform/platform-settings.service';
 
 export const DEFAULT_PREFERENCES: NotificationPreferences = {
@@ -51,6 +51,7 @@ export class NotificationsService {
     private readonly sms: SmsChannel,
     private readonly whatsapp: WhatsAppChannel,
     private readonly email: EmailChannel,
+    private readonly pushChannel: PushChannel,
     private readonly platform: PlatformSettingsService,
   ) {}
 
@@ -59,7 +60,7 @@ export class NotificationsService {
     const client = tx ?? this.prisma;
     const users = await client.user.findMany({
       where: { id: { in: [...new Set(userIds)] }, disabledAt: null },
-      select: { id: true, preferences: true, email: true },
+      select: { id: true, preferences: true, email: true, _count: { select: { pushDevices: true } } },
     });
     let created = 0;
     for (const u of users) {
@@ -71,6 +72,8 @@ export class NotificationsService {
         if (prefs.whatsapp) channels.push('WHATSAPP');
         if (prefs.email && u.email) channels.push('EMAIL');
       }
+      // Push is the app's own channel: on whenever the member allows it and has a device registered.
+      if (prefs.push && u._count.pushDevices > 0 && (!topic || prefs[topic])) channels.push('PUSH');
       const dedupeKey = input.dedupeKey ? `${input.dedupeKey}:${u.id}` : null;
       if (dedupeKey && (await client.notification.findUnique({ where: { dedupeKey }, select: { id: true } }))) continue;
       await client.notification.create({
@@ -96,7 +99,7 @@ export class NotificationsService {
       where: { status: 'QUEUED', attempts: { lt: 3 } },
       take: limit,
       orderBy: { createdAt: 'asc' },
-      include: { notification: { include: { user: { select: { phone: true, email: true } } } } },
+      include: { notification: { include: { user: { select: { phone: true, email: true, pushDevices: { select: { token: true } } } } } } },
     });
     let sent = 0;
     let failed = 0;
@@ -116,7 +119,9 @@ export class NotificationsService {
             ? await this.whatsapp.send(note.user.phone, text)
             : d.channel === 'EMAIL' && note.user.email
               ? await this.email.send(note.user.email, note.title, note.body)
-              : { ok: false, skipped: true, provider: 'none', error: 'Channel unavailable' };
+              : d.channel === 'PUSH'
+                ? await this.sendPush(note.user.pushDevices.map((p) => p.token), note)
+                : { ok: false, skipped: true, provider: 'none', error: 'Channel unavailable' };
       await this.prisma.notificationDelivery.update({
         where: { id: d.id },
         data: {
@@ -132,6 +137,24 @@ export class NotificationsService {
     }
     if (queued.length) this.logger.log(`Dispatched ${queued.length} deliveries: ${sent} sent, ${failed} failed`);
     return { processed: queued.length, sent, failed };
+  }
+
+  /** Push carries the notification id, type and group so the app can open the right screen. */
+  private async sendPush(tokens: string[], note: { id: string; type: string; title: string; body: string; groupId: string | null; data: Prisma.JsonValue }) {
+    const data = { ...((note.data as Record<string, unknown> | null) ?? {}), notificationId: note.id, type: note.type, groupId: note.groupId };
+    const r = await this.pushChannel.send(tokens, note.title, note.body, data);
+    if (r.deadTokens.length) await this.prisma.pushDevice.deleteMany({ where: { token: { in: r.deadTokens } } });
+    return r;
+  }
+
+  async registerDevice(userId: string, token: string, platform: string) {
+    await this.prisma.pushDevice.upsert({ where: { token }, create: { userId, token, platform }, update: { userId, platform, lastSeenAt: new Date() } });
+    return { ok: true };
+  }
+
+  async removeDevice(userId: string, token: string) {
+    await this.prisma.pushDevice.deleteMany({ where: { token, userId } });
+    return { ok: true };
   }
 
   /** User ids of active members of a group, optionally limited to some roles. */

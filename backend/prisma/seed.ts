@@ -174,7 +174,7 @@ async function main() {
   }
 
   // 3) Mombasa Investment Chama — Amina is CHAIRPERSON.
-  const mi = await group('Mombasa Investment Chama', 'INVESTMENT', [['Amina', 'CHAIRPERSON'], ['Brian', 'TREASURER'], ['Lucy', 'SECRETARY'], ['Daniel', 'MEMBER'], ['Samuel', 'MEMBER']], 3);
+  const mi = await group('Mombasa Investment Chama', 'INVESTMENT', [['Amina', 'CHAIRPERSON'], ['Brian', 'TREASURER'], ['Lucy', 'SECRETARY'], ['Daniel', 'MEMBER'], ['Samuel', 'AUDITOR']], 3);
   await contributions.createSchedule(mi.id, { name: 'Investment contribution', amountCents: 500_000, frequency: 'MONTHLY', startDate: addDays(today, -31 * 3) }, mi.ctx.Brian, meta);
   for (const o of await pastObligations(mi.id)) await settle(mi.ctx, byMembership(mi.ctx, o.membershipId), 500_000, iso(o.dueDate), { targetId: o.id });
   await prisma.investmentHolding.create({ data: { groupId: mi.id, name: 'Treasury bond FXD1/2024/10', kind: 'Government bond', costCents: 3_000_000n, currentValueCents: 3_120_000n, acquiredOn: new Date(`${addDays(today, -40)}T00:00:00Z`) } });
@@ -201,6 +201,8 @@ async function main() {
 
   console.log('Demo data seeded. Password for all demo users: Demo1234');
   console.log('  0700 000 001  Amina — treasurer / chairperson / member in different Chamas');
+  console.log('  Upendo: 002 Peter (chair) · 003 Joyce (treasurer) · 005 Mercy (payout approver) · 004 Daniel (member)');
+  console.log('  Mombasa: 009 Lucy (secretary) · 006 Samuel (auditor)');
   console.log('  0700 000 099  Super Admin · 0700 000 098 Platform Admin · 0700 000 097 Support Agent');
   await app.close();
 }

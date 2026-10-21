@@ -267,3 +267,48 @@ export const styles = StyleSheet.create({
   rowIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.forestTint, alignItems: 'center', justifyContent: 'center', marginRight: space.md },
   chip: { minHeight: 36, paddingHorizontal: space.md, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, justifyContent: 'center' },
 });
+
+/** A labelled progress bar (e.g. collection progress); percent is 0–100. */
+export function Progress({ percent, label, tone = 'green' }: { percent: number; label?: string; tone?: 'green' | 'amber' }) {
+  const p = Math.max(0, Math.min(100, Math.round(percent)));
+  return (
+    <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: p }} accessibilityLabel={label}>
+      <View style={{ height: 8, backgroundColor: colors.slateTint, borderRadius: 4, overflow: 'hidden' }}>
+        <View style={{ width: `${p}%`, height: 8, backgroundColor: tone === 'green' ? colors.emerald : colors.warning }} />
+      </View>
+      {label && <T variant="small" style={{ marginTop: 4 }}>{label}</T>}
+    </View>
+  );
+}
+
+/** Large square shortcut used on the management dashboard. */
+export function Tile({ icon, label, onPress, badge }: { icon: IconName; label: string; onPress: () => void; badge?: number }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={badge ? `${label}, ${badge} waiting` : label} style={({ pressed }) => [{ width: '23%', minWidth: 76, alignItems: 'center', paddingVertical: space.sm }, pressed && { opacity: 0.7 }]}>
+      <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: colors.forestTint, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={22} color={colors.forest} />
+        {!!badge && (
+          <View style={{ position: 'absolute', top: -4, right: -6, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+            <Text style={{ color: colors.white, fontSize: 11, fontWeight: '700' }}>{badge}</Text>
+          </View>
+        )}
+      </View>
+      <T variant="small" style={{ marginTop: 6, textAlign: 'center', color: colors.navy, fontSize: 12 }} numberOfLines={2}>{label}</T>
+    </Pressable>
+  );
+}
+
+/** One label/value line inside a Section. */
+export function KV({ label, value, last }: { label: string; value: ReactNode; last?: boolean }) {
+  return (
+    <View style={[styles.row, { minHeight: 44, paddingVertical: space.sm }, !last && styles.rowBorder]}>
+      <T variant="small" style={{ flex: 1 }}>{label}</T>
+      {typeof value === 'string' ? <T variant="body" style={{ fontWeight: '600', textAlign: 'right', flexShrink: 1 }}>{value}</T> : value}
+    </View>
+  );
+}
+
+/** Shown when a section is opened without the permission for it (e.g. from an old link). */
+export function NoAccess({ what }: { what: string }) {
+  return <Empty icon="lock-closed-outline" title="Not available for your role" body={`Your role in this group does not include ${what}.`} />;
+}

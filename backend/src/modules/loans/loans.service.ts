@@ -191,6 +191,19 @@ export class LoansService {
     const repayments = await this.prisma.payment.findMany({ where: { groupId, purpose: 'LOAN_REPAYMENT', targetId: l.id }, include: paymentInclude, orderBy: { paidAt: 'desc' } });
     const t = today();
     const myDecision = await this.prisma.approval.findUnique({ where: { entityType_entityId_approverMembershipId: { entityType: 'LOAN', entityId: l.id, approverMembershipId: viewer.id || '-' } } });
+    // Reviewers see the borrower's standing in this group to judge eligibility.
+    let borrowerPosition: LoanDetail['borrowerPosition'] = null;
+    if (!own) {
+      const [b, membership] = await Promise.all([this.finance.balances(groupId, [l.membershipId]), this.prisma.membership.findUniqueOrThrow({ where: { id: l.membershipId }, select: { joinedAt: true } })]);
+      const bal = b.get(l.membershipId);
+      borrowerPosition = {
+        contributedCents: bal?.contributedCents ?? 0,
+        arrearsCents: bal?.outstandingCents ?? 0,
+        otherLoansCents: Math.max((bal?.loanBalanceCents ?? 0) - (l.status === 'DISBURSED' ? this.summary(l, 0).outstandingCents : 0), 0),
+        finesOutstandingCents: bal?.finesOutstandingCents ?? 0,
+        memberSince: isoDate(membership.joinedAt),
+      };
+    }
     return {
       ...this.summary(l, approvals.filter((a) => a.decision === 'APPROVED').length),
       schedule: l.installments.map((i) => ({
@@ -207,6 +220,7 @@ export class LoansService {
       approvals,
       guarantors: l.guarantors.map((g) => ({ membershipId: g.membershipId, name: g.membership.user.fullName })),
       disbursementReference: l.disbursementReference,
+      borrowerPosition,
       canApprove:
         l.status === 'PENDING_APPROVAL' &&
         viewer.permissions.includes(Permission.LOANS_APPROVE) &&

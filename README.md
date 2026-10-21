@@ -6,7 +6,7 @@ ChamaHub manages multiple Chamas (savings groups) for the Kenyan market. It has 
 
 | Part | Path | Stack | For |
 | --- | --- | --- | --- |
-| Mobile app | `mobile` | Expo SDK 57, React Native 0.86, Expo Router, TanStack Query, React Hook Form + Zod | Members, and officers on the go |
+| Mobile app | `mobile` | Expo SDK 57, React Native 0.86, Expo Router, TanStack Query, React Hook Form + Zod | Members and every group officer: day-to-day management runs fully on the phone |
 | Admin dashboard | `web` | Next.js 15 App Router, Tailwind, Radix/shadcn-style UI, TanStack Table/Query, Recharts | Chama officers and platform staff |
 | API | `backend` | NestJS 11, Prisma 6, PostgreSQL 16 | Shared backend: all money rules and authorization |
 | Shared | `packages/shared` | TypeScript + Zod | Contracts, enums, permission matrix, integer-cent finance math |
@@ -37,11 +37,26 @@ The mobile app finds the API on the computer running the Expo dev server, so a p
 **Demo data only** (from `backend/prisma/seed.ts`; it refuses to run with `NODE_ENV=production`):
 
 - `0700 000 001` / `Demo1234` — Amina: treasurer of *Jitegemee Table Banking*, chairperson of *Mombasa Investment Chama*, member of *Upendo Merry-Go-Round* and *Family Welfare Group*.
+- One user per role, to try each role's mobile experience (all `Demo1234`):
+
+  | Role | Phone | Group |
+  | --- | --- | --- |
+  | Chairperson | `0700 000 002` (Peter) | Upendo Merry-Go-Round |
+  | Treasurer | `0700 000 003` (Joyce) | Upendo Merry-Go-Round |
+  | Payout approver (optional role) | `0700 000 005` (Mercy) | Upendo Merry-Go-Round |
+  | Ordinary member | `0700 000 004` (Daniel) | Upendo Merry-Go-Round |
+  | Secretary | `0700 000 009` (Lucy) | Mombasa Investment Chama |
+  | Auditor | `0700 000 006` (Samuel) | Mombasa Investment Chama |
+  | Loan committee (optional role) | `0700 000 002` (Peter) | Jitegemee Table Banking |
 - `0700 000 099` / `Demo1234` — platform super admin.
 - `0700 000 098` / `Demo1234` — platform admin.
 - `0700 000 097` / `Demo1234` — support agent (no access to group finances without a chair-approved grant).
 
 Roles are per group. See `docs/ARCHITECTURE.md` → *Identity, roles and multi-Chama access* for the permission matrix, optional roles and the safeguards that bound what a group can configure.
+
+### Mobile app for officers
+
+Each Chama opens with the member's own position. Officers also get a dashboard for that group (collections, next payout and readiness, items waiting for them) with shortcuts and the management sections their permissions allow: members, contributions and reconciliation, payout rotation, payout approvals, loans, expenses, meetings, announcements, reports and statements, settings, and activity/audit. Permissions are re-read per group from the API, which enforces them on every request; hidden buttons are only a convenience. Actions never run offline: an action either reaches the server and is recorded, or visibly fails.
 
 In development, OTP codes are written to the API log (`DEV_LOG_OTP=true`) because no SMS provider is configured.
 
@@ -65,7 +80,7 @@ Nothing below is presented to users as working unless it is configured.
 | SMS (Africa's Talking) | Implemented, not verified with a live account. Without credentials, nothing is sent. |
 | WhatsApp Business Cloud API | Plain-text sending implemented; production use needs an approved WABA and message templates. |
 | Email | Posts to a configured relay webhook; no provider bundled. |
-| Push notifications | Not yet implemented (in-app notifications work). |
+| Push notifications | **Implemented; needs a build with an EAS project.** The API sends through the Expo push service, and the app registers on sign-in and deep-links taps to the right screen. Expo Go (Android) and the browser preview cannot receive remote push; run `npx eas init` in `mobile/` and use a development or store build. In-app notifications always work. |
 | Automated payouts (M-Pesa B2C) | **Not implemented.** Payouts are sent through the group's agreed channel and recorded with the transaction reference. Each payout completes only when the recipient confirms or a second officer verifies the reference. B2C needs separate Safaricom onboarding (initiator credentials, result/timeout callbacks). |
 | PDF statements | Working (server-side, pdfkit). |
 | CSV / Excel import, CSV export | Working. Excel is converted to CSV in the browser. |

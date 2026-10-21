@@ -425,6 +425,7 @@ model User {
   updatedAt           DateTime     @updatedAt
 
   sessions        Session[]
+  pushDevices     PushDevice[]
   memberships     Membership[]
   notifications   Notification[]
   invitationsSent Invitation[]   @relation("InvitedBy")
@@ -1473,4 +1474,19 @@ model PlatformSetting {
   updatedAt   DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+/// Expo push tokens of the user's signed-in devices. A token moves to whoever signs in on that device.
+model PushDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  token      String   @unique
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_devices")
 }

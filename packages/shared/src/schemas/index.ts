@@ -116,6 +116,11 @@ export const notificationPreferencesSchema = z.object({
 });
 export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
 
+export const pushDeviceSchema = z.object({
+  token: z.string().trim().regex(/^Expo(nent)?PushToken\[.+\]$/, 'Not an Expo push token').max(200),
+  platform: z.enum(['android', 'ios', 'web']),
+});
+
 export const accountDeletionSchema = z.object({ reason: z.string().trim().max(500).optional() });
 
 /* ---------- groups ---------- */
@@ -256,6 +261,8 @@ export const paymentFilterSchema = paginationSchema.extend({
   from: isoDateSchema.optional(),
   to: isoDateSchema.optional(),
   q: z.string().trim().max(60).optional(),
+  /** Exact amount in cents, for finding a payment by what the member says they paid. */
+  amountCents: z.coerce.number().int().positive().optional(),
 });
 
 export const matchUnmatchedSchema = z.object({ memberId: z.string(), purpose: z.enum(['CONTRIBUTION', 'LOAN_REPAYMENT', 'FINE']), targetId: z.string().optional() });

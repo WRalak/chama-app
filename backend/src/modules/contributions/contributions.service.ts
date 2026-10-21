@@ -250,6 +250,7 @@ export class ContributionsService {
       ...(canSeeAll ? (q.memberId ? { membershipId: q.memberId } : {}) : { membershipId: viewer.id }),
       ...(q.status ? { status: q.status } : {}),
       ...(q.method ? { method: q.method } : {}),
+      ...(q.amountCents ? { amountCents: BigInt(q.amountCents) } : {}),
       ...(q.from || q.to ? { paidAt: { ...(q.from ? { gte: dbDate(q.from) } : {}), ...(q.to ? { lte: dbDate(q.to) } : {}) } } : {}),
       ...(q.q ? { OR: [{ reference: { contains: q.q.toUpperCase() } }, { membership: { user: { fullName: { contains: q.q, mode: 'insensitive' } } } }] } : {}),
     };

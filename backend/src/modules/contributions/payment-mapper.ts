@@ -30,6 +30,7 @@ export async function toPaymentItems(prisma: PrismaService, rows: PaymentWithRel
     memberName: p.membership?.user.fullName ?? null,
     amountCents: n(p.amountCents),
     method: p.method,
+    source: p.source,
     reference: p.reference,
     purpose: p.purpose,
     status: p.status,

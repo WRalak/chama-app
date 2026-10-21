@@ -33,7 +33,9 @@ export class DisputesController {
   async create(@Param('groupId') groupId: string, @Body(new ZodPipe(disputeSchema)) body: z.infer<typeof disputeSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     if (!m.id) throw new ForbiddenException('Only members can raise disputes');
     if (body.paymentId) {
-      const p = await this.prisma.payment.findFirst({ where: { id: body.paymentId, groupId, membershipId: m.id } });
+      // Members dispute their own payments; officers who verify or reconcile can escalate any payment.
+      const officer = m.permissions.includes(Permission.CONTRIBUTIONS_VERIFY) || m.permissions.includes(Permission.RECONCILIATION_MANAGE);
+      const p = await this.prisma.payment.findFirst({ where: { id: body.paymentId, groupId, ...(officer ? {} : { membershipId: m.id }) } });
       if (!p) throw new NotFoundException('Payment not found');
       // A pending payment under dispute is frozen until officers resolve it.
       if (p.status === 'PENDING') await this.prisma.payment.update({ where: { id: p.id }, data: { status: 'DISPUTED' } });

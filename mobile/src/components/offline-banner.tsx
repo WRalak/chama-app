@@ -12,7 +12,7 @@ export function OfflineBanner() {
   return (
     <View style={{ backgroundColor: colors.navy, paddingVertical: 6, paddingHorizontal: 16 }} accessibilityRole="alert">
       <T variant="small" style={{ color: colors.white, textAlign: 'center' }}>
-        You are offline. Showing the last figures loaded.
+        You are offline. Showing figures loaded earlier. Nothing can be recorded or approved until you reconnect.
       </T>
     </View>
   );

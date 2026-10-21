@@ -4,6 +4,7 @@ import { NotificationItem, Paginated } from '@chamahub/shared';
 import { Button, Empty, ErrorView, Loading, Row, Screen, Section } from '@/components/ui';
 import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
+import { routeForNotification } from '@/lib/links';
 import { useAct } from '@/lib/queries';
 
 export default function Notifications() {
@@ -25,8 +26,7 @@ export default function Notifications() {
                 subtitle={`${n.body}\n${n.groupName ? `${n.groupName} · ` : ''}${dateTime(n.createdAt)}`}
                 onPress={() => {
                   if (!n.readAt) read.mutate(n.id);
-                  if (n.type === 'INVITATION') router.push('/(app)/invitations');
-                  else if (n.groupId) router.push(`/(app)/group/${n.groupId}`);
+                  router.push(routeForNotification(n) as never);
                 }}
                 last={i === list.data!.items.length - 1}
               />

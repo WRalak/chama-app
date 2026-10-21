@@ -8,6 +8,8 @@ import { ApiError } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { Loading } from '@/components/ui';
 import { MaintenanceBanner, OfflineBanner } from '@/components/offline-banner';
+import { routeForNotification } from '@/lib/links';
+import { listenForNotificationTaps } from '@/lib/push';
 import { colors } from '@/theme';
 
 /** Keeps the navigation tree in step with the auth state. */
@@ -22,6 +24,11 @@ function Gate() {
     else if (status === 'unverified' && (segments as string[])[1] !== 'verify') router.replace('/(auth)/verify');
     else if (status === 'signedIn' && inAuth) router.replace('/(app)/(tabs)');
   }, [status, segments, router]);
+  // Tapping a push notification opens the screen it is about (also on a cold start).
+  useEffect(() => {
+    if (status !== 'signedIn') return;
+    return listenForNotificationTaps((data) => router.push(routeForNotification({ type: data.type as string, groupId: (data.groupId as string) ?? null, data }) as never));
+  }, [status, router]);
   if (status === 'loading') {
     return (
       <View style={{ flex: 1, justifyContent: 'center', backgroundColor: colors.background }}>

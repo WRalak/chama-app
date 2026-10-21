@@ -209,6 +209,8 @@ export interface PaymentItem {
   memberName: string | null;
   amountCents: number;
   method: PaymentMethod;
+  /** MANUAL entries were recorded by a person; MPESA_* came from a validated M-Pesa callback. */
+  source: 'MANUAL' | 'MPESA_STK' | 'MPESA_C2B' | 'IMPORT';
   reference: string | null;
   purpose: PaymentPurpose;
   status: TransactionStatus;
@@ -329,6 +331,8 @@ export interface LoanDetail extends LoanSummary {
   approvals: ApprovalRecord[];
   guarantors: { membershipId: string; name: string }[];
   disbursementReference: string | null;
+  /** For reviewers (not the borrower): the borrower's standing in this group. */
+  borrowerPosition: { contributedCents: number; arrearsCents: number; otherLoansCents: number; finesOutstandingCents: number; memberSince: string } | null;
   canApprove: boolean;
   canDisburse: boolean;
 }
@@ -625,6 +629,8 @@ export interface NotificationItem {
   type: NotificationType;
   title: string;
   body: string;
+  /** Ids the app uses to open the right screen (cycleId, roundId, loanId…). */
+  data: Record<string, unknown> | null;
   readAt: string | null;
   createdAt: string;
 }
@@ -733,4 +739,52 @@ export interface PlatformStaffRow {
   phone: string;
   platformRole: PlatformRole;
   createdAt: string;
+}
+
+/* ---------- group management dashboard (mobile + web) ---------- */
+
+/** Something waiting for the viewer, counted only when the viewer is allowed to act on it. */
+export interface DashboardTask {
+  key: 'VERIFY_PAYMENTS' | 'UNMATCHED_PAYMENTS' | 'DISPUTES' | 'LOAN_DECISIONS' | 'LOAN_DISBURSEMENTS' | 'EXPENSE_DECISIONS' | 'EXPENSE_PAYMENTS' | 'PAYOUT_PREPARE' | 'PAYOUT_DECISIONS' | 'PAYOUT_SEND' | 'PAYOUT_CONFIRM' | 'ROTATION_APPROVALS' | 'DISTRIBUTION_DECISIONS' | 'MINUTES_APPROVAL' | 'FINDINGS' | 'INVITATIONS';
+  label: string;
+  count: number;
+  /** Which management section handles it. */
+  section: 'contributions' | 'loans' | 'expenses' | 'payouts' | 'meetings' | 'audit' | 'members' | 'reports';
+}
+
+export interface GroupDashboard {
+  groupId: string;
+  asOf: string;
+  period: { from: string; to: string; label: string };
+  /** Present for officers who may see all contributions. */
+  collections: {
+    expectedCents: number;
+    verifiedCents: number;
+    outstandingCents: number;
+    /** Verified ÷ expected for the period, 0–100. */
+    progressPercent: number;
+    arrearsCents: number;
+    membersInArrears: number;
+    pendingVerificationCount: number;
+    pendingVerificationCents: number;
+  } | null;
+  cashBalanceCents: number | null;
+  nextPayout: {
+    cycleId: string;
+    roundId: string;
+    round: number;
+    recipientName: string;
+    payoutDate: string;
+    status: PayoutStatus;
+    expectedCents: number;
+    confirmedCents: number;
+    /** Readiness summary for officers; null for others. */
+    ready: boolean | null;
+    blockers: string[];
+  } | null;
+  reconciliation: { pendingVerification: number; unmatched: number; duplicateReferences: number; openDisputes: number } | null;
+  loans: { outstandingCents: number; activeCount: number; overdueInstallments: number } | null;
+  tasks: DashboardTask[];
+  recentActivity: { id: string; date: string; description: string; amountCents: number; direction: 'IN' | 'OUT' | 'NONE' }[] | null;
+  upcoming: { date: string; label: string; amountCents: number | null; kind: 'CONTRIBUTION' | 'PAYOUT' | 'MEETING' | 'LOAN' }[];
 }

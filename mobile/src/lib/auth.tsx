@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { AuthResponse, AuthUser, MeResponse } from '@chamahub/shared';
 import { api, loadSession, saveTokens, setSignedOutHandler } from './api';
+import { registerForPush, unregisterPush } from './push';
 
 type Status = 'loading' | 'signedOut' | 'unverified' | 'signedIn';
 
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const apply = useCallback((u: AuthUser | null) => {
     setUser(u);
     setStatus(!u ? 'signedOut' : u.phoneVerified ? 'signedIn' : 'unverified');
+    if (u?.phoneVerified) void registerForPush();
   }, []);
 
   const signedOut = useCallback(() => {
@@ -63,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         apply(await api<AuthUser>('auth/verify-phone', { body: { code } }));
       },
       signOut: async () => {
+        await unregisterPush();
         await api('auth/logout', { method: 'POST' }).catch(() => undefined);
         await saveTokens(null);
         signedOut();

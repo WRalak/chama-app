@@ -18,7 +18,8 @@ export default function Meetings() {
   const [day, setDay] = useState('');
   const [time, setTime] = useState('14:00');
   const [location, setLocation] = useState('');
-  const create = useAct(() => api(`groups/${groupId}/meetings`, { body: { title, scheduledAt: `${day}T${time}:00+03:00`, location: location || undefined, agenda: [], requiresRsvp: true } }), { invalidate: [['meetings', groupId]], successMessage: 'Meeting scheduled. Members were notified.', onSuccess: () => { setTitle(''); setDay(''); setLocation(''); } });
+  const [agenda, setAgenda] = useState('');
+  const create = useAct(() => api(`groups/${groupId}/meetings`, { body: { title, scheduledAt: `${day}T${time}:00+03:00`, location: location || undefined, agenda: agenda.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 30), requiresRsvp: true } }), { invalidate: [['meetings', groupId]], successMessage: 'Meeting scheduled. Members were notified.', onSuccess: () => { setTitle(''); setDay(''); setLocation(''); setAgenda(''); } });
   const list = useQuery({ queryKey: ['meetings', groupId, scope], queryFn: () => api<MeetingRow[]>(`groups/${groupId}/meetings`, { query: { scope } }) });
   return (
     <Screen refreshing={list.isRefetching} onRefresh={list.refetch}>
@@ -30,6 +31,7 @@ export default function Meetings() {
             <Field label="Date (YYYY-MM-DD)" value={day} onChangeText={setDay} placeholder="2026-11-05" />
             <Field label="Time (24h, EAT)" value={time} onChangeText={setTime} placeholder="14:00" />
             <Field label="Location" value={location} onChangeText={setLocation} />
+            <Field label="Agenda (one item per line)" value={agenda} onChangeText={setAgenda} multiline placeholder={'Treasurer report\nPayout for round 4\nAOB'} />
             <Button title="Schedule and notify members" onPress={() => create.mutate(undefined)} loading={create.isPending} disabled={title.length < 3 || !isIsoDate(day) || !/^\d{2}:\d{2}$/.test(time)} />
           </View>
         </Section>

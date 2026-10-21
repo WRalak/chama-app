@@ -13,6 +13,7 @@ Status words: **done** means implemented, tested and in the apps. **Partial** me
 | Contributions | Schedules, obligations, partial payments, verification by a second officer, self-reported payments, disputes. |
 | **Rotation engine (phase 1)** | Draft → approval by officers or a members' vote. Order methods: agreed, random draw (published seed) and carry-over. Several recipients per round. Readiness checks; prepare / approve / send / confirm with evidence. Failed attempts and retries; amendments; the original approved plan is kept. 26 engine unit tests and 13 end-to-end tests. |
 | Loans, distributions, statements, imports, meetings, votes, audit findings | See `ARCHITECTURE.md`. |
+| **Mobile for every officer (phase 2)** | Role-aware group dashboard and shortcuts; mobile workflows for reconciliation (verify, search by member/amount/date/code, M-Pesa matching, duplicates, arrears, disputes), manual entries with evidence and review, payout preparation/approval/sending/confirmation, rotation drafting and amendments, members and roles, loan review with borrower standing and disbursement, expenses, meetings (attendance, minutes, resolutions, actions), announcements, reports with PDF/CSV sharing, settings, audit. Push registration and deep links. Tested per role, including cross-group tampering. |
 
 ## Next phases, in priority order
 
@@ -22,8 +23,9 @@ Status words: **done** means implemented, tested and in the apps. **Partial** me
    - Payment status "under reconciliation" shown on each obligation.
    - Evidence attachments (receipt photos) on manual entries.
 2. **Notifications**
-   - Expo push notifications with deep links for invitations, payment status and payouts.
+   - Push is implemented; it needs an EAS project id and a development/store build to receive pushes on real phones.
    - Group-level channel preferences.
+   - Offline viewing across app restarts (needs encrypted on-device storage before financial data is cached to disk).
    - WhatsApp message templates. A sample like "UPENDO CHAMA: KSh 5,000 contribution confirmed…" must come only from ledger data and never expose a member's private loan or balance to the group.
 3. **Group setup wizard and group activation**
    - A guided setup (type → contributions → rotation → loans → notifications) in plain language.

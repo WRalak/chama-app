@@ -1,17 +1,35 @@
-import { Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { NotificationItem, paginationSchema } from '@chamahub/shared';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { NotificationItem, paginationSchema, pushDeviceSchema } from '@chamahub/shared';
 import { z } from 'zod';
 import { CurrentUser } from '../../common/decorators';
 import { AuthContext } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from './notifications.service';
 import { paginate, skipTake } from '../../common/pagination';
 
 const listSchema = paginationSchema.extend({ unread: z.enum(['true', 'false']).optional() });
 
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
+
+  /** Registers this phone's Expo push token for the signed-in user. */
+  @HttpCode(200)
+  @Post('devices')
+  register(@CurrentUser() user: AuthContext, @Body(new ZodPipe(pushDeviceSchema)) body: z.infer<typeof pushDeviceSchema>) {
+    return this.notifications.registerDevice(user.id, body.token, body.platform);
+  }
+
+  /** Called on sign-out so the phone stops receiving this user's notifications. */
+  @HttpCode(200)
+  @Post('devices/remove')
+  remove(@CurrentUser() user: AuthContext, @Body(new ZodPipe(pushDeviceSchema.pick({ token: true }))) body: { token: string }) {
+    return this.notifications.removeDevice(user.id, body.token);
+  }
 
   @Get()
   async list(@CurrentUser() user: AuthContext, @Query(new ZodPipe(listSchema)) q: z.infer<typeof listSchema>) {
@@ -31,6 +49,7 @@ export class NotificationsController {
       type: r.type,
       title: r.title,
       body: r.body,
+      data: (r.data as Record<string, unknown> | null) ?? null,
       readAt: r.readAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
     }));

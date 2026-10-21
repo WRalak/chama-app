@@ -93,3 +93,33 @@ export class EmailChannel {
     }
   }
 }
+
+/**
+ * Push via the Expo push service (works for apps built with Expo; no paid
+ * credentials needed, EXPO_ACCESS_TOKEN optional). Tokens Expo reports as no
+ * longer registered are returned so the caller can drop them.
+ */
+@Injectable()
+export class PushChannel {
+  async send(tokens: string[], title: string, body: string, data: Record<string, unknown>): Promise<ChannelResult & { deadTokens: string[] }> {
+    if (!tokens.length) return { ok: false, skipped: true, provider: 'expo', error: 'No registered devices', deadTokens: [] };
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'application/json' };
+      if (process.env.EXPO_ACCESS_TOKEN) headers.Authorization = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
+      const res = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(tokens.map((to) => ({ to, title, body, data, sound: 'default', priority: 'high', channelId: 'default' }))),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return { ok: false, provider: 'expo', error: `HTTP ${res.status}`, deadTokens: [] };
+      const json = (await res.json()) as { data?: { status: string; details?: { error?: string } }[] };
+      const results = json.data ?? [];
+      const deadTokens = tokens.filter((_, i) => results[i]?.details?.error === 'DeviceNotRegistered');
+      const ok = results.some((r) => r.status === 'ok');
+      return { ok, provider: 'expo', error: ok ? undefined : results[0]?.details?.error ?? 'Push rejected', deadTokens };
+    } catch (err) {
+      return { ok: false, provider: 'expo', error: (err as Error).message, deadTokens: [] };
+    }
+  }
+}
