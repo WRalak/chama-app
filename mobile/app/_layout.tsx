@@ -18,7 +18,7 @@ function Gate() {
   useEffect(() => {
     if (status === 'loading') return;
     const inAuth = segments[0] === '(auth)';
-    if (status === 'signedOut' && !inAuth) router.replace('/(auth)/sign-in');
+    if (status === 'signedOut' && !inAuth) router.replace('/(auth)/welcome'); // welcome forwards to sign-in after the first time
     else if (status === 'unverified' && (segments as string[])[1] !== 'verify') router.replace('/(auth)/verify');
     else if (status === 'signedIn' && inAuth) router.replace('/(app)/(tabs)');
   }, [status, segments, router]);

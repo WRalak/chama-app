@@ -32,3 +32,26 @@ export async function writeSession(s: StoredSession | null) {
   if (s) await SecureStore.setItemAsync(KEY, JSON.stringify(s), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
   else await SecureStore.deleteItemAsync(KEY);
 }
+
+/* ---------- small device preferences (not secrets) ---------- */
+
+const ONBOARDED = 'chamahub.onboarded';
+
+/** Whether this device has seen the welcome screens. */
+export async function readOnboarded(): Promise<boolean> {
+  try {
+    if (Platform.OS === 'web') return globalThis.localStorage?.getItem(ONBOARDED) === '1';
+    return (await SecureStore.getItemAsync(ONBOARDED)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export async function markOnboarded() {
+  try {
+    if (Platform.OS === 'web') globalThis.localStorage?.setItem(ONBOARDED, '1');
+    else await SecureStore.setItemAsync(ONBOARDED, '1');
+  } catch {
+    // Not fatal: the welcome screens simply show again next time.
+  }
+}
