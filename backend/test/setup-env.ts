@@ -8,3 +8,5 @@ process.env.AT_USERNAME = '';
 process.env.AT_API_KEY = '';
 process.env.MPESA_CONSUMER_KEY = '';
 process.env.DISABLE_THROTTLE = 'true';
+// Tests never call a real AI provider; they script one where needed.
+process.env.ANTHROPIC_API_KEY = '';

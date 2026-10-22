@@ -73,6 +73,10 @@ Each Chama opens with the member's own position. Officers also get a dashboard f
 - **WhatsApp summaries.** Collection status, payment receipts, payout notices and *how to pay* are built from confirmed records only and open in WhatsApp. They never include anyone's loans or balances, and they name who has not paid only when the group allows members to see each other's contributions.
 - ChamaHub never asks for or stores an M-Pesa PIN, bank password or OTP, never logs into these accounts, and never reads SMS.
 
+### AI assistant
+
+Members and officers can ask about their group's records on mobile (**Ask assistant**) and on the web (**AI Assistant**). The assistant only reads records through server-side tools allowed for the user's role in that group, and every figure comes from ChamaHub's financial engine. It cannot record, approve or move anything. Set `ANTHROPIC_API_KEY` in `backend/.env` to turn chat on. Without it, the same screens offer **quick answers** read straight from the records. See [`docs/AI.md`](docs/AI.md).
+
 In development, OTP codes are written to the API log (`DEV_LOG_OTP=true`) because no SMS provider is configured.
 
 ## Tests
@@ -97,6 +101,7 @@ Nothing below is presented to users as working unless it is configured.
 | Email | Posts to a configured relay webhook; no provider bundled. |
 | Push notifications | **Implemented; needs a build with an EAS project.** The API sends through the Expo push service, and the app registers on sign-in and deep-links taps to the right screen. Expo Go (Android) and the browser preview cannot receive remote push; run `npx eas init` in `mobile/` and use a development or store build. In-app notifications always work. |
 | Automated payouts (M-Pesa B2C) | **Not implemented.** Payouts are sent through the group's agreed channel and recorded with the transaction reference. Each payout completes only when the recipient confirms or a second officer verifies the reference. B2C needs separate Safaricom onboarding (initiator credentials, result/timeout callbacks). |
+| AI assistant (Claude) | **Implemented; needs `ANTHROPIC_API_KEY`.** Tested with a scripted provider and against a local stub of the API, not against the live service. Without a key, chat is off and quick answers work. |
 | PDF statements | Working (server-side, pdfkit). |
 | CSV / Excel import, CSV export | Working. Paper-records imports convert Excel to CSV in the browser; statement imports read .xlsx on the server. |
 | Statement import (M-Pesa, Paybill/Till, bank) | **Working, from files the officer downloads.** No account access, scraping or SMS reading. PDF statements are not read yet. |

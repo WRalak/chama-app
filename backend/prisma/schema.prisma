@@ -1696,3 +1696,87 @@ model StatementLine {
   @@index([importId, rowNo])
   @@map("statement_lines")
 }
+
+// ───────────────────────────── AI assistant ─────────────────────────────
+// Kept apart from the financial records: nothing here is a source of truth for
+// money, and conversations expire under AI_RETENTION_DAYS.
+
+/// One assistant conversation, owned by one member of one group.
+model AiConversation {
+  id           String      @id @default(cuid())
+  groupId      String
+  userId       String
+  membershipId String
+  title        String
+  locale       String      @default("en")
+  expiresAt    DateTime
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  messages     AiMessage[]
+
+  @@index([groupId, userId, updatedAt])
+  @@index([expiresAt])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  /// user | assistant (tool results are stored as user turns, as the API expects).
+  role           String
+  /// Exactly what was sent to / received from the provider, so history replays unchanged.
+  content        Json
+  /// What the app shows: the text and the record cards the answer was built from. Null for internal turns.
+  display        Json?
+  createdAt      DateTime       @default(now())
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("ai_messages")
+}
+
+/// One request to the AI provider (or one refused by a limit), for cost tracking and monitoring.
+model AiUsage {
+  id               String   @id @default(cuid())
+  groupId          String
+  userId           String
+  conversationId   String?
+  feature          String
+  provider         String
+  model            String
+  /// OK | ERROR | TIMEOUT | RATE_LIMITED | REFUSED | LIMIT_REACHED | UNAVAILABLE
+  status           String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  costMicroUsd     Int      @default(0)
+  latencyMs        Int      @default(0)
+  toolCalls        Int      @default(0)
+  errorCode        String?
+  createdAt        DateTime @default(now())
+
+  @@index([groupId, createdAt])
+  @@index([userId, createdAt])
+  @@map("ai_usage")
+}
+
+/// Every tool the assistant asked to run, whether it ran, and why not.
+model AiToolCall {
+  id             String   @id @default(cuid())
+  groupId        String
+  userId         String
+  conversationId String?
+  /// "direct" when the member ran the tool from a suggestion without the model.
+  via            String
+  tool           String
+  input          Json
+  /// OK | DENIED | INVALID | UNKNOWN_TOOL | ERROR
+  outcome        String
+  error          String?
+  durationMs     Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([groupId, createdAt])
+  @@map("ai_tool_calls")
+}

@@ -18,6 +18,15 @@ export class OfflineError extends Error {
  * Every action changes records on the server, so none is queued offline: an
  * action either reaches the server and is recorded there, or visibly fails.
  */
+/** False only when the device reports no connection; unknown counts as online. */
+export async function isOnline() {
+  try {
+    return (await Network.getNetworkStateAsync()).isConnected !== false;
+  } catch {
+    return true;
+  }
+}
+
 async function requireOnline() {
   try {
     const s = await Network.getNetworkStateAsync();

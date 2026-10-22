@@ -21,6 +21,7 @@
     "seed": "ts-node --transpile-only -P tsconfig.json prisma/seed.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0",
     "@chamahub/shared": "*",
     "@nestjs/common": "11.2.7",
     "@nestjs/config": "4.0.4",

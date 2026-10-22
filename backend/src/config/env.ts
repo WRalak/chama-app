@@ -29,6 +29,17 @@ const envSchema = z.object({
   MPESA_CALLBACK_URL: z.string().optional(),
   MPESA_CALLBACK_TOKEN: z.string().optional(),
   DISABLE_JOBS: bool,
+  /** AI assistant. Without a provider the assistant is off and its record cards still work. */
+  AI_PROVIDER: z.enum(['anthropic', 'disabled']).default('anthropic'),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  AI_MODEL: z.string().default('claude-opus-5-5'),
+  AI_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('medium'),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(1000).max(600_000).default(60_000),
+  AI_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
+  AI_MAX_TOOL_ROUNDS: z.coerce.number().int().min(1).max(12).default(6),
+  AI_DAILY_REQUESTS_PER_USER: z.coerce.number().int().min(0).default(40),
+  AI_MONTHLY_BUDGET_USD_PER_GROUP: z.coerce.number().min(0).default(10),
+  AI_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -67,4 +78,7 @@ export function whatsappConfigured(e: Env = env()): boolean {
 }
 export function emailConfigured(e: Env = env()): boolean {
   return !blank(e.EMAIL_WEBHOOK_URL);
+}
+export function aiConfigured(e: Env = env()): boolean {
+  return e.AI_PROVIDER === 'anthropic' && !blank(e.ANTHROPIC_API_KEY);
 }

@@ -15,6 +15,7 @@ const P = Permission;
 
 /** The group management areas, shown only to members whose permissions in this group allow them. */
 export const SECTIONS: SectionDef[] = [
+  { key: 'assistant', title: 'Assistant', subtitle: 'Ask about your records; quick answers', icon: 'sparkles-outline', path: 'assistant', visible: (can) => can(P.GROUP_VIEW) },
   { key: 'members', title: 'Members', subtitle: 'Directory, invitations, roles', icon: 'people-outline', path: 'manage/members', visible: (can) => can(P.MEMBERS_VIEW) },
   { key: 'contributions', title: 'Contributions', subtitle: 'Verify, search, reconcile, record', icon: 'wallet-outline', path: 'manage/contributions', visible: (can) => can(P.CONTRIBUTIONS_VIEW_ALL) || can(P.CONTRIBUTIONS_VERIFY) || can(P.RECONCILIATION_MANAGE) },
   { key: 'destinations', title: 'Payment destinations', subtitle: 'Paybill, Till, bank, M-Pesa — with approvals', icon: 'wallet-outline', path: 'manage/destinations', visible: (can) => can(P.DESTINATIONS_MANAGE) || can(P.PAYOUTS_APPROVE) || can(P.AUDIT_VIEW) },

@@ -642,3 +642,14 @@ export const resolveStatementLineSchema = z.discriminatedUnion('action', [
 ]);
 export type ResolveStatementLineInput = z.infer<typeof resolveStatementLineSchema>;
 export const confirmMatchesSchema = z.object({ lineIds: z.array(z.string()).min(1).max(500) });
+
+/* ---------- AI assistant ---------- */
+
+export const AI_LOCALES = ['en', 'sw'] as const;
+export const aiChatSchema = z.object({
+  conversationId: z.string().optional(),
+  message: z.string().trim().min(1).max(2000),
+  /** English now; Kiswahili answers are supported by the prompt, the app UI follows later. */
+  locale: z.enum(AI_LOCALES).default('en'),
+});
+export type AiChatInput = z.infer<typeof aiChatSchema>;

@@ -69,7 +69,10 @@ export default function GroupHome() {
             </StatGrid>
           )}
           {!readOnly && <Button title="Make a contribution" icon="phone-portrait-outline" onPress={() => go('pay')} style={{ marginBottom: space.sm }} />}
-          <Button title="How to pay" variant="secondary" icon="wallet-outline" onPress={() => go('how-to-pay')} style={{ marginBottom: space.xl }} />
+          <View style={{ flexDirection: 'row', gap: space.sm, marginBottom: space.xl }}>
+            <Button title="How to pay" variant="secondary" icon="wallet-outline" onPress={() => go('how-to-pay')} style={{ flex: 1 }} />
+            <Button title="Ask assistant" variant="secondary" icon="sparkles-outline" onPress={() => go('assistant')} style={{ flex: 1 }} />
+          </View>
 
           {dash.error && <Notice tone="red" icon="alert-circle-outline">Could not load the group dashboard. Pull down to retry.</Notice>}
           {officer && d && (

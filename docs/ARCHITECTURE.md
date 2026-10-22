@@ -111,6 +111,10 @@ Business rules live in the API. The shared package gives both clients the same v
 - **Distributions.** Distributable = confirmed cash − liabilities − retained funds. Outstanding loans are shown but are never distributable. Methods: equal, contribution-proportional, share-based. The full calculation is stored before approval. Cash is re-checked at approval. Loan offsets post as real repayments.
 - **Statements.** Group statements are computed from journal lines, classified by account (a reversal counts as the type it reverses). The tests check that opening + inflows − outflows = closing. Members see only published snapshots, with member names hidden unless the group allows it. Personal consolidated statements count each journal entry once and list loans received separately from income.
 
+## AI assistant
+
+See [`AI.md`](AI.md). The `ai` module only reads records through the tool registry; its usage, tool-call and conversation tables are separate from the financial tables, and nothing financial depends on it.
+
 ## Background jobs (`JobsService`, recorded in `job_runs`)
 
 - Every 30 min: generate obligations, refresh statuses, issue configured late fines (one per obligation), update installment statuses.

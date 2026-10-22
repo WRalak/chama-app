@@ -917,3 +917,89 @@ export interface ShareableSummary {
   /** Whether the text names individual members (only for summaries the group agreed to share). */
   namesMembers: boolean;
 }
+
+/* ---------- AI assistant ---------- */
+
+/** Where a card's link should take the user; each app maps these to its own screens. */
+export interface AiLink {
+  label: string;
+  target: 'payment' | 'loan' | 'my-contributions' | 'contributions' | 'rotation' | 'payouts' | 'meeting' | 'statement-import' | 'reports' | 'how-to-pay' | 'destinations';
+  id?: string;
+}
+
+/**
+ * A block of figures read from ChamaHub's records by a backend tool. Every
+ * amount is calculated by the financial engine, never by the model.
+ * VERIFIED = from confirmed records; DRAFT = text built from records for a
+ * person to review before sharing.
+ */
+export interface AiCard {
+  tool: string;
+  kind: 'VERIFIED' | 'DRAFT';
+  title: string;
+  /** When the figures were read. */
+  asOf: string;
+  period: { from: string; to: string } | null;
+  facts: { label: string; value: string }[];
+  table: { columns: string[]; rows: string[][]; truncated: boolean } | null;
+  notes: string[];
+  /** Text ready to copy or share (drafts). */
+  text: string | null;
+  links: AiLink[];
+}
+
+export interface AiSuggestion {
+  label: string;
+  /** The question sent to the assistant. */
+  prompt: string;
+  /** The tool that answers it directly from records, without the AI model. */
+  tool: string;
+  args?: Record<string, unknown>;
+}
+
+export interface AiStatus {
+  /** Whether chat with the model is available. Record cards work either way. */
+  chatAvailable: boolean;
+  reason: string | null;
+  model: string | null;
+  suggestions: AiSuggestion[];
+  tools: { name: string; description: string }[];
+  limits: { requestsLeftToday: number | null; groupBudgetLeftUsd: number | null };
+  retentionDays: number;
+}
+
+export interface AiDisplayMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  cards: AiCard[];
+  /** Tools the assistant was refused (e.g. not allowed for this role). */
+  refused: string[];
+  createdAt: string;
+}
+
+export interface AiChatResponse {
+  conversationId: string;
+  message: AiDisplayMessage;
+}
+
+export interface AiConversationRow {
+  id: string;
+  title: string;
+  updatedAt: string;
+  expiresAt: string;
+}
+
+export interface AiUsageSummary {
+  from: string;
+  to: string;
+  requests: number;
+  failed: number;
+  limited: number;
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  budgetUsd: number;
+  toolCalls: { tool: string; ok: number; denied: number; invalid: number; error: number }[];
+  recentErrors: { at: string; status: string; errorCode: string | null }[];
+}

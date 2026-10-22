@@ -6,5 +6,5 @@ import { StatementsService } from './statements.service';
 import { SummariesService } from './summaries.service';
 
 /** Collections: where members pay, evidence and payment history, statement reconciliation and shareable summaries. */
-@Module({ imports: [ContributionsModule], controllers: [CollectionsController], providers: [EvidenceService, StatementsService, SummariesService] })
+@Module({ imports: [ContributionsModule], controllers: [CollectionsController], providers: [EvidenceService, StatementsService, SummariesService], exports: [StatementsService, SummariesService] })
 export class CollectionsModule {}

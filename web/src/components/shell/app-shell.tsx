@@ -35,6 +35,7 @@ import {
   SlidersHorizontal,
   FileSearch,
   Landmark,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -52,6 +53,7 @@ type NavItem = { href: string; label: string; icon: React.ComponentType<{ classN
 
 const GROUP_NAV: NavItem[] = [
   { href: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { href: 'assistant', label: 'AI Assistant', icon: Sparkles },
   { href: 'members', label: 'Members', icon: Users, permission: Permission.MEMBERS_VIEW },
   { href: 'contributions', label: 'Contributions', icon: Wallet, permission: Permission.CONTRIBUTIONS_VIEW_ALL },
   { href: 'collections', label: 'Collections', icon: ArrowLeftRight, permission: Permission.RECONCILIATION_MANAGE },
