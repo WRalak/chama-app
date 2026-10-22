@@ -16,7 +16,7 @@ export function Brand() {
       <BrandMark />
       <div className="leading-tight">
         <p className="text-sm font-semibold text-plum">ChamaHub</p>
-        <p className="text-2xs text-muted">Administration</p>
+        <p className="text-2xs text-muted">Chama management</p>
       </div>
     </div>
   );

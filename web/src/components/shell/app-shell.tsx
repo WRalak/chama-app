@@ -12,6 +12,9 @@ import {
   CircleDollarSign,
   ClipboardList,
   FileSpreadsheet,
+  FileText,
+  PiggyBank,
+  UserRound,
   Gavel,
   HandCoins,
   Home,
@@ -61,6 +64,15 @@ type NavSection = { label: string; icon: NavItem['icon']; items: NavItem[] };
  */
 const GROUP_SECTIONS: NavSection[] = [
   { label: 'Overview', icon: LayoutDashboard, items: [{ href: 'overview', label: 'Overview', icon: LayoutDashboard }, { href: 'assistant', label: 'AI Assistant', icon: Sparkles }] },
+  {
+    label: 'My account',
+    icon: UserRound,
+    items: [
+      { href: 'my', label: 'My contributions', icon: PiggyBank },
+      { href: 'my-loans', label: 'My loans', icon: HandCoins },
+      { href: 'statements', label: 'Group statements', icon: FileText, permission: Permission.STATEMENTS_VIEW },
+    ],
+  },
   {
     label: 'Members',
     icon: Users,
@@ -178,12 +190,17 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       {(groups?.length ?? 0) > 0 && <GroupSwitcher />}
       <div className="space-y-0.5">
         <NavLink href="/home" label="My home" icon={Home} active={pathname === '/home'} onClick={onNavigate} />
+        <NavLink href="/finances" label="My finances" icon={Wallet} active={pathname === '/finances'} onClick={onNavigate} />
         <NavLink href="/chamas" label="Groups" icon={ClipboardList} active={pathname === '/chamas'} onClick={onNavigate} />
+        <NavLink href="/notifications" label="Notifications" icon={Bell} active={pathname === '/notifications'} onClick={onNavigate} />
+        <NavLink href="/profile" label="Profile" icon={UserRound} active={pathname === '/profile'} onClick={onNavigate} />
+      </div>
+      <div className="space-y-0.5">
         {groupId &&
           GROUP_SECTIONS.map((sec) => {
             const items = sec.items.filter((i) => allowed(can, i.permission));
             if (!items.length) return null;
-            const at = (i: NavItem) => pathname.startsWith(`/g/${groupId}/${i.href}`);
+            const at = (i: NavItem) => { const base = `/g/${groupId}/${i.href}`; return pathname === base || pathname.startsWith(`${base}/`); };
             const open = items.some(at);
             return (
               <div key={sec.label}>
@@ -205,7 +222,19 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function NotificationBell() {
+  const { data } = useQuery({ queryKey: ['notifications', 'unread'], queryFn: () => api<{ unread: number }>('notifications', { query: { pageSize: 1 } }), refetchInterval: 60_000 });
+  const unread = data?.unread ?? 0;
+  return (
+    <Link href="/notifications" className="relative rounded p-1.5 text-muted hover:bg-canvas hover:text-plum" aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'}>
+      <Bell className="h-4 w-4" />
+      {unread > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-[1rem] rounded-full bg-berry px-1 text-center text-[10px] font-bold leading-4 text-white">{unread > 9 ? '9+' : unread}</span>}
+    </Link>
+  );
+}
+
 function UserMenu() {
+  const router = useRouter();
   const { data: me } = useMe();
   async function signOut() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -231,6 +260,9 @@ function UserMenu() {
             {me && me.platformRole !== 'USER' && <p className="mt-1 text-2xs font-medium uppercase tracking-wide text-berry">{LABELS.platformRole[me.platformRole]}</p>}
           </div>
           <DM.Separator className="my-1 h-px bg-line" />
+          <DM.Item onSelect={() => router.push('/profile')} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-plum outline-none data-[highlighted]:bg-canvas">
+            <UserRound className="h-4 w-4" /> Profile & security
+          </DM.Item>
           <DM.Item onSelect={signOut} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-danger-ink outline-none data-[highlighted]:bg-danger-50">
             <LogOut className="h-4 w-4" /> Sign out
           </DM.Item>
@@ -296,11 +328,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="flex-1" />
           <div className="flex items-center gap-1">
-            {groupId && (
-              <Link href={`/g/${groupId}/notifications`} className="rounded p-1.5 text-muted hover:bg-canvas hover:text-plum" aria-label="Notifications">
-                <Bell className="h-4 w-4" />
-              </Link>
-            )}
+            <NotificationBell />
             <UserMenu />
           </div>
         </header>

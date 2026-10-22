@@ -34,6 +34,18 @@ npm run dev:mobile         # Expo: press w for the browser, or scan the QR code 
 
 **Web sign-in.** Open http://localhost:3000 and sign in with the same phone number and password as the mobile app (every demo account below works). *Create an account* signs up a new user. The phone must be verified before anything else loads; in development the 6-digit code is printed in the API terminal (`DEV ONLY — OTP for …`). Members land on **My home** (their own contributions, dues, payouts and loans across all their Chamas); officers land on their group's Overview and can open My home from the sidebar.
 
+**Mobile or web — same account, same records.** Both apps call the same API and database; permissions are checked by the API on every request, so a payment reported on the web shows on the phone and the other way round.
+
+| Web (http://localhost:3000) | What a member can do |
+| --- | --- |
+| My home · My finances | Totals across all Chamas, payment history with status, personal statement PDF |
+| Group → My account | My contributions (report a payment with its M-Pesa code and a receipt, query a payment), My loans (apply, schedule, cancel), Group statements (PDF) |
+| Group → Overview | What I owe, what is awaiting verification, the next payout, what is coming up, tasks waiting for officers |
+| Groups | Accept invitations, join with a group code, create a Chama |
+| Notifications · Profile | Inbox; personal details, password and signed-in devices, notification channels, privacy and account deletion, support |
+
+Officers get their sections (contributions, reconciliation, statement import, payouts, loans, expenses, reports, audit, meetings, settings) in the same sidebar, filtered by their role in the selected Chama. Platform staff get **Platform administration**, separate from group management. Tables turn into cards on phones.
+
 The mobile app finds the API on the computer running the Expo dev server, so a phone on the same Wi-Fi needs no configuration (allow Node through the Windows firewall when asked). Set `EXPO_PUBLIC_API_URL` only for a deployed API.
 
 **Demo data only** (from `backend/prisma/seed.ts`; it refuses to run with `NODE_ENV=production`):

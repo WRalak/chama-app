@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { createGroupSchema, GROUP_TYPES, LABELS } from '@chamahub/shared';
+import { createGroupSchema, GROUP_TYPES, LABELS, type InvitationRow } from '@chamahub/shared';
+import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -38,7 +39,24 @@ export default function ChamasPage() {
         ) : groups.data.length === 0 ? (
           <EmptyState title="You are not in any Chama yet" description="Create one, or accept an invitation from the mobile app." />
         ) : (
-          <table className="w-full text-sm">
+          <>
+          <ul className="divide-y divide-line md:hidden">
+            {groups.data.map((g) => (
+              <li key={g.groupId}>
+                <Link href={`/g/${g.groupId}/overview`} className="block px-4 py-3 hover:bg-canvas">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate font-medium text-plum">{g.name}</span>
+                    <Badge tone={g.role === 'MEMBER' ? 'neutral' : 'green'}>{LABELS.groupRole[g.role]}</Badge>
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted">
+                    {LABELS.groupType[g.type]} · {g.memberCount} members · next due {date(g.nextDueDate)}
+                    {g.outstandingCents ? <span className="text-danger"> · you owe {kes(g.outstandingCents)}</span> : null}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <table className="hidden w-full text-sm md:table">
             <thead>
               <tr className="border-b border-line bg-canvas/60 text-left text-xs text-muted">
                 <th className="px-4 py-2 font-medium">Chama</th>
@@ -69,8 +87,10 @@ export default function ChamasPage() {
               ))}
             </tbody>
           </table>
+          </>
         )}
       </Panel>
+      <JoinAndInvitations />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent title="Create a Chama" description="You will be the chairperson. You can invite officers and members next.">
@@ -119,5 +139,53 @@ export default function ChamasPage() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Pending invitations to this phone number, and joining a Chama with the code its officers share. */
+function JoinAndInvitations() {
+  const router = useRouter();
+  const [code, setCode] = useState('');
+  const invites = useQuery({ queryKey: ['invitations'], queryFn: () => api<InvitationRow[]>('invitations') });
+  const pending = (invites.data ?? []).filter((i) => i.status === 'PENDING');
+  const respond = useAction(async ({ id, accept }: { id: string; accept: boolean }) => ({ ...(await api<{ groupId: string }>(`invitations/${id}/respond`, { body: { accept } })), accept }), {
+    success: (r) => (r.accept ? 'Welcome! You have joined the Chama.' : 'Invitation declined'),
+    invalidate: [['invitations'], ['groups']],
+    onSuccess: (r) => { if (r.accept) router.push(`/g/${r.groupId}/overview`); },
+  });
+  const join = useAction((c: string) => api<{ groupId: string; name: string }>('invitations/join-code', { body: { code: c } }), {
+    success: (r) => `You have joined ${r.name}`,
+    invalidate: [['groups']],
+    onSuccess: (r) => { setCode(''); router.push(`/g/${r.groupId}/overview`); },
+  });
+  return (
+    <div className="mt-5 grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
+      <Panel title={`Invitations${pending.length ? ` · ${pending.length}` : ''}`} flush>
+        {pending.length === 0 ? <EmptyState title="No pending invitations" description="When an officer invites your phone number, it appears here." /> : (
+          <ul className="divide-y divide-line">
+            {pending.map((i) => (
+              <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">
+                <span className="min-w-0">
+                  <span className="block font-medium text-plum">{i.groupName}</span>
+                  <span className="text-xs text-muted">As {LABELS.groupRole[i.role].toLowerCase()} · invited by {i.invitedByName} · expires {date(i.expiresAt)}</span>
+                </span>
+                <span className="flex gap-2">
+                  <Button size="sm" onClick={() => respond.mutate({ id: i.id, accept: true })} loading={respond.isPending && respond.variables?.id === i.id && respond.variables.accept}>Accept</Button>
+                  <Button size="sm" variant="ghost" onClick={() => respond.mutate({ id: i.id, accept: false })}>Decline</Button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+      <Panel title="Join with a group code">
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); join.mutate(code); }}>
+          <Field label="Group code" htmlFor="join-code" hint="Your chairperson or secretary can share the code.">
+            <Input id="join-code" className="font-mono uppercase tracking-widest" placeholder="e.g. 7KQ2MXRP" value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} />
+          </Field>
+          <Button type="submit" loading={join.isPending} disabled={code.length < 6}>Join</Button>
+        </form>
+      </Panel>
+    </div>
   );
 }

@@ -76,7 +76,32 @@ export function DataTable<T>({
 
   return (
     <div>
-      <div className="overflow-x-auto">
+      {/* Phones: each row becomes a card of label/value pairs. Tables from md up. */}
+      <ul className="divide-y divide-line md:hidden">
+        {rows.map((r) => (
+          <li
+            key={r.id}
+            className={cn('px-4 py-3', onRowClick && 'cursor-pointer hover:bg-canvas', rowClassName?.(r.original))}
+            onClick={onRowClick ? () => onRowClick(r.original) : undefined}
+            onKeyDown={onRowClick ? (e) => e.key === 'Enter' && onRowClick(r.original) : undefined}
+            tabIndex={onRowClick ? 0 : undefined}
+            role={onRowClick ? 'button' : undefined}
+          >
+            <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1 text-sm">
+              {r.getVisibleCells().map((c) => {
+                const header = c.column.columnDef.header;
+                return (
+                  <div key={c.id} className="contents">
+                    <dt className="truncate text-xs leading-5 text-muted">{typeof header === 'string' ? header : ''}</dt>
+                    <dd className="min-w-0 break-words text-right text-plum [&_*]:justify-end">{flexRender(c.column.columnDef.cell, c.getContext())}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto md:block">
         <table className="w-full border-collapse text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (

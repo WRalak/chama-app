@@ -3,13 +3,15 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { GroupOverview, LABELS, LoanSummary, MONTHS, Paginated, PaymentItem, Permission } from '@chamahub/shared';
-import { StatusBadge } from '@/components/ui/badge';
-import { PageHeader, Panel, StatStrip } from '@/components/ui/layout-parts';
+import { GroupDashboard, GroupOverview, LABELS, LoanSummary, MONTHS, ObligationItem, Paginated, PaymentItem, Permission, todayInNairobi } from '@chamahub/shared';
+import { Badge, StatusBadge } from '@/components/ui/badge';
+import { MoneyCard, PageHeader, Panel, StatStrip } from '@/components/ui/layout-parts';
 import { EmptyState, ErrorState, LoadingRows } from '@/components/ui/states';
 import { api } from '@/lib/api';
 import { useCan, useGroup, useGroupId } from '@/lib/session';
 import { date, kes } from '@/lib/utils';
+
+const withArticle = (role: string) => `${/^[aeiou]/.test(role) ? 'an' : 'a'} ${role}`;
 
 const shortKes = (cents: number) => {
   const v = cents / 100;
@@ -25,34 +27,14 @@ export default function OverviewPage() {
   const pending = useQuery({ queryKey: ['payments', groupId, 'PENDING'], queryFn: () => api<Paginated<PaymentItem>>(`groups/${groupId}/payments`, { query: { status: 'PENDING', pageSize: 5 } }), enabled: can(Permission.CONTRIBUTIONS_VIEW_ALL) });
   const loans = useQuery({ queryKey: ['loans', groupId, 'pending'], queryFn: () => api<LoanSummary[]>(`groups/${groupId}/loans`, { query: { status: 'PENDING_APPROVAL' } }), enabled: can(Permission.LOANS_VIEW_ALL) });
 
-  if (group.data && !officer) {
-    return (
-      <>
-        <PageHeader title={group.data.name} description={`${LABELS.groupType[group.data.type]} · You are a ${LABELS.groupRole[group.data.myMembership.role].toLowerCase()}`} />
-        <Panel>
-          {group.data.myMembership.role === 'MEMBER' ? (
-            <EmptyState title="Members use the ChamaHub mobile app" description="Your contributions, loans, payouts, votes and statements are in the app." />
-          ) : (
-            <div className="space-y-2 text-sm">
-              <p className="text-plum">Your tools in this group:</p>
-              <ul className="flex flex-wrap gap-2">
-                {[['meetings', 'Meetings', Permission.MEETINGS_MANAGE], ['members', 'Members', Permission.MEMBERS_VIEW], ['decisions', 'Decisions & Votes', Permission.GROUP_VIEW], ['notifications', 'Announcements', Permission.ANNOUNCEMENTS_SEND], ['audit', 'Audit records', Permission.AUDIT_VIEW_AREA]]
-                  .filter(([, , p]) => can(p as Permission))
-                  .map(([href, label]) => <li key={href}><Link className="rounded-md border border-line px-3 py-1.5 text-berry hover:bg-canvas" href={`/g/${groupId}/${href}`}>{label}</Link></li>)}
-              </ul>
-            </div>
-          )}
-        </Panel>
-      </>
-    );
-  }
+  if (group.data && !officer) return <MemberOverview />;
 
   const o = overview.data;
   const chart = o?.monthly.map((m) => ({ month: `${MONTHS[Number(m.month.slice(5)) - 1]}`, Contributions: m.contributionsCents, Repayments: m.repaymentsCents, Expenses: m.expensesCents }));
 
   return (
     <>
-      <PageHeader title={group.data?.name ?? 'Overview'} description={group.data ? `${LABELS.groupType[group.data.type]} · ${group.data.memberCount} active members · You are ${LABELS.groupRole[group.data.myMembership.role].toLowerCase()}` : undefined} />
+      <PageHeader title={group.data?.name ?? 'Overview'} description={group.data ? `${LABELS.groupType[group.data.type]} · ${group.data.memberCount} active members · You are ${withArticle(LABELS.groupRole[group.data.myMembership.role].toLowerCase())}` : undefined} />
       {overview.error ? (
         <ErrorState error={overview.error} onRetry={overview.refetch} />
       ) : !o ? (
@@ -133,6 +115,94 @@ export default function OverviewPage() {
           </Panel>
         </div>
       </div>
+    </>
+  );
+}
+
+/** Web paths for the dashboard's task sections. */
+const TASK_PATH: Record<string, string> = { contributions: 'collections', loans: 'loans', expenses: 'expenses', payouts: 'rotations', meetings: 'meetings', audit: 'findings', members: 'members', reports: 'reports', destinations: 'payment-destinations', statements: 'statement-imports' };
+
+/**
+ * A member's (or non-financial officer's) view of one Chama: what they owe, the next payout,
+ * what is coming up and their tools. Figures come from the API; nothing is calculated here
+ * beyond adding up the member's own obligations.
+ */
+function MemberOverview() {
+  const groupId = useGroupId();
+  const group = useGroup();
+  const can = useCan();
+  const dash = useQuery({ queryKey: ['group-dashboard', groupId], queryFn: () => api<GroupDashboard>(`groups/${groupId}/dashboard`) });
+  const obligations = useQuery({ queryKey: ['my-obligations', groupId], queryFn: () => api<ObligationItem[]>('me/obligations', { query: { groupId, from: '2000-01-01' } }) });
+  const g = group.data!;
+  const t = todayInNairobi();
+  const owed = (obligations.data ?? []).reduce((s, o) => s + (o.dueDate <= t ? o.outstandingCents : 0), 0);
+  const pending = (obligations.data ?? []).reduce((s, o) => s + o.pendingCents, 0);
+  const d = dash.data;
+  const links: [string, string, boolean][] = [
+    ['my', 'Pay or report a payment', true],
+    ['my-loans', 'My loans', true],
+    ['statements', 'Group statements', can(Permission.STATEMENTS_VIEW)],
+    ['rotations', 'Payout rotation', can(Permission.ROTATIONS_VIEW)],
+    ['payment-destinations', 'How to pay', true],
+    ['meetings', 'Meetings & minutes', can(Permission.MEETINGS_VIEW)],
+    ['decisions', 'Decisions & votes', true],
+    ['notifications', 'Announcements', true],
+    ['assistant', 'AI assistant', true],
+  ];
+  return (
+    <>
+      <PageHeader title={g.name} description={`${LABELS.groupType[g.type]} · ${g.memberCount} active members · You are ${withArticle(LABELS.groupRole[g.myMembership.role].toLowerCase())}`} />
+      {dash.error ? <ErrorState error={dash.error} onRetry={dash.refetch} /> : (
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3 [&>*]:min-w-0">
+            <MoneyCard label="You owe now" amount={obligations.data ? kes(owed) : '…'} status={owed > 0 ? <Badge tone="amber">Due</Badge> : obligations.data ? <Badge tone="green">Up to date</Badge> : undefined} hint={<Link href={`/g/${groupId}/my`} className="text-berry hover:underline">See my contributions</Link>} />
+            <MoneyCard label="Awaiting verification" amount={obligations.data ? kes(pending) : '…'} hint="Reported, not yet confirmed. Not counted as paid." />
+            <MoneyCard
+              label="Next payout"
+              amount={d?.nextPayout ? kes(d.nextPayout.expectedCents) : '—'}
+              status={d?.nextPayout ? <StatusBadge status={d.nextPayout.status} /> : undefined}
+              hint={d?.nextPayout ? `Round ${d.nextPayout.round} to ${d.nextPayout.recipientName} on ${date(d.nextPayout.payoutDate)}. Paid from what is actually collected.` : 'No payout scheduled'}
+            />
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+            <Panel title="Coming up" flush>
+              {!d ? <LoadingRows rows={3} /> : d.upcoming.length === 0 ? <EmptyState title="Nothing coming up" /> : (
+                <ul className="divide-y divide-line">
+                  {d.upcoming.map((u, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+                      <span className="min-w-0"><span className="block truncate text-plum">{u.label}</span><span className="text-xs text-muted">{date(u.date)}</span></span>
+                      {u.amountCents !== null && <span className="shrink-0 whitespace-nowrap tabular-nums">{kes(u.amountCents)}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+            <div className="space-y-4">
+              {d && d.tasks.length > 0 && (
+                <Panel title="Waiting for you" flush>
+                  <ul className="divide-y divide-line">
+                    {d.tasks.map((task) => (
+                      <li key={task.key}>
+                        <Link href={`/g/${groupId}/${TASK_PATH[task.section] ?? 'overview'}`} className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-canvas">
+                          <span className="text-plum">{task.label}</span>
+                          <Badge tone="amber" icon={false}>{String(task.count)}</Badge>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </Panel>
+              )}
+              <Panel title="In this Chama">
+                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {links.filter(([, , ok]) => ok).map(([href, label]) => (
+                    <li key={href}><Link href={`/g/${groupId}/${href}`} className="block rounded-md border border-line px-3 py-2 text-sm text-berry hover:bg-canvas">{label}</Link></li>
+                  ))}
+                </ul>
+              </Panel>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

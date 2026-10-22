@@ -8,9 +8,9 @@ export const TabsContent = T.Content;
 
 export function TabsList({ tabs }: { tabs: { value: string; label: React.ReactNode }[] }) {
   return (
-    <T.List className="mb-4 flex gap-1 border-b border-line">
+    <T.List className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
       {tabs.map((t) => (
-        <T.Trigger key={t.value} value={t.value} className={cn('-mb-px border-b-2 border-transparent px-3 py-2 text-sm text-muted hover:text-plum data-[state=active]:border-rose data-[state=active]:font-medium data-[state=active]:text-plum')}>
+        <T.Trigger key={t.value} value={t.value} className={cn('-mb-px shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm text-muted hover:text-plum data-[state=active]:border-rose data-[state=active]:font-medium data-[state=active]:text-plum')}>
           {t.label}
         </T.Trigger>
       ))}
