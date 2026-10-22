@@ -2,6 +2,10 @@ import { ConflictException, ForbiddenException, Injectable } from '@nestjs/commo
 import { ApprovalEntity } from '@prisma/client';
 import { ApprovalRecord, GroupRole } from '@chamahub/shared';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
+import { readSettings } from './policies';
+
+/** Approvals a group can make subject to a Joint Signatory. */
+const SIGNATORY_ENTITIES: ApprovalEntity[] = ['EXPENSE', 'PAYOUT', 'DISTRIBUTION', 'LOAN'];
 
 export interface DecideInput {
   groupId: string;
@@ -20,6 +24,8 @@ export interface DecideResult {
   approvals: number;
   rejected: boolean;
   reached: boolean;
+  /** True when the count is met but the group still needs a Joint Signatory's approval. */
+  awaitingSignatory: boolean;
 }
 
 /**
@@ -48,14 +54,25 @@ export class ApprovalsService {
         comment: input.comment ?? null,
       },
     });
-    return this.tally(tx, input.entityType, input.entityId, input.required);
+    return this.tally(tx, input.groupId, input.entityType, input.entityId, input.required);
   }
 
-  async tally(tx: Tx, entityType: ApprovalEntity, entityId: string, required: number): Promise<DecideResult> {
-    const rows = await tx.approval.findMany({ where: { entityType, entityId } });
-    const approvals = rows.filter((r) => r.decision === 'APPROVED').length;
+  /**
+   * Counts approvals. When the group requires a Joint Signatory for this kind
+   * of item, the item is approved only once at least one approval came from a
+   * member holding that role at the time of counting.
+   */
+  async tally(tx: Tx, groupId: string, entityType: ApprovalEntity, entityId: string, required: number): Promise<DecideResult> {
+    const rows = await tx.approval.findMany({ where: { entityType, entityId }, include: { approver: { select: { specialRoles: true } } } });
+    const approved = rows.filter((r) => r.decision === 'APPROVED');
     const rejected = rows.some((r) => r.decision === 'REJECTED');
-    return { approvals, rejected, reached: !rejected && approvals >= required };
+    const counted = !rejected && approved.length >= required;
+    let awaitingSignatory = false;
+    if (counted && SIGNATORY_ENTITIES.includes(entityType)) {
+      const g = await tx.group.findUniqueOrThrow({ where: { id: groupId }, select: { settings: true } });
+      if (readSettings(g.settings).requireJointSignatory) awaitingSignatory = !approved.some((r) => r.approver.specialRoles.includes('JOINT_SIGNATORY'));
+    }
+    return { approvals: approved.length, rejected, reached: counted && !awaitingSignatory, awaitingSignatory };
   }
 
   async records(entityType: ApprovalEntity, entityIds: string[]): Promise<Map<string, ApprovalRecord[]>> {

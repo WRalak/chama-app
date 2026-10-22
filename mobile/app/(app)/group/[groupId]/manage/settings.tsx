@@ -31,13 +31,13 @@ export default function GroupSettings() {
   const save = useAct(() => api(`groups/${groupId}`, { method: 'PATCH', body: { settings: { ...s, lateContributionFineCents: fineCents } } }), { invalidate: [['group', groupId], ['group-dashboard', groupId]], successMessage: 'Rules updated. The change is recorded in the audit log.' });
   if (!group.data || !s) return <Screen><Stack.Screen options={{ title: 'Group settings' }} /><Loading /></Screen>;
   const g = group.data;
-  const toggle = (label: string, key: 'allowEarlyPayout' | 'holdPayoutWhenRecipientInArrears' | 'membersCanViewMemberBalances', hint: string) => (
+  const toggle = (label: string, key: 'allowEarlyPayout' | 'holdPayoutWhenRecipientInArrears' | 'membersCanViewMemberBalances' | 'requireJointSignatory', hint: string) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.sm, gap: space.md }}>
       <View style={{ flex: 1 }}>
         <T variant="body">{label}</T>
         <T variant="small">{hint}</T>
       </View>
-      <Switch value={s[key]} onValueChange={(v) => setS({ ...s, [key]: v })} disabled={!editable} trackColor={{ true: colors.emerald }} accessibilityLabel={label} />
+      <Switch value={s[key]} onValueChange={(v) => setS({ ...s, [key]: v })} disabled={!editable} trackColor={{ true: colors.rose }} accessibilityLabel={label} />
     </View>
   );
   return (
@@ -56,7 +56,7 @@ export default function GroupSettings() {
             <T variant="label" style={{ marginBottom: 6 }}>Approvals needed for payouts, expenses and distributions</T>
             <Chips value={String(s.requiredFinancialApprovals)} onChange={(v) => setS({ ...s, requiredFinancialApprovals: Number(v) })} options={['1', '2', '3'].map((v) => ({ value: v, label: v }))} />
             <Field label="Grace days before a contribution is overdue" keyboardType="number-pad" value={String(s.graceDays)} onChangeText={(v) => setS({ ...s, graceDays: Number(v.replace(/\D/g, '') || 0) })} />
-            <Field label="Automatic late fine (0 = none)" prefix="KES" keyboardType="decimal-pad" value={fine} onChangeText={setFine} error={fineCents === null ? 'Invalid amount' : undefined} />
+            <Field label="Automatic late fine (0 = none)" prefix="KSh" keyboardType="decimal-pad" value={fine} onChangeText={setFine} error={fineCents === null ? 'Invalid amount' : undefined} />
           </View>
         ) : (
           <>
@@ -73,6 +73,7 @@ export default function GroupSettings() {
         </View>
         {toggle('Allow early payouts', 'allowEarlyPayout', 'Pay a round before its scheduled date')}
         {toggle('Hold payout while recipient is in arrears', 'holdPayoutWhenRecipientInArrears', 'Overdue contributions, fines or loan installments')}
+        {toggle('Require a Joint Signatory', 'requireJointSignatory', 'Expenses, payouts, distributions and loans also need one Joint Signatory’s approval')}
       </Section>
       <Section title="Privacy">{toggle('Members can see each other’s balances', 'membersCanViewMemberBalances', 'Officers always can')}</Section>
       <Section title="Loans">

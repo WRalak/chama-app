@@ -13,8 +13,8 @@ export default function Profile() {
   return (
     <Screen>
       <View style={{ alignItems: 'center', marginVertical: space.lg }}>
-        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.forestTint, alignItems: 'center', justifyContent: 'center' }}>
-          <T variant="title" style={{ color: colors.forest }}>{user.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('')}</T>
+        <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.blush, alignItems: 'center', justifyContent: 'center' }}>
+          <T variant="title" style={{ color: colors.berry }}>{user.fullName.split(' ').map((p) => p[0]).slice(0, 2).join('')}</T>
         </View>
         <T variant="heading" style={{ marginTop: space.sm }}>{user.fullName}</T>
         <T variant="small">{formatKenyanPhone(user.phone)}</T>

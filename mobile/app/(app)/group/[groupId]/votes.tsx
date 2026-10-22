@@ -34,8 +34,8 @@ export default function Votes() {
               {(['YES', 'NO', 'ABSTAIN'] as const).map((c) => (
                 <View key={c} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
                   <T variant="small" style={{ width: 64 }}>{CHOICE_LABEL[c]}</T>
-                  <View style={{ flex: 1, height: 6, backgroundColor: colors.slateTint, borderRadius: 3 }}>
-                    <View style={{ height: 6, borderRadius: 3, width: `${p.eligibleCount ? (p.tally[c] / p.eligibleCount) * 100 : 0}%`, backgroundColor: c === 'YES' ? colors.emerald : c === 'NO' ? colors.error : colors.muted }} />
+                  <View style={{ flex: 1, height: 6, backgroundColor: colors.neutralTint, borderRadius: 3 }}>
+                    <View style={{ height: 6, borderRadius: 3, width: `${p.eligibleCount ? (p.tally[c] / p.eligibleCount) * 100 : 0}%`, backgroundColor: c === 'YES' ? colors.rose : c === 'NO' ? colors.error : colors.muted }} />
                   </View>
                   <T variant="label" style={{ width: 28, textAlign: 'right' }}>{String(p.tally[c])}</T>
                 </View>

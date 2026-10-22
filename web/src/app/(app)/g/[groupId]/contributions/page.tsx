@@ -164,12 +164,21 @@ function SchedulesTab() {
 }
 
 function ContributionsInner() {
+  const groupId = useGroupId();
+  const remind = useAction(() => api<{ sent: number }>(`groups/${groupId}/reminders/contributions`, { body: {} }), { success: (r) => (r.sent ? `Reminders sent to ${r.sent} member${r.sent === 1 ? '' : 's'}` : 'Nobody owes anything that is due') });
   const can = useCan();
   const params = useSearchParams();
   const [record, setRecord] = useState(false);
   return (
     <>
-      <PageHeader title="Contributions" description="Every expected contribution, what was received, and how it was verified." actions={can(Permission.CONTRIBUTIONS_RECORD) && <Button onClick={() => setRecord(true)}>Record payment</Button>} />
+      <PageHeader
+        title="Contributions"
+        description="Every expected contribution, what was received, and how it was verified."
+        actions={<>
+          {(can(Permission.CONTRIBUTIONS_RECORD) || can(Permission.RECONCILIATION_MANAGE)) && <Button variant="secondary" loading={remind.isPending} onClick={() => { if (confirm('Send reminders? Every member with contributions already due gets a reminder with only their own amount. Reminders can be sent once every 12 hours.')) remind.mutate(undefined); }}>Send reminders</Button>}
+          {can(Permission.CONTRIBUTIONS_RECORD) && <Button onClick={() => setRecord(true)}>Record payment</Button>}
+        </>}
+      />
       <Tabs defaultValue={params.get('tab') ?? 'ledger'}>
         <TabsList tabs={[{ value: 'ledger', label: 'Contributions ledger' }, { value: 'payments', label: 'Payments & verification' }, { value: 'schedules', label: 'Schedules' }]} />
         <TabsContent value="ledger"><LedgerTab /></TabsContent>

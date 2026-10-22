@@ -28,5 +28,6 @@ export const SECTIONS: SectionDef[] = [
   { key: 'announcements', title: 'Announcements', subtitle: 'News from your officers', icon: 'megaphone-outline', path: 'manage/announcements', visible: (can) => can(P.GROUP_VIEW) },
   { key: 'reports', title: 'Reports & statements', subtitle: 'Statements, exports', icon: 'bar-chart-outline', path: 'manage/reports', visible: (can) => can(P.REPORTS_VIEW) || can(P.STATEMENTS_VIEW) },
   { key: 'settings', title: 'Group settings', subtitle: 'Rules and approvals', icon: 'settings-outline', path: 'manage/settings', visible: (can) => can(P.GROUP_VIEW) },
+  { key: 'handovers', title: 'Officer handovers', subtitle: 'What each officer handed over, from the ledger', icon: 'swap-horizontal-outline', path: 'manage/handovers', visible: (can, g) => can(P.GROUP_CONFIGURE) || can(P.AUDIT_VIEW) || g.myMembership.role !== 'MEMBER' },
   { key: 'audit', title: 'Activity & audit', subtitle: 'Who did what, and when', icon: 'time-outline', path: 'manage/audit', visible: (can) => can(P.GROUP_VIEW) },
 ];

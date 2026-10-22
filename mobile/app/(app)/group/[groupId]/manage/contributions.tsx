@@ -31,6 +31,7 @@ export default function ContributionsManage() {
   const inv = [['payments', groupId], ['reconciliation', groupId], ['group-dashboard', groupId], ['ledger', groupId], ['disputes', groupId]];
 
   const verify = useAct(({ id, decision, note }: { id: string; decision: 'CONFIRM' | 'FAIL'; note?: string }) => api(`groups/${groupId}/payments/${id}/verify`, { body: { decision, note } }), { invalidate: inv, successMessage: 'Decision recorded.' });
+  const remind = useAct(() => api<{ sent: number }>(`groups/${groupId}/reminders/contributions`, { body: {} }), { onSuccess: (r) => setTimeout(() => alert(r.sent ? `Reminders sent to ${r.sent} member${r.sent === 1 ? '' : 's'}. Each was told only their own amount.` : 'Nobody owes anything that is due.'), 50) });
   const reverse = useAct(({ id, reason }: { id: string; reason: string }) => api(`groups/${groupId}/payments/${id}/reverse`, { body: { reason } }), { invalidate: inv, successMessage: 'Reversed. A reversal entry was added to the ledger; the original stays on record.' });
   const actionsFor = (p: PaymentItem) => ({
     onVerify: can(P.CONTRIBUTIONS_VERIFY) ? (decision: 'CONFIRM' | 'FAIL', note?: string) => askToConfirm(decision === 'CONFIRM' ? 'Confirm this payment?' : 'Mark as not received?', `${kes(p.amountCents)} from ${p.memberName}${p.reference ? `, ref ${p.reference}` : ''}.`, decision === 'CONFIRM' ? 'Confirm' : 'Not received', () => verify.mutate({ id: p.id, decision, note })) : undefined,
@@ -45,7 +46,10 @@ export default function ContributionsManage() {
       <Stack.Screen options={{ title: 'Contributions' }} />
       {!group.data ? <Loading /> : (
         <>
-          {can(P.CONTRIBUTIONS_RECORD) && <Button title="Record a payment" icon="add-circle-outline" onPress={() => router.push(`/(app)/group/${groupId}/manage/record-payment` as never)} style={{ marginBottom: space.lg }} />}
+          {can(P.CONTRIBUTIONS_RECORD) && <Button title="Record a payment" icon="add-circle-outline" onPress={() => router.push(`/(app)/group/${groupId}/manage/record-payment` as never)} style={{ marginBottom: space.sm }} />}
+          {canAny(P.CONTRIBUTIONS_RECORD, P.RECONCILIATION_MANAGE) && (
+            <Button title="Send reminders to members who owe" variant="secondary" icon="notifications-outline" loading={remind.isPending} onPress={() => askToConfirm('Send reminders?', 'Every member with contributions already due gets a reminder with only their own amount. You can send reminders once every 12 hours.', 'Send', () => remind.mutate(undefined))} style={{ marginBottom: space.lg }} />
+          )}
           <Chips value={active!} onChange={setTab} options={tabs} />
           {active === 'verify' && <VerifyTab groupId={groupId} actionsFor={actionsFor} />}
           {active === 'search' && <SearchTab groupId={groupId} actionsFor={actionsFor} />}
@@ -91,7 +95,7 @@ function SearchTab({ groupId, actionsFor }: { groupId: string; actionsFor: Actio
     <>
       <Field label="Member name or transaction code" value={text} onChangeText={setText} autoCapitalize="characters" placeholder="e.g. Amina or SBK3XYZ" />
       <View style={{ flexDirection: 'row', gap: space.sm }}>
-        <View style={{ flex: 1 }}><Field label="Exact amount" prefix="KES" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === undefined ? 'Invalid' : undefined} /></View>
+        <View style={{ flex: 1 }}><Field label="Exact amount" prefix="KSh" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === undefined ? 'Invalid' : undefined} /></View>
         <View style={{ flex: 1 }}><Field label="On or after" placeholder="YYYY-MM-DD" value={from} onChangeText={setFrom} error={ok ? undefined : 'Use YYYY-MM-DD'} /></View>
       </View>
       <Chips value={status} onChange={setStatus} options={[{ value: 'ALL', label: 'All' }, ...TRANSACTION_STATUSES.map((s) => ({ value: s, label: s.toLowerCase() }))]} />

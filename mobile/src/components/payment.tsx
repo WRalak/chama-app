@@ -36,7 +36,7 @@ export function PaymentCard({ p, actions, last, duplicate }: { p: PaymentItem; a
           {p.notes && <T variant="small" style={{ fontStyle: 'italic' }}>{`“${p.notes}”`}</T>}
           {(p.destinationName || p.evidenceCount > 0) && <T variant="small">{[p.destinationName && `Sent to ${p.destinationName}`, p.evidenceCount > 0 && `${p.evidenceCount} evidence file${p.evidenceCount > 1 ? 's' : ''}`].filter(Boolean).join(' · ')}</T>}
           <Pressable onPress={() => router.push(`/(app)/group/${p.groupId}/payments/${p.id}`)} accessibilityRole="link" hitSlop={8}>
-            <T variant="small" style={{ color: colors.forest, fontWeight: '600', marginTop: 2 }}>History & evidence ›</T>
+            <T variant="small" style={{ color: colors.berry, fontWeight: '600', marginTop: 2 }}>History & evidence ›</T>
           </Pressable>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>

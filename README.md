@@ -1,6 +1,6 @@
 # ChamaHub
 
-**Every Chama. Every Contribution. One Place.**
+**Every Chama. Every Contribution. Every Payout. One Place.**
 
 ChamaHub manages multiple Chamas (savings groups) for the Kenyan market. It has three parts and one financial record:
 
@@ -72,6 +72,16 @@ Each Chama opens with the member's own position. Officers also get a dashboard f
   - Try it with `docs/samples/upendo-paybill-statement-demo.csv` as Joyce (0700 000 003) in the demo data.
 - **WhatsApp summaries.** Collection status, payment receipts, payout notices and *how to pay* are built from confirmed records only and open in WhatsApp. They never include anyone's loans or balances, and they name who has not paid only when the group allows members to see each other's contributions.
 - ChamaHub never asks for or stores an M-Pesa PIN, bank password or OTP, never logs into these accounts, and never reads SMS.
+
+### Design system
+
+Rose, berry and deep plum on a warm white background, with Satoshi as the typeface and amounts in KSh. Statuses always carry an icon and words. Run `npm run fonts:satoshi` once to install Satoshi from Fontshare; until then the apps use system fonts (mobile) and Inter (web). See [`docs/DESIGN.md`](docs/DESIGN.md).
+
+### Governance
+
+- **Joint Signatory.** A group can require one Joint Signatory approval on expenses, payouts, distributions and loans, on top of its normal approval count. The rule cannot be switched on without a signatory, and the last signatory cannot be removed while it is on.
+- **Contribution reminders.** Treasurers can send reminders to every member who owes. Each member is told only their own amount, at most once every 12 hours.
+- **Officer handovers.** When a chairperson, vice chairperson, treasurer or secretary changes, a permanent record of ledger figures and open work is saved for the incoming officer to acknowledge. Officers can also prepare one before leaving office.
 
 ### AI assistant
 

@@ -38,6 +38,7 @@ export default function GroupHome() {
   const shortcuts = [
     { show: can(P.CONTRIBUTIONS_RECORD), icon: 'add-circle-outline' as const, label: 'Record payment', path: 'manage/record-payment' },
     { show: canAny(P.RECONCILIATION_MANAGE, P.CONTRIBUTIONS_VERIFY), icon: 'git-compare-outline' as const, label: 'Reconcile payments', path: 'manage/contributions', badge: taskCount(['VERIFY_PAYMENTS', 'UNMATCHED_PAYMENTS', 'DISPUTES']) },
+    { show: canAny(P.CONTRIBUTIONS_RECORD, P.RECONCILIATION_MANAGE), icon: 'notifications-outline' as const, label: 'Send reminders', path: 'manage/contributions' },
     { show: can(P.RECONCILIATION_MANAGE), icon: 'document-attach-outline' as const, label: 'Import statement', path: 'manage/statements', badge: taskCount(['STATEMENT_LINES']) },
     { show: can(P.DESTINATIONS_MANAGE), icon: 'wallet-outline' as const, label: 'Payment details', path: 'manage/destinations', badge: taskCount(['DESTINATION_DECISIONS']) },
     { show: can(P.ROTATIONS_VIEW), icon: 'sync-outline' as const, label: 'View rotation', path: 'rotation' },

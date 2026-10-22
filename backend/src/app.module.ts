@@ -35,6 +35,7 @@ import { DecisionsModule } from './modules/decisions/decisions.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CollectionsModule } from './modules/collections/collections.module';
 import { AiModule } from './modules/ai/ai.module';
+import { OfficersModule } from './modules/officers/officers.module';
 import { PlatformSettingsModule } from './modules/platform/platform-settings.service';
 import { HealthController } from './health.controller';
 
@@ -61,6 +62,7 @@ const featureModules = [
   DashboardModule,
   CollectionsModule,
   AiModule,
+  OfficersModule,
   JobsModule,
 ];
 

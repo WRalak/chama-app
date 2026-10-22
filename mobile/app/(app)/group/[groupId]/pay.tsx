@@ -62,7 +62,7 @@ export default function Pay() {
               <Row key={o.id} title={o.periodLabel} subtitle={`${o.scheduleName} · due ${date(o.dueDate)}`} right={kes(o.outstandingCents)} rightSub={targetId === o.id ? 'Selected' : undefined} onPress={() => { setTargetId(o.id); setAmount(String(o.outstandingCents / 100)); }} last={i === arr.length - 1} accessibilityLabel={`Pay ${o.periodLabel}, ${kes(o.outstandingCents)}`} />
             ))}
           </Section>
-          <Field label="Amount (KES)" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} prefix="KES" error={amount && cents === null ? 'Enter a valid amount' : undefined} />
+          <Field label="Amount (KSh)" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} prefix="KSh" error={amount && cents === null ? 'Enter a valid amount' : undefined} />
           {mpesa ? (
             <>
               <Field label="M-Pesa phone number" keyboardType="phone-pad" value={phone} onChangeText={setPhone} hint="You will get a prompt on this phone to enter your M-Pesa PIN." />

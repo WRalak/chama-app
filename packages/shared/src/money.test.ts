@@ -14,9 +14,9 @@ describe('money', () => {
   });
 
   it('formats cents', () => {
-    expect(formatKes(123456)).toBe('KES 1,234.56');
-    expect(formatKes(-5000)).toBe('-KES 50.00');
-    expect(formatKes(100000000, { compact: true })).toBe('KES 1,000,000');
+    expect(formatKes(123456)).toBe('KSh 1,234.56');
+    expect(formatKes(-5000)).toBe('-KSh 50.00');
+    expect(formatKes(100000000, { compact: true })).toBe('KSh 1,000,000');
   });
 
   it('rounds half away from zero', () => {

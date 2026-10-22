@@ -177,7 +177,7 @@ function MemberDrawer({ member, onClose }: { member: MemberRow | null; onClose: 
       )}
       {(can(Permission.ROLES_ASSIGN) || can(Permission.MEMBERS_MANAGE)) && (
         <div className="mt-6 space-y-3 rounded-md border border-line bg-canvas p-3">
-          <h3 className="text-sm font-semibold text-navy">Change membership</h3>
+          <h3 className="text-sm font-semibold text-plum">Change membership</h3>
           <Field label="Reason (recorded in the audit log)" htmlFor="m-reason">
             <Textarea id="m-reason" rows={2} className="min-h-0 bg-white" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Elected treasurer at the AGM on 12 March" />
           </Field>

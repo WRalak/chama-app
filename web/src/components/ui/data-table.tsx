@@ -87,7 +87,7 @@ export function DataTable<T>({
                   return (
                     <th key={h.id} scope="col" className={cn('whitespace-nowrap px-3 py-2 text-left text-xs font-medium text-muted', meta?.align === 'right' && 'text-right')}>
                       {h.isPlaceholder ? null : h.column.getCanSort() ? (
-                        <button className={cn('inline-flex items-center gap-1 hover:text-navy', meta?.align === 'right' && 'flex-row-reverse')} onClick={h.column.getToggleSortingHandler()}>
+                        <button className={cn('inline-flex items-center gap-1 hover:text-plum', meta?.align === 'right' && 'flex-row-reverse')} onClick={h.column.getToggleSortingHandler()}>
                           {flexRender(h.column.columnDef.header, h.getContext())}
                           {sorted === 'asc' ? <ArrowUp className="h-3 w-3" /> : sorted === 'desc' ? <ArrowDown className="h-3 w-3" /> : null}
                         </button>
@@ -112,7 +112,7 @@ export function DataTable<T>({
                 {r.getVisibleCells().map((c) => {
                   const meta = c.column.columnDef.meta as { align?: 'right' } | undefined;
                   return (
-                    <td key={c.id} className={cn('px-3 py-2 align-top text-navy', meta?.align === 'right' && 'text-right tabular-nums')}>
+                    <td key={c.id} className={cn('px-3 py-2 align-top text-plum', meta?.align === 'right' && 'text-right tabular-nums')}>
                       {flexRender(c.column.columnDef.cell, c.getContext())}
                     </td>
                   );

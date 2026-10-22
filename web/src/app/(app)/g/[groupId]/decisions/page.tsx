@@ -45,12 +45,12 @@ export default function DecisionsPage() {
             const turnout = p.tally.YES + p.tally.NO + p.tally.ABSTAIN;
             return (
               <Panel key={p.id} title={p.title} actions={<StatusBadge status={p.status} />}>
-                <p className="whitespace-pre-wrap text-sm text-navy">{p.description}</p>
+                <p className="whitespace-pre-wrap text-sm text-plum">{p.description}</p>
                 <p className="mt-2 text-xs text-muted">Started by {p.createdByName} · {p.status === 'OPEN' ? `closes ${dateTime(p.closesAt)}` : `closed ${dateTime(p.closedAt)}`} · needs {p.quorumPercent}% turnout and {p.passPercent}% yes</p>
                 <div className="mt-3 space-y-1.5">
-                  <Bar label="Yes" value={p.tally.YES} total={p.eligibleCount} tone="bg-emerald" />
+                  <Bar label="Yes" value={p.tally.YES} total={p.eligibleCount} tone="bg-rose" />
                   <Bar label="No" value={p.tally.NO} total={p.eligibleCount} tone="bg-danger" />
-                  <Bar label="Abstain" value={p.tally.ABSTAIN} total={p.eligibleCount} tone="bg-slate-400" />
+                  <Bar label="Abstain" value={p.tally.ABSTAIN} total={p.eligibleCount} tone="bg-muted" />
                   <p className="text-xs text-muted">{turnout} of {p.eligibleCount} eligible members have voted</p>
                 </div>
                 {p.myVote && <p className="mt-2 text-sm">You voted <strong>{p.myVote.toLowerCase()}</strong>.</p>}
@@ -75,7 +75,7 @@ export default function DecisionsPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent title="Start a vote" description="All eligible members are notified. Read-only members do not vote.">
           <div className="space-y-3">
-            <Field label="Question" htmlFor="v-t"><Input id="v-t" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="e.g. Raise the monthly contribution to KES 1,500" /></Field>
+            <Field label="Question" htmlFor="v-t"><Input id="v-t" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="e.g. Raise the monthly contribution to KSh 1,500" /></Field>
             <Field label="Details" htmlFor="v-d"><Textarea id="v-d" rows={3} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Closes (EAT)" htmlFor="v-c"><Input id="v-c" type="datetime-local" value={f.closesAt} onChange={(e) => setF({ ...f, closesAt: e.target.value })} /></Field>

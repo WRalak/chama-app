@@ -34,14 +34,14 @@ export function parseKes(input: string | number): Cents {
   const raw = String(input).replace(/KES|KSH|Ksh|,|\s/gi, '');
   const match = /^(-)?(\d+)(?:\.(\d{1,2}))?$/.exec(raw);
   if (!match) {
-    throw new MoneyError(`"${input}" is not a valid KES amount`);
+    throw new MoneyError(`"${input}" is not a valid amount in KSh`);
   }
   const [, sign, whole, frac = ''] = match;
   const cents = Number(whole) * 100 + Number(frac.padEnd(2, '0'));
   return assertCents(sign ? -cents : cents);
 }
 
-/** Formats cents as "KES 1,234.50". `compact` drops ".00". */
+/** Formats cents as "KSh 1,234.50" (the Kenyan convention). `compact` drops ".00". */
 export function formatKes(cents: Cents, opts: { compact?: boolean; withCurrency?: boolean } = {}): string {
   assertCents(cents);
   const { compact = false, withCurrency = true } = opts;
@@ -51,7 +51,7 @@ export function formatKes(cents: Cents, opts: { compact?: boolean; withCurrency?
   const frac = abs % 100;
   const wholeStr = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const body = compact && frac === 0 ? wholeStr : `${wholeStr}.${frac.toString().padStart(2, '0')}`;
-  return `${negative ? '-' : ''}${withCurrency ? 'KES ' : ''}${body}`;
+  return `${negative ? '-' : ''}${withCurrency ? 'KSh ' : ''}${body}`;
 }
 
 /** Converts cents to a plain decimal string ("1234.50") for CSV exports. */

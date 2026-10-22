@@ -36,10 +36,10 @@ export default function FindingsPage() {
               {list.data.map((x) => (
                 <li key={x.id} className="px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium text-navy">{x.title}</p>
+                    <p className="font-medium text-plum">{x.title}</p>
                     <span className="flex gap-1"><Badge tone={tone[x.severity]}>{x.severity.toLowerCase()}</Badge><StatusBadge status={x.status} /></span>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-navy">{x.details}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-plum">{x.details}</p>
                   <p className="mt-1 text-xs text-muted">Raised by {x.raisedByName} · {dateTime(x.createdAt)}{x.reference ? ` · ref ${x.reference}` : ''}</p>
                   {x.response && <p className="mt-2 rounded-md bg-canvas px-3 py-2 text-sm"><strong>{x.respondedByName}:</strong> {x.response}</p>}
                   {x.canRespond && (

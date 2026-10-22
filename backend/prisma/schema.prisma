@@ -1780,3 +1780,28 @@ model AiToolCall {
   @@index([groupId, createdAt])
   @@map("ai_tool_calls")
 }
+
+// ───────────────────────────── officer handovers ─────────────────────────────
+
+/// What an incoming officer takes over: figures from the ledger and open work at
+/// the moment of the change. The snapshot never changes; the incoming officer
+/// acknowledges it once.
+model OfficerHandover {
+  id                   String    @id @default(cuid())
+  groupId              String
+  role                 GroupRole
+  outgoingMembershipId String?
+  incomingMembershipId String?
+  /// "role_change" when created by a role change, "manual" when an officer prepared it.
+  trigger              String
+  snapshot             Json
+  notes                String?
+  createdById          String
+  acknowledgedById     String?
+  acknowledgedAt       DateTime?
+  acknowledgementNote  String?
+  createdAt            DateTime  @default(now())
+
+  @@index([groupId, createdAt])
+  @@map("officer_handovers")
+}

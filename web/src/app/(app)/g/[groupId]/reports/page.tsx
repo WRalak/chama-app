@@ -77,7 +77,7 @@ export default function ReportsPage() {
       <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
         <nav className="space-y-0.5" aria-label="Reports">
           {REPORTS.map((r) => (
-            <button key={r.id} onClick={() => setReport(r.id)} className={cn('block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-white', report === r.id && 'bg-white font-medium text-forest shadow-sm')}>
+            <button key={r.id} onClick={() => setReport(r.id)} className={cn('block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-white', report === r.id && 'bg-white font-medium text-berry shadow-sm')}>
               {r.label}
             </button>
           ))}
@@ -114,7 +114,7 @@ export default function ReportsPage() {
                   {published.data.map((p) => (
                     <li key={p.id} className="flex items-center justify-between px-4 py-2">
                       <span>{date(p.from)} – {date(p.to)} <span className="text-muted">· published {date(p.publishedAt)}</span></span>
-                      <span className="flex items-center gap-3"><span className="tabular-nums">{kes(p.closingBalanceCents)}</span><a className="text-forest hover:underline" href={fileUrl(`groups/${groupId}/statements/${p.id}/pdf`)}>PDF</a></span>
+                      <span className="flex items-center gap-3"><span className="tabular-nums">{kes(p.closingBalanceCents)}</span><a className="text-berry hover:underline" href={fileUrl(`groups/${groupId}/statements/${p.id}/pdf`)}>PDF</a></span>
                     </li>
                   ))}
                 </ul>

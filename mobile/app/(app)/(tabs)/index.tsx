@@ -2,16 +2,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import { LABELS } from '@chamahub/shared';
-import { Badge, Button, Empty, ErrorView, Loading, Notice, Row, Screen, Section, Stat, StatGrid, StatusBadge, T } from '@/components/ui';
+import { Badge, Button, Empty, ErrorView, Loading, MoneyCard, Notice, Row, Screen, Section, StatusBadge, T } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { date, dateTime, kes, relativeDay } from '@/lib/format';
 import { useDashboard } from '@/lib/queries';
-import { colors, radius, space } from '@/theme';
+import { colors, radius, shadow, space } from '@/theme';
 
+/**
+ * The member's financial home. It answers, from the ledger and records:
+ * what have I contributed, what do I owe, has my payment been confirmed,
+ * when is my payout, what is my loan balance, and what changed.
+ */
 export default function Home() {
   const { user } = useAuth();
   const d = useDashboard();
   const first = user?.fullName.split(' ')[0];
+  const data = d.data;
+  const payout = data?.upcomingPayouts[0];
   return (
     <Screen edges={['top']} refreshing={d.isRefetching} onRefresh={d.refetch}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.lg }}>
@@ -19,70 +26,114 @@ export default function Home() {
           <T variant="small">Habari,</T>
           <T variant="title">{first}</T>
         </View>
-        <Pressable onPress={() => router.push('/(app)/notifications')} accessibilityRole="button" accessibilityLabel={`Notifications${d.data?.unreadNotifications ? `, ${d.data.unreadNotifications} unread` : ''}`} style={{ padding: 10 }}>
-          <Ionicons name="notifications-outline" size={24} color={colors.navy} />
-          {!!d.data?.unreadNotifications && <View style={{ position: 'absolute', right: 8, top: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error }} />}
+        <Pressable onPress={() => router.push('/(app)/(tabs)/activity')} accessibilityRole="button" accessibilityLabel={`Activity${data?.unreadNotifications ? `, ${data.unreadNotifications} unread` : ''}`} style={{ padding: 10, minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}>
+          <Ionicons name="notifications-outline" size={24} color={colors.text} />
+          {!!data?.unreadNotifications && (
+            <View style={{ position: 'absolute', right: 6, top: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.berry, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+              <T variant="tiny" style={{ color: colors.white }}>{String(data.unreadNotifications)}</T>
+            </View>
+          )}
         </Pressable>
       </View>
 
-      {d.error ? <ErrorView error={d.error} onRetry={d.refetch} /> : !d.data ? <Loading /> : (
+      {d.error ? <ErrorView error={d.error} onRetry={d.refetch} /> : !data ? <Loading label="Loading your Chamas…" /> : data.groups.length === 0 ? (
+        <Empty title="You are not in a Chama yet" body="Ask your treasurer for an invitation or join with a group code." icon="people-outline" action={<Button title="Go to My Chamas" onPress={() => router.push('/(app)/(tabs)/chamas')} />} />
+      ) : (
         <>
-          {d.data.pendingInvitations > 0 && (
+          {data.pendingInvitations > 0 && (
             <Pressable onPress={() => router.push('/(app)/invitations')} accessibilityRole="button">
-              <Notice tone="green" icon="mail-unread-outline">{`You have ${d.data.pendingInvitations} Chama invitation${d.data.pendingInvitations > 1 ? 's' : ''}. Tap to respond.`}</Notice>
+              <Notice tone="rose" icon="mail-unread-outline">{`You have ${data.pendingInvitations} Chama invitation${data.pendingInvitations > 1 ? 's' : ''}. Tap to respond.`}</Notice>
             </Pressable>
           )}
-          {d.data.overdueCents > 0 && <Notice tone="red" icon="alert-circle-outline">{`${kes(d.data.overdueCents)} is overdue across your Chamas.`}</Notice>}
 
-          {d.data.groups.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: space.lg, marginHorizontal: -space.lg }} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm }} accessibilityLabel="Switch Chama">
-              {d.data.groups.map((g) => (
-                <Pressable key={g.groupId} onPress={() => router.push(`/(app)/group/${g.groupId}`)} accessibilityRole="button" accessibilityLabel={`Open ${g.name}`} style={{ backgroundColor: colors.white, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: space.md, paddingVertical: space.sm, maxWidth: 220 }}>
-                  <T variant="label" numberOfLines={1}>{g.name}</T>
-                  <T variant="small" numberOfLines={1}>{LABELS.groupRole[g.role]}</T>
-                </Pressable>
-              ))}
-            </ScrollView>
-          )}
+          {/* What have I contributed? */}
+          <View style={{ backgroundColor: colors.plum, borderRadius: radius.lg, padding: space.lg, marginBottom: space.md, ...shadow }} accessible accessibilityLabel={`Total confirmed contributions ${kes(data.totalContributedCents)}`}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.blush} style={{ marginRight: 6 }} />
+              <T variant="small" style={{ color: colors.blush }}>Total confirmed contributions</T>
+            </View>
+            <T variant="amount" style={{ color: colors.white, marginTop: 4, fontSize: 32, lineHeight: 38 }}>{kes(data.totalContributedCents)}</T>
+            <T variant="small" style={{ color: colors.blush, marginTop: 2 }}>{`${kes(data.contributedThisMonthCents)} confirmed this month · ${data.activeGroups} Chama${data.activeGroups === 1 ? '' : 's'}`}</T>
+            <Pressable onPress={() => router.push('/(app)/(tabs)/finances')} accessibilityRole="button" style={{ marginTop: space.md, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: radius.pill, paddingHorizontal: space.md, minHeight: 40 }}>
+              <Ionicons name="document-text-outline" size={16} color={colors.white} style={{ marginRight: 6 }} />
+              <T variant="label" style={{ color: colors.white }}>My statement</T>
+            </Pressable>
+          </View>
 
-          <StatGrid>
-            <Stat label="Active Chamas" value={String(d.data.activeGroups)} />
-            <Stat label="Paid this month" value={kes(d.data.contributedThisMonthCents, true)} tone="success" />
-            <Stat label="Overdue" value={kes(d.data.overdueCents, true)} tone={d.data.overdueCents ? 'danger' : undefined} />
-            <Stat label="Loan balance" value={kes(d.data.outstandingLoanCents, true)} />
-            <Stat label="Payouts received" value={kes(d.data.payoutsReceivedCents, true)} />
-            <Stat label="Upcoming payouts" value={String(d.data.upcomingPayouts.length)} sub={d.data.upcomingPayouts[0] ? date(d.data.upcomingPayouts[0].payoutDate) : undefined} />
-          </StatGrid>
+          {/* What do I owe? Has my payment been confirmed? */}
+          <MoneyCard
+            label="Contributions due now"
+            icon="wallet-outline"
+            amount={kes(data.dueNowCents)}
+            status={data.dueNowCents > 0 ? (data.overdueCents > 0 ? { text: `${kes(data.overdueCents, true)} overdue`, tone: 'red' } : { text: 'Due', tone: 'amber' }) : { text: 'Up to date', tone: 'green' }}
+            sub={data.nextDeadline ? `Next: ${kes(data.nextDeadline.amountCents)} for ${data.nextDeadline.periodLabel} (${data.nextDeadline.groupName}), due ${relativeDay(data.nextDeadline.dueDate)}` : 'Nothing due in the next 30 days'}
+            onPress={data.nextDeadline ? () => router.push(`/(app)/group/${data.nextDeadline!.groupId}/pay`) : undefined}
+          />
+          <MoneyCard
+            label="Payments awaiting verification"
+            icon="time-outline"
+            amount={kes(data.pendingVerification.cents)}
+            status={data.pendingVerification.count ? { text: `${data.pendingVerification.count} reported`, tone: 'amber' } : { text: 'None waiting', tone: 'neutral' }}
+            sub="Reported payments count only after an officer, the group’s statement or M-Pesa confirms them."
+            onPress={() => router.push('/(app)/(tabs)/finances')}
+          />
 
-          {d.data.overdue.length > 0 && (
+          {/* When is my payout? What is my loan balance? */}
+          <View style={{ flexDirection: 'row', gap: space.md, marginBottom: space.xl }}>
+            <Pressable style={{ flex: 1 }} onPress={() => (payout ? router.push(`/(app)/group/${payout.groupId}/rotation`) : undefined)} accessibilityRole={payout ? 'button' : undefined} accessibilityLabel={payout ? `My payout: round ${payout.round} of ${payout.totalRounds}, ${date(payout.payoutDate)}` : 'No payout scheduled'}>
+              <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: space.md, minHeight: 128, ...shadow }}>
+                <Ionicons name="gift-outline" size={20} color={colors.rose} />
+                <T variant="small" style={{ marginTop: 6 }}>My payout</T>
+                {payout ? (
+                  <>
+                    <T variant="heading">{`Round ${payout.round} of ${payout.totalRounds}`}</T>
+                    <T variant="small">{`${date(payout.payoutDate)} · ${payout.groupName}`}</T>
+                    <View style={{ marginTop: 4 }}><StatusBadge status={payout.status} /></View>
+                  </>
+                ) : <T variant="label" style={{ marginTop: 2 }}>Not scheduled</T>}
+              </View>
+            </Pressable>
+            <Pressable style={{ flex: 1 }} onPress={() => router.push('/(app)/(tabs)/finances')} accessibilityRole="button" accessibilityLabel={`Outstanding loan balance ${kes(data.outstandingLoanCents)}`}>
+              <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: space.md, minHeight: 128, ...shadow }}>
+                <Ionicons name="cash-outline" size={20} color={colors.rose} />
+                <T variant="small" style={{ marginTop: 6 }}>Loan balance</T>
+                <T variant="heading">{kes(data.outstandingLoanCents)}</T>
+                <T variant="small">{data.outstandingLoanCents ? 'Principal and interest owed' : 'No active loans'}</T>
+              </View>
+            </Pressable>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: space.xl, marginHorizontal: -space.lg }} contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.sm }} accessibilityLabel="Open a Chama">
+            {data.groups.map((g) => (
+              <Pressable key={g.groupId} onPress={() => router.push(`/(app)/group/${g.groupId}`)} accessibilityRole="button" accessibilityLabel={`Open ${g.name}, you are ${LABELS.groupRole[g.role]}`} style={{ backgroundColor: colors.white, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: space.md, paddingVertical: space.sm, maxWidth: 220, minHeight: 48 }}>
+                <T variant="label" numberOfLines={1}>{g.name}</T>
+                <T variant="small" numberOfLines={1}>{LABELS.groupRole[g.role]}</T>
+              </Pressable>
+            ))}
+          </ScrollView>
+
+          {data.overdue.length > 0 && (
             <Section title="Overdue">
-              {d.data.overdue.map((o, i) => (
-                <Row key={o.id} title={o.groupName} subtitle={`${o.scheduleName} · ${o.periodLabel} · due ${date(o.dueDate)}`} right={kes(o.outstandingCents)} rightSub={<StatusBadge status="OVERDUE" />} onPress={() => router.push(`/(app)/group/${o.groupId}/contributions`)} last={i === d.data!.overdue.length - 1} />
+              {data.overdue.map((o, i) => (
+                <Row key={o.id} title={o.groupName} subtitle={`${o.scheduleName} · ${o.periodLabel} · due ${date(o.dueDate)}`} right={kes(o.outstandingCents)} rightSub={<StatusBadge status="OVERDUE" />} onPress={() => router.push(`/(app)/group/${o.groupId}/contributions`)} last={i === data.overdue.length - 1} />
               ))}
             </Section>
           )}
 
-          <Section title="Upcoming contributions" action={<Pressable onPress={() => router.push('/(app)/(tabs)/calendar')} style={{ padding: 6 }}><T variant="label" style={{ color: colors.forest }}>Calendar</T></Pressable>}>
-            {d.data.upcoming.length === 0 ? <Empty title="Nothing due in the next 30 days" icon="checkmark-done-outline" /> : d.data.upcoming.map((o, i) => (
-              <Row key={o.id} title={o.groupName} subtitle={`${o.periodLabel} · ${relativeDay(o.dueDate)}`} right={kes(o.outstandingCents)} rightSub={o.pendingCents ? <StatusBadge status="PENDING" /> : <StatusBadge status={o.status} />} onPress={() => router.push(`/(app)/group/${o.groupId}/contributions`)} last={i === d.data!.upcoming.length - 1} />
-            ))}
-          </Section>
-
-          {d.data.upcomingPayouts.length > 0 && (
-            <Section title="Your upcoming payouts">
-              {d.data.upcomingPayouts.map((p, i) => (
-                <Row key={`${p.groupId}-${p.payoutDate}`} title={p.groupName} subtitle={`${p.cycleName} · ${date(p.payoutDate)}`} right={kes(p.expectedCents)} rightSub={<Badge label={p.status === 'APPROVED' ? 'Approved' : 'Scheduled'} tone={p.status === 'APPROVED' ? 'green' : 'neutral'} />} onPress={() => router.push(`/(app)/group/${p.groupId}/rotation`)} last={i === d.data!.upcomingPayouts.length - 1} />
+          {data.upcomingPayouts.length > 1 && (
+            <Section title="Payout rotation">
+              {data.upcomingPayouts.map((p, i) => (
+                <Row key={`${p.groupId}-${p.payoutDate}`} title={`${p.groupName} · round ${p.round} of ${p.totalRounds}`} subtitle={`${p.cycleName} · ${date(p.payoutDate)}`} right={kes(p.expectedCents)} rightSub={<Badge label={p.status === 'APPROVED' ? 'Approved' : 'Scheduled'} tone={p.status === 'APPROVED' ? 'green' : 'neutral'} />} onPress={() => router.push(`/(app)/group/${p.groupId}/rotation`)} last={i === data.upcomingPayouts.length - 1} />
               ))}
             </Section>
           )}
 
-          <Section title="Recent activity">
-            {d.data.recentActivity.length === 0 ? <Empty title="No activity yet" /> : d.data.recentActivity.slice(0, 8).map((a, i, arr) => (
-              <Row key={a.id} title={a.title} subtitle={`${a.groupName} · ${dateTime(a.at)}`} right={a.amountCents ? kes(a.amountCents) : undefined} last={i === arr.length - 1} />
+          {/* What has changed in my Chama? */}
+          <Section title="Recent activity" action={<Pressable onPress={() => router.push('/(app)/(tabs)/activity')} style={{ padding: 8 }} accessibilityRole="link"><T variant="label" style={{ color: colors.berry }}>See all</T></Pressable>}>
+            {data.recentActivity.length === 0 ? <Empty title="No confirmed activity yet" icon="time-outline" /> : data.recentActivity.slice(0, 6).map((a, i, arr) => (
+              <Row key={a.id} icon={a.kind === 'REVERSAL' ? 'arrow-undo-outline' : 'checkmark-circle-outline'} title={a.title} subtitle={`${a.groupName} · ${dateTime(a.at)}`} right={a.amountCents ? kes(a.amountCents) : undefined} last={i === arr.length - 1} />
             ))}
           </Section>
-
-          {d.data.groups.length === 0 && <Empty title="You are not in a Chama yet" body="Ask your treasurer for an invitation or join with a group code." action={<Button title="Go to My Chamas" variant="secondary" onPress={() => router.push('/(app)/(tabs)/chamas')} />} />}
         </>
       )}
     </Screen>

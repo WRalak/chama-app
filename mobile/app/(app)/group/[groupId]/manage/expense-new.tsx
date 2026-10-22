@@ -30,7 +30,7 @@ export default function ExpenseNew() {
       <Notice tone="neutral">The expense waits for approval by another officer; nothing is paid or posted until then.</Notice>
       <Chips value={category} onChange={setCategory} options={CATEGORIES.map((c) => ({ value: c, label: c }))} />
       <Field label="What was it for?" value={description} onChangeText={setDescription} placeholder="e.g. Venue hire for the AGM" />
-      <Field label="Amount" prefix="KES" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === null ? 'Enter a valid amount' : undefined} />
+      <Field label="Amount" prefix="KSh" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === null ? 'Enter a valid amount' : undefined} />
       <Field label="Paid to (optional)" value={payee} onChangeText={setPayee} placeholder="e.g. Nyali Community Hall" />
       <Field label="Date incurred" value={incurredOn} onChangeText={setIncurredOn} placeholder="YYYY-MM-DD" />
       <Button title="Submit for approval" onPress={() => create.mutate(undefined)} disabled={!cents || description.trim().length < 3 || !/^\d{4}-\d{2}-\d{2}$/.test(incurredOn)} loading={create.isPending} />

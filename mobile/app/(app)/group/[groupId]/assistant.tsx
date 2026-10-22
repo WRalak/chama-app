@@ -96,7 +96,7 @@ export default function Assistant() {
             {turns.map((t) => (
               <View key={t.id} style={{ alignItems: t.role === 'user' ? 'flex-end' : 'stretch', marginBottom: space.md }}>
                 {t.role === 'user' ? (
-                  <View style={{ backgroundColor: colors.forest, borderRadius: radius.lg, paddingVertical: space.sm, paddingHorizontal: space.md, maxWidth: '85%' }}>
+                  <View style={{ backgroundColor: colors.berry, borderRadius: radius.lg, paddingVertical: space.sm, paddingHorizontal: space.md, maxWidth: '85%' }}>
                     <T variant="body" style={{ color: colors.white }}>{t.text}</T>
                   </View>
                 ) : t.role === 'error' ? (
@@ -118,7 +118,7 @@ export default function Assistant() {
             ))}
             {busy && (
               <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center', marginBottom: space.md }} accessibilityLiveRegion="polite">
-                <ActivityIndicator color={colors.forest} />
+                <ActivityIndicator color={colors.berry} />
                 <T variant="small">Checking your records…</T>
               </View>
             )}
@@ -134,7 +134,7 @@ export default function Assistant() {
                   onLongPress={() => quick(s.tool, s.label, s.args)}
                   style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.white, borderRadius: 999, paddingVertical: 6, paddingHorizontal: space.md, opacity: busy ? 0.5 : 1 }}
                 >
-                  <T variant="small" style={{ color: colors.navy }}>{s.label}</T>
+                  <T variant="small" style={{ color: colors.text }}>{s.label}</T>
                 </Pressable>
               ))}
             </View>
@@ -149,7 +149,7 @@ export default function Assistant() {
                 accessibilityLabel="Question for the assistant"
                 multiline
                 maxLength={2000}
-                style={{ flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm, fontSize: 16, color: colors.navy }}
+                style={{ flex: 1, minHeight: 44, maxHeight: 120, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm, fontSize: 16, color: colors.text }}
                 onSubmitEditing={() => ask(draft)}
               />
               <Button title="Ask" onPress={() => ask(draft)} disabled={!draft.trim() || busy} />

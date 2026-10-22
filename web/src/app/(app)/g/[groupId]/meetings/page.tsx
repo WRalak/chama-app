@@ -92,7 +92,7 @@ function MeetingDrawer({ id, onClose }: { id: string | null; onClose: () => void
           <TabsContent value="resolutions">
             <ul className="mb-4 divide-y divide-line rounded-md border border-line text-sm">
               {d.resolutions.length === 0 && <li className="px-3 py-4 text-center text-muted">No resolutions recorded.</li>}
-              {d.resolutions.map((r) => <li key={r.id} className="px-3 py-2"><p className="font-medium">{r.title}{r.isFinancial && <span className="ml-2 text-xs text-forest">Financial · {kes(r.amountCents)}</span>}</p>{r.details && <p className="text-muted">{r.details}</p>}</li>)}
+              {d.resolutions.map((r) => <li key={r.id} className="px-3 py-2"><p className="font-medium">{r.title}{r.isFinancial && <span className="ml-2 text-xs text-berry">Financial · {kes(r.amountCents)}</span>}</p>{r.details && <p className="text-muted">{r.details}</p>}</li>)}
             </ul>
             {manage && !final && (
               <div className="space-y-2 rounded-md border border-line bg-canvas p-3">

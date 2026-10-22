@@ -265,7 +265,7 @@ describe('Collections', () => {
     it('the collections summary uses group figures and no names by default', async () => {
       const s = (await as(app, treasurer).get(g('share/collections')).expect(200)).body;
       expect(s.text).toContain('*TEST CHAMA*');
-      expect(s.text).toMatch(/Collected: KES [\d,]+ of KES [\d,]+ due/);
+      expect(s.text).toMatch(/Collected: KSh [\d,]+ of KSh [\d,]+ due/);
       expect(s.text).not.toContain('Still to pay');
       expect(s.namesMembers).toBe(false);
       await as(app, jane).get(g('share/collections')).expect(403);
@@ -278,7 +278,7 @@ describe('Collections', () => {
     it('receipts exist only for confirmed payments and only for their member or officers', async () => {
       const confirmed = await prisma.payment.findFirstOrThrow({ where: { reference: 'SJK12ABC34' } });
       const r = (await as(app, jane).get(g(`share/receipt/${confirmed.id}`)).expect(200)).body;
-      expect(r.text).toMatch(/^TEST CHAMA: KES 2,000 contribution from Jane Wanjiru Kamau confirmed on .+ Ref SJK12ABC34\. Thank you\.$/);
+      expect(r.text).toMatch(/^TEST CHAMA: KSh 2,000 contribution from Jane Wanjiru Kamau confirmed on .+ Ref SJK12ABC34\. Thank you\.$/);
       await as(app, john).get(g(`share/receipt/${confirmed.id}`)).expect(404);
       const pending = await prisma.payment.findFirstOrThrow({ where: { reference: 'SJK88AMB03' } });
       await as(app, treasurer).get(g(`share/receipt/${pending.id}`)).expect(422);

@@ -107,10 +107,10 @@ describe('AI assistant', () => {
     it('quick answers read the member’s own records', async () => {
       const r = (await as(app, alice).post(g('tools/get_my_financial_summary'), {}).expect(200)).body;
       expect(r.cards[0]).toMatchObject({ kind: 'VERIFIED', title: 'My position in Test Chama' });
-      expect(r.cards[0].facts).toContainEqual({ label: 'Confirmed contributions', value: 'KES 2,000.00' });
+      expect(r.cards[0].facts).toContainEqual({ label: 'Confirmed contributions', value: 'KSh 2,000.00' });
       const c = (await as(app, alice).post(g('tools/get_my_contributions'), { args: { outstandingOnly: false } }).expect(200)).body;
       expect(c.cards).toHaveLength(2);
-      expect(c.cards[1].table.rows[0]).toEqual(expect.arrayContaining(['KES 2,000.00', 'SAI1REF001', 'confirmed']));
+      expect(c.cards[1].table.rows[0]).toEqual(expect.arrayContaining(['KSh 2,000.00', 'SAI1REF001', 'confirmed']));
     });
 
     it('enforces role permissions, input validation and the tool allowlist', async () => {
@@ -149,12 +149,12 @@ describe('AI assistant', () => {
     let conversationId: string;
 
     it('answers from tool results and records usage, cost and the conversation', async () => {
-      const p = use([() => callTool('get_group_collection_summary'), () => text('You have collected KES 2,000.00 this month.')]);
+      const p = use([() => callTool('get_group_collection_summary'), () => text('You have collected KSh 2,000.00 this month.')]);
       const r = (await as(app, treasurer).post(g('chat'), { message: 'How much has the group collected this month?' }).expect(200)).body;
       conversationId = r.conversationId;
-      expect(r.message.text).toBe('You have collected KES 2,000.00 this month.');
+      expect(r.message.text).toBe('You have collected KSh 2,000.00 this month.');
       expect(r.message.cards[0]).toMatchObject({ tool: 'get_group_collection_summary', kind: 'VERIFIED' });
-      expect(r.message.cards[0].facts).toContainEqual({ label: 'Confirmed', value: 'KES 2,000.00' });
+      expect(r.message.cards[0].facts).toContainEqual({ label: 'Confirmed', value: 'KSh 2,000.00' });
       // Only read-only tools are ever offered to the model.
       expect(p.requests[0].tools.map((t) => t.name).every((n) => n.startsWith('get_') || n.startsWith('draft_'))).toBe(true);
       expect(p.requests[0].system[1].text).toContain('Treasurer');
@@ -165,7 +165,7 @@ describe('AI assistant', () => {
     });
 
     it('continues a conversation with its full history, and only its owner can read it', async () => {
-      const p = use([() => text('Earlier I said KES 2,000.00.')]);
+      const p = use([() => text('Earlier I said KSh 2,000.00.')]);
       await as(app, treasurer).post(g('chat'), { conversationId, message: 'Repeat that?' }).expect(200);
       expect(p.requests[0].messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant', 'user']);
       const conv = (await as(app, treasurer).get(g(`conversations/${conversationId}`)).expect(200)).body;

@@ -99,7 +99,7 @@ export class ContributionsController {
   async ledgerCsv(@Param('groupId') groupId: string, @Query(new ZodPipe(ledgerQuery)) q: z.infer<typeof ledgerQuery>) {
     const page = await this.svc.ledger(groupId, { ...q, page: 1, pageSize: 100000 });
     return toCsv(
-      ['Due date', 'Member', 'Period', 'Expected (KES)', 'Received (KES)', 'Pending (KES)', 'Outstanding (KES)', 'Status', 'Methods', 'References', 'Recorded by'],
+      ['Due date', 'Member', 'Period', 'Expected (KSh)', 'Received (KSh)', 'Pending (KSh)', 'Outstanding (KSh)', 'Status', 'Methods', 'References', 'Recorded by'],
       page.items.map((r) => [
         r.dueDate,
         r.memberName,

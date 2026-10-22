@@ -51,30 +51,51 @@ import { Brand } from './brand';
 /** `permission` may be a list: the item shows if the role holds ANY of them. */
 type NavItem = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; permission?: Permission | Permission[] };
 
-const GROUP_NAV: NavItem[] = [
-  { href: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { href: 'assistant', label: 'AI Assistant', icon: Sparkles },
-  { href: 'members', label: 'Members', icon: Users, permission: Permission.MEMBERS_VIEW },
-  { href: 'contributions', label: 'Contributions', icon: Wallet, permission: Permission.CONTRIBUTIONS_VIEW_ALL },
-  { href: 'collections', label: 'Collections', icon: ArrowLeftRight, permission: Permission.RECONCILIATION_MANAGE },
-  { href: 'statement-imports', label: 'Statement import', icon: FileSearch, permission: [Permission.RECONCILIATION_MANAGE, Permission.AUDIT_VIEW] },
-  { href: 'payment-destinations', label: 'Payment destinations', icon: Landmark },
-  { href: 'loans', label: 'Loans', icon: HandCoins, permission: Permission.LOANS_VIEW_ALL },
-  { href: 'repayments', label: 'Repayments', icon: RefreshCcw, permission: Permission.LOANS_VIEW_ALL },
-  { href: 'expenses', label: 'Expenses', icon: Receipt, permission: Permission.EXPENSES_VIEW },
-  { href: 'fines', label: 'Fines', icon: Gavel, permission: Permission.FINES_VIEW_ALL },
-  { href: 'rotations', label: 'Payout Rotations', icon: CircleDollarSign, permission: Permission.ROTATIONS_VIEW },
-  { href: 'distributions', label: 'Distributions', icon: PieChart, permission: Permission.REPORTS_VIEW },
-  { href: 'meetings', label: 'Meetings', icon: CalendarDays, permission: Permission.MEETINGS_VIEW },
-  { href: 'reports', label: 'Financial Reports', icon: BarChart3, permission: Permission.REPORTS_VIEW },
-  { href: 'decisions', label: 'Decisions & Votes', icon: Vote },
-  { href: 'imports', label: 'Imports and Migration', icon: FileSpreadsheet, permission: [Permission.IMPORTS_MANAGE, Permission.IMPORTS_APPROVE] },
-  { href: 'audit', label: 'Audit Logs', icon: ScrollText },
-  { href: 'findings', label: 'Audit Findings', icon: SearchCheck, permission: [Permission.FINDINGS_RAISE, Permission.FINDINGS_RESOLVE, Permission.AUDIT_VIEW] },
-  { href: 'notifications', label: 'Notifications', icon: Bell },
-  { href: 'roles', label: 'Roles & Permissions', icon: KeyRound, permission: Permission.PERMISSIONS_CONFIGURE },
-  { href: 'settings', label: 'Settings', icon: Settings, permission: Permission.GROUP_CONFIGURE },
+type NavSection = { label: string; icon: NavItem['icon']; items: NavItem[] };
+
+/**
+ * Group sections, in the order officers work through them. A section shows
+ * only if the caller's role can open at least one of its pages; its pages are
+ * listed under it while it is open.
+ */
+const GROUP_SECTIONS: NavSection[] = [
+  { label: 'Overview', icon: LayoutDashboard, items: [{ href: 'overview', label: 'Overview', icon: LayoutDashboard }, { href: 'assistant', label: 'AI Assistant', icon: Sparkles }] },
+  {
+    label: 'Members',
+    icon: Users,
+    items: [
+      { href: 'members', label: 'Members', icon: Users, permission: Permission.MEMBERS_VIEW },
+      { href: 'meetings', label: 'Meetings', icon: CalendarDays, permission: Permission.MEETINGS_VIEW },
+      { href: 'decisions', label: 'Decisions & votes', icon: Vote },
+    ],
+  },
+  { label: 'Contributions', icon: Wallet, items: [{ href: 'contributions', label: 'Contributions', icon: Wallet, permission: Permission.CONTRIBUTIONS_VIEW_ALL }, { href: 'fines', label: 'Fines', icon: Gavel, permission: Permission.FINES_VIEW_ALL }] },
+  {
+    label: 'Reconciliation',
+    icon: ArrowLeftRight,
+    items: [
+      { href: 'collections', label: 'Collections', icon: ArrowLeftRight, permission: Permission.RECONCILIATION_MANAGE },
+      { href: 'statement-imports', label: 'Statement import', icon: FileSearch, permission: [Permission.RECONCILIATION_MANAGE, Permission.AUDIT_VIEW] },
+      { href: 'payment-destinations', label: 'Payment destinations', icon: Landmark },
+    ],
+  },
+  { label: 'Payouts', icon: CircleDollarSign, items: [{ href: 'rotations', label: 'Payout rotation', icon: CircleDollarSign, permission: Permission.ROTATIONS_VIEW }, { href: 'distributions', label: 'Distributions', icon: PieChart, permission: Permission.REPORTS_VIEW }] },
+  { label: 'Loans', icon: HandCoins, items: [{ href: 'loans', label: 'Loans', icon: HandCoins, permission: Permission.LOANS_VIEW_ALL }, { href: 'repayments', label: 'Repayments', icon: RefreshCcw, permission: Permission.LOANS_VIEW_ALL }] },
+  { label: 'Expenses', icon: Receipt, items: [{ href: 'expenses', label: 'Expenses', icon: Receipt, permission: Permission.EXPENSES_VIEW }] },
+  { label: 'Reports', icon: BarChart3, items: [{ href: 'reports', label: 'Financial reports', icon: BarChart3, permission: Permission.REPORTS_VIEW }, { href: 'imports', label: 'Imports & migration', icon: FileSpreadsheet, permission: [Permission.IMPORTS_MANAGE, Permission.IMPORTS_APPROVE] }] },
+  { label: 'Audit Logs', icon: ScrollText, items: [{ href: 'audit', label: 'Audit logs', icon: ScrollText }, { href: 'findings', label: 'Audit findings', icon: SearchCheck, permission: [Permission.FINDINGS_RAISE, Permission.FINDINGS_RESOLVE, Permission.AUDIT_VIEW] }, { href: 'handovers', label: 'Officer handovers', icon: ArrowLeftRight }] },
+  {
+    label: 'Settings',
+    icon: Settings,
+    items: [
+      { href: 'settings', label: 'Group settings', icon: Settings, permission: Permission.GROUP_CONFIGURE },
+      { href: 'roles', label: 'Roles & permissions', icon: KeyRound, permission: Permission.PERMISSIONS_CONFIGURE },
+      { href: 'notifications', label: 'Notifications', icon: Bell },
+    ],
+  },
 ];
+
+const GROUP_NAV: NavItem[] = GROUP_SECTIONS.flatMap((sec) => sec.items);
 
 const allowed = (can: (p: Permission) => boolean, p?: Permission | Permission[]) => !p || (Array.isArray(p) ? p.some(can) : can(p));
 
@@ -89,10 +110,19 @@ const PLATFORM_NAV: (Omit<NavItem, 'permission'> & { permission: PlatformPermiss
   { href: '/platform/support', label: 'Support', icon: LifeBuoy, permission: PlatformPermission.PLATFORM_SUPPORT },
 ];
 
-function NavLink({ href, label, icon: Icon, active, onClick }: { href: string; label: string; icon: NavItem['icon']; active: boolean; onClick?: () => void }) {
+function NavLink({ href, label, icon: Icon, active, onClick, sub }: { href: string; label: string; icon: NavItem['icon']; active: boolean; onClick?: () => void; sub?: boolean }) {
   return (
-    <Link href={href} onClick={onClick} aria-current={active ? 'page' : undefined} className={cn('flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-slate-300 hover:bg-white/5 hover:text-white', active && 'bg-white/10 font-medium text-white')}>
-      <Icon className="h-4 w-4 shrink-0" />
+    <Link
+      href={href}
+      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'relative flex items-center gap-2.5 rounded-lg px-2.5 text-sm text-white/75 hover:bg-white/10 hover:text-white',
+        sub ? 'ml-6 py-1.5 text-[13px]' : 'py-2',
+        active && 'bg-white/10 font-semibold text-white before:absolute before:inset-y-1.5 before:left-0 before:w-1 before:rounded-full before:bg-rose',
+      )}
+    >
+      {!sub && <Icon className="h-4 w-4 shrink-0" />}
       <span className="truncate">{label}</span>
     </Link>
   );
@@ -107,23 +137,23 @@ function GroupSwitcher() {
   const section = pathname.split('/')[3] ?? 'overview';
   return (
     <DM.Root>
-      <DM.Trigger className="flex w-full items-center justify-between gap-2 rounded-md border border-white/10 px-2.5 py-2 text-left hover:bg-white/5">
+      <DM.Trigger className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/15 bg-white/5 px-2.5 py-2 text-left hover:bg-white/10">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-white">{current?.name ?? 'Select a Chama'}</p>
-          <p className="truncate text-2xs text-slate-400">{current ? `${LABELS.groupRole[current.role]}${current.specialRoles.length ? ' +' : ''} · ${LABELS.groupType[current.type]}` : `${groups?.length ?? 0} Chamas`}</p>
+          <p className="truncate text-2xs text-white/65">{current ? `${LABELS.groupRole[current.role]}${current.specialRoles.length ? ' +' : ''} · ${LABELS.groupType[current.type]}` : `${groups?.length ?? 0} Chamas`}</p>
         </div>
-        <ChevronsUpDown className="h-4 w-4 shrink-0 text-slate-400" />
+        <ChevronsUpDown className="h-4 w-4 shrink-0 text-white/65" />
       </DM.Trigger>
       <DM.Portal>
         <DM.Content align="start" sideOffset={4} className="z-50 w-64 rounded-md border border-line bg-white p-1 shadow-lg">
           {groups?.map((g) => (
-            <DM.Item key={g.groupId} onSelect={() => router.push(`/g/${g.groupId}/${section}`)} className={cn('cursor-pointer rounded px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-canvas', g.groupId === groupId && 'font-medium text-forest')}>
+            <DM.Item key={g.groupId} onSelect={() => router.push(`/g/${g.groupId}/${section}`)} className={cn('cursor-pointer rounded px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-canvas', g.groupId === groupId && 'font-medium text-berry')}>
               <p className="truncate">{g.name}</p>
               <p className="text-2xs text-muted">{LABELS.groupRole[g.role]}</p>
             </DM.Item>
           ))}
           <DM.Separator className="my-1 h-px bg-line" />
-          <DM.Item onSelect={() => router.push('/chamas')} className="cursor-pointer rounded px-2 py-1.5 text-sm text-forest outline-none data-[highlighted]:bg-canvas">
+          <DM.Item onSelect={() => router.push('/chamas')} className="cursor-pointer rounded px-2 py-1.5 text-sm text-berry outline-none data-[highlighted]:bg-canvas">
             All my Chamas / create new
           </DM.Item>
         </DM.Content>
@@ -140,21 +170,30 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { data: groups } = useMyGroups();
   const platformItems = PLATFORM_NAV.filter((i) => platformCan(i.permission));
   return (
-    <nav className="flex h-full flex-col gap-4 overflow-y-auto bg-navy px-3 py-4" aria-label="Main">
-      <div className="px-1 [&_p:first-child]:text-white">
+    <nav className="flex h-full flex-col gap-4 overflow-y-auto bg-plum px-3 py-4" aria-label="Main">
+      <div className="px-1 [&_p:first-child]:text-white [&_p:last-child]:text-white/60">
         <Brand />
       </div>
       {(groups?.length ?? 0) > 0 && <GroupSwitcher />}
       <div className="space-y-0.5">
-        <NavLink href="/chamas" label="Chamas" icon={ClipboardList} active={pathname === '/chamas'} onClick={onNavigate} />
+        <NavLink href="/chamas" label="Groups" icon={ClipboardList} active={pathname === '/chamas'} onClick={onNavigate} />
         {groupId &&
-          GROUP_NAV.filter((i) => allowed(can, i.permission)).map((i) => (
-            <NavLink key={i.href} href={`/g/${groupId}/${i.href}`} label={i.label} icon={i.icon} active={pathname.startsWith(`/g/${groupId}/${i.href}`)} onClick={onNavigate} />
-          ))}
+          GROUP_SECTIONS.map((sec) => {
+            const items = sec.items.filter((i) => allowed(can, i.permission));
+            if (!items.length) return null;
+            const at = (i: NavItem) => pathname.startsWith(`/g/${groupId}/${i.href}`);
+            const open = items.some(at);
+            return (
+              <div key={sec.label}>
+                <NavLink href={`/g/${groupId}/${items[0].href}`} label={sec.label} icon={sec.icon} active={open && items.length === 1} onClick={onNavigate} />
+                {open && items.length > 1 && items.map((i) => <NavLink key={i.href} sub href={`/g/${groupId}/${i.href}`} label={i.label} icon={i.icon} active={at(i)} onClick={onNavigate} />)}
+              </div>
+            );
+          })}
       </div>
       {platformItems.length > 0 && (
         <div className="space-y-0.5">
-          <p className="px-2.5 pb-1 text-2xs font-medium uppercase tracking-wider text-slate-500">Platform</p>
+          <p className="px-2.5 pb-1 text-2xs font-semibold uppercase tracking-wider text-white/55">Platform administration</p>
           {platformItems.map((i) => (
             <NavLink key={i.href} href={i.href} label={i.label} icon={i.icon} active={i.href === '/platform' ? pathname === '/platform' : pathname.startsWith(i.href)} onClick={onNavigate} />
           ))}
@@ -172,25 +211,25 @@ function UserMenu() {
   }
   return (
     <DM.Root>
-      <DM.Trigger className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-canvas" aria-label="Account menu">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-forest-50 text-xs font-semibold text-forest">
+      <DM.Trigger className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-blush/60" aria-label="Account menu">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blush text-xs font-semibold text-berry">
           {me?.fullName
             .split(' ')
             .map((p) => p[0])
             .slice(0, 2)
             .join('')}
         </span>
-        <span className="hidden text-sm text-navy sm:block">{me?.fullName}</span>
+        <span className="hidden text-sm text-plum sm:block">{me?.fullName}</span>
       </DM.Trigger>
       <DM.Portal>
         <DM.Content align="end" sideOffset={4} className="z-50 w-56 rounded-md border border-line bg-white p-1 shadow-lg">
           <div className="px-2 py-1.5">
-            <p className="text-sm font-medium text-navy">{me?.fullName}</p>
+            <p className="text-sm font-medium text-plum">{me?.fullName}</p>
             <p className="text-xs text-muted">{me?.phone}</p>
-            {me && me.platformRole !== 'USER' && <p className="mt-1 text-2xs font-medium uppercase tracking-wide text-forest">{LABELS.platformRole[me.platformRole]}</p>}
+            {me && me.platformRole !== 'USER' && <p className="mt-1 text-2xs font-medium uppercase tracking-wide text-berry">{LABELS.platformRole[me.platformRole]}</p>}
           </div>
           <DM.Separator className="my-1 h-px bg-line" />
-          <DM.Item onSelect={signOut} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-danger outline-none data-[highlighted]:bg-red-50">
+          <DM.Item onSelect={signOut} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-danger-ink outline-none data-[highlighted]:bg-danger-50">
             <LogOut className="h-4 w-4" /> Sign out
           </DM.Item>
         </DM.Content>
@@ -232,7 +271,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-navy/40" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-plum/40" onClick={() => setOpen(false)} />
           <div className="absolute inset-y-0 left-0 w-64">
             <Sidebar onNavigate={() => setOpen(false)} />
           </div>
@@ -242,14 +281,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-3 border-b border-line bg-white/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-line bg-white/95 px-4 backdrop-blur">
           <button className="rounded p-1 lg:hidden" onClick={() => setOpen(true)} aria-label="Open menu">
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex-1" />
           <div className="flex items-center gap-1">
             {groupId && (
-              <Link href={`/g/${groupId}/notifications`} className="rounded p-1.5 text-muted hover:bg-canvas hover:text-navy" aria-label="Notifications">
+              <Link href={`/g/${groupId}/notifications`} className="rounded p-1.5 text-muted hover:bg-canvas hover:text-plum" aria-label="Notifications">
                 <Bell className="h-4 w-4" />
               </Link>
             )}

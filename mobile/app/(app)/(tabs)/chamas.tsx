@@ -19,7 +19,7 @@ export default function Chamas() {
         <Empty title="No Chamas yet" body="Accept an invitation or join with a code from your group officer." icon="people-outline" />
       ) : (
         groups.data.map((g) => (
-          <Pressable key={g.groupId} onPress={() => router.push(`/(app)/group/${g.groupId}`)} accessibilityRole="button" accessibilityLabel={`${g.name}, ${LABELS.groupRole[g.role]}`} style={({ pressed }) => [s.item, pressed && { backgroundColor: colors.slateTint }]}>
+          <Pressable key={g.groupId} onPress={() => router.push(`/(app)/group/${g.groupId}`)} accessibilityRole="button" accessibilityLabel={`${g.name}, ${LABELS.groupRole[g.role]}`} style={({ pressed }) => [s.item, pressed && { backgroundColor: colors.neutralTint }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <View style={{ flex: 1, marginRight: space.sm }}>
                 <T variant="heading" numberOfLines={2}>{g.name}</T>
@@ -52,7 +52,7 @@ function Fact({ label, value, danger }: { label: string; value: string; danger?:
   return (
     <View style={{ width: '50%', marginTop: space.sm }}>
       <T variant="small">{label}</T>
-      <T variant="label" style={{ color: danger ? colors.error : colors.navy, fontVariant: ['tabular-nums'] }}>{value}</T>
+      <T variant="label" style={{ color: danger ? colors.error : colors.text, fontVariant: ['tabular-nums'] }}>{value}</T>
     </View>
   );
 }

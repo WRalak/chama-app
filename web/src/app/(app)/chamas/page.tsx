@@ -53,7 +53,7 @@ export default function ChamasPage() {
               {groups.data.map((g) => (
                 <tr key={g.groupId} className="border-b border-line last:border-0 hover:bg-canvas">
                   <td className="px-4 py-2.5">
-                    <Link href={`/g/${g.groupId}/overview`} className="font-medium text-navy hover:text-forest">
+                    <Link href={`/g/${g.groupId}/overview`} className="font-medium text-plum hover:text-berry">
                       {g.name}
                     </Link>
                     <p className="text-xs text-muted">{LABELS.groupType[g.type]}</p>

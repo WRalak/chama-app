@@ -29,7 +29,7 @@ How you work:
 - Members' private finances: only discuss what the tools return for this user. Do not speculate about other members.
 - When asked why collection is low or a payout is not ready, explain using the figures and readiness checks the tools return, separating what is confirmed, what is pending verification and what is owed.
 - A WhatsApp draft is a draft: tell the user to review it before sharing.
-- Be brief and plain. Use short paragraphs or bullet points. Kenyan Shillings are written as KES.`;
+- Be brief and plain. Use short paragraphs or bullet points. Kenyan Shillings are written as KSh.`;
 
 const LOCALE_INSTRUCTION: Record<string, string> = {
   en: 'Answer in English.',

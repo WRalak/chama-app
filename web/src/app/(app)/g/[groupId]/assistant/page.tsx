@@ -35,7 +35,7 @@ function CardView({ card, groupId }: { card: AiCard; groupId: string }) {
   return (
     <div className={`mt-2 rounded-md border bg-white p-3 ${draft ? 'border-amber-300' : 'border-line'}`}>
       <div className="flex items-start justify-between gap-2">
-        <h4 className="text-sm font-semibold text-navy">{card.title}</h4>
+        <h4 className="text-sm font-semibold text-plum">{card.title}</h4>
         <Badge tone={draft ? 'amber' : 'green'}>{draft ? 'Draft — review before sharing' : 'From records'}</Badge>
       </div>
       <p className="mb-2 text-xs text-muted">{card.period ? `Period ${card.period.from} – ${card.period.to} · ` : ''}read {dateTime(card.asOf)} · source: ChamaHub records</p>
@@ -64,7 +64,7 @@ function CardView({ card, groupId }: { card: AiCard; groupId: string }) {
             <Button size="sm" variant="secondary" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(card.text!)}`, '_blank')}>Open in WhatsApp</Button>
           </>
         )}
-        {card.links.map((l, i) => <Link key={i} href={HREF[l.target](groupId, l.id)} className="text-xs font-medium text-forest hover:underline">{l.label} ›</Link>)}
+        {card.links.map((l, i) => <Link key={i} href={HREF[l.target](groupId, l.id)} className="text-xs font-medium text-berry hover:underline">{l.label} ›</Link>)}
       </div>
     </div>
   );
@@ -118,7 +118,7 @@ function Chat({ status }: { status: AiStatus }) {
         <div className="space-y-4" aria-live="polite">
           {turns.map((t, i) => (
             <div key={i} className={t.role === 'user' ? 'flex justify-end' : ''}>
-              {t.role === 'user' ? <p className="max-w-[80%] rounded-lg bg-forest px-3 py-2 text-sm text-white">{t.text}</p>
+              {t.role === 'user' ? <p className="max-w-[80%] rounded-lg bg-berry px-3 py-2 text-sm text-white">{t.text}</p>
                 : t.role === 'error' ? <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{t.text}</p>
                 : (
                   <div>
@@ -149,8 +149,8 @@ function Chat({ status }: { status: AiStatus }) {
         <ul className="space-y-1.5">
           {status.suggestions.map((s) => (
             <li key={s.label} className="flex items-center justify-between gap-2">
-              <button className="text-left text-sm text-navy hover:text-forest disabled:opacity-50" disabled={busy} onClick={() => (chatOn ? ask(s.prompt) : quick(s.tool, s.label, s.args))}>{chatOn ? s.prompt : s.label}</button>
-              {chatOn && <button className="shrink-0 text-2xs uppercase text-muted hover:text-forest" disabled={busy} onClick={() => quick(s.tool, s.label, s.args)} title="Show the records without the AI">records</button>}
+              <button className="text-left text-sm text-plum hover:text-berry disabled:opacity-50" disabled={busy} onClick={() => (chatOn ? ask(s.prompt) : quick(s.tool, s.label, s.args))}>{chatOn ? s.prompt : s.label}</button>
+              {chatOn && <button className="shrink-0 text-2xs uppercase text-muted hover:text-berry" disabled={busy} onClick={() => quick(s.tool, s.label, s.args)} title="Show the records without the AI">records</button>}
             </li>
           ))}
         </ul>

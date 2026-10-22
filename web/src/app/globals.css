@@ -8,12 +8,11 @@
 
 html,
 body {
-  background: #f8fafc;
-  color: #172033;
+  background: #fffafc;
+  color: #42213d;
 }
 
 body {
-  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
 }
 

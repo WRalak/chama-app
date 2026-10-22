@@ -132,7 +132,7 @@ function PayoutCard({ groupId, cycle, r }: { groupId: string; cycle: RotationCyc
           <T variant="label">{r.readiness.ready ? 'Readiness checks pass' : 'Not ready yet'}</T>
           {r.readiness.checks.map((c) => (
             <View key={c.key} style={{ flexDirection: 'row', gap: 8 }}>
-              <Ionicons name={c.status === 'PASS' ? 'checkmark-circle' : c.status === 'WARN' ? 'warning' : 'close-circle'} size={18} color={c.status === 'PASS' ? colors.success : c.status === 'WARN' ? colors.warning : colors.error} accessibilityLabel={c.status} />
+              <Ionicons name={c.status === 'PASS' ? 'checkmark-circle' : c.status === 'WARN' ? 'warning' : 'close-circle'} size={18} color={c.status === 'PASS' ? colors.success : c.status === 'WARN' ? colors.pending : colors.error} accessibilityLabel={c.status} />
               <View style={{ flex: 1 }}>
                 <T variant="label">{c.label}</T>
                 <T variant="small">{c.detail}</T>

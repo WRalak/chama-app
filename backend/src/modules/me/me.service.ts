@@ -34,7 +34,7 @@ export class MeService {
     const t = today();
     const monthStart = `${t.slice(0, 7)}-01`;
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { phone: true } });
-    const [groups, obligations, monthLines, payoutLines, rounds, recent, invitations, unread] = await Promise.all([
+    const [groups, obligations, monthLines, payoutLines, rounds, recent, invitations, unread, allLines, pending] = await Promise.all([
       this.groups.mine(userId),
       this.finance.obligationItems({ membershipIds: ids, to: addDays(t, 30) }),
       this.prisma.journalLine.findMany({ where: { account: 'MEMBER_CONTRIBUTIONS', entry: { membershipId: { in: ids }, entryDate: { gte: dbDate(monthStart), lte: dbDate(t) } } }, select: { amountCents: true } }),
@@ -53,7 +53,12 @@ export class MeService {
       }),
       this.prisma.invitation.count({ where: { phone: user.phone, status: 'PENDING', expiresAt: { gt: new Date() } } }),
       this.prisma.notification.count({ where: { userId, readAt: null } }),
+      this.prisma.journalLine.aggregate({ where: { account: 'MEMBER_CONTRIBUTIONS', entry: { membershipId: { in: ids } } }, _sum: { amountCents: true } }),
+      this.prisma.payment.aggregate({ where: { membershipId: { in: ids }, status: 'PENDING' }, _sum: { amountCents: true }, _count: true }),
     ]);
+    const lastRound = rounds.length
+      ? new Map((await this.prisma.payoutRound.groupBy({ by: ['cycleId'], where: { cycleId: { in: [...new Set(rounds.map((r) => r.cycleId))] }, status: { not: 'CANCELLED' } }, _max: { round: true } })).map((x) => [x.cycleId, x._max.round ?? 0]))
+      : new Map<string, number>();
     const open = obligations.filter((o) => o.outstandingCents > 0);
     const overdue = open.filter((o) => o.status === 'OVERDUE');
     const upcoming = open.filter((o) => o.status !== 'OVERDUE').slice(0, 10);
@@ -64,15 +69,21 @@ export class MeService {
         e.type === 'REVERSAL' ? 'Reversed' : type === 'CONTRIBUTION' ? 'Contribution confirmed' : type === 'LOAN_DISBURSEMENT' ? 'Loan disbursed to you' : type === 'LOAN_REPAYMENT_PRINCIPAL' ? 'Loan repayment confirmed' : type === 'PAYOUT' ? 'Payout received' : type === 'DISTRIBUTION' ? 'Distribution received' : type === 'FINE_PAYMENT' ? 'Fine paid' : e.description;
       return { id: e.id, groupId: e.groupId, groupName: e.group.name, at: e.createdAt.toISOString(), title: label, amountCents: Math.abs(cash), kind: e.type };
     });
+    const next = open.filter((o) => o.dueDate >= t).sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
     return {
       activeGroups: groups.filter((g) => g.status === 'ACTIVE').length,
+      // Credits to member contributions are negative ledger lines: confirmed money only.
+      totalContributedCents: -n(allLines._sum.amountCents),
+      dueNowCents: open.filter((o) => o.dueDate <= t).reduce((a, o) => a + o.outstandingCents, 0),
+      pendingVerification: { count: pending._count, cents: n(pending._sum.amountCents) },
+      nextDeadline: next ? { groupId: next.groupId, groupName: next.groupName, periodLabel: next.periodLabel, dueDate: next.dueDate, amountCents: next.outstandingCents } : null,
       contributedThisMonthCents: -monthLines.reduce((a, l) => a + n(l.amountCents), 0),
       upcoming,
       overdue,
       overdueCents: overdue.reduce((a, o) => a + o.outstandingCents, 0),
       outstandingLoanCents: groups.reduce((a, g) => a + g.loanBalanceCents, 0),
       payoutsReceivedCents: payoutLines.reduce((a, l) => a + n(l.amountCents), 0),
-      upcomingPayouts: rounds.map((r) => ({ groupId: r.cycle.groupId, groupName: r.cycle.group.name, cycleName: r.cycle.name, payoutDate: isoDate(r.payoutDate), expectedCents: recipientShare(n(r.expectedCents), r.cycle.recipientsPerRound, r.slot - 1), status: r.status })),
+      upcomingPayouts: rounds.map((r) => ({ groupId: r.cycle.groupId, groupName: r.cycle.group.name, cycleName: r.cycle.name, payoutDate: isoDate(r.payoutDate), expectedCents: recipientShare(n(r.expectedCents), r.cycle.recipientsPerRound, r.slot - 1), status: r.status, round: r.round, totalRounds: lastRound.get(r.cycleId) ?? r.round })),
       recentActivity,
       groups,
       pendingInvitations: invitations,

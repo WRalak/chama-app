@@ -5,17 +5,17 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        primary: 'bg-forest text-white hover:bg-forest-800',
-        secondary: 'border border-line bg-white text-navy hover:bg-canvas',
-        ghost: 'text-navy hover:bg-canvas',
-        danger: 'bg-danger text-white hover:bg-red-700',
-        link: 'text-forest underline-offset-2 hover:underline px-0 h-auto',
+        primary: 'bg-berry text-white hover:bg-berry-700 active:bg-berry-700',
+        secondary: 'border border-line bg-white text-plum hover:bg-blush/60',
+        ghost: 'text-plum hover:bg-blush/60',
+        danger: 'bg-danger-ink text-white hover:bg-[#8A1621]',
+        link: 'text-berry underline-offset-2 hover:underline px-0 h-auto',
       },
-      size: { sm: 'h-8 px-2.5 text-xs', md: 'h-9 px-3.5', lg: 'h-10 px-5', icon: 'h-8 w-8' },
+      size: { sm: 'h-8 px-3 text-xs', md: 'h-10 px-4', lg: 'h-11 px-5', icon: 'h-9 w-9' },
     },
     defaultVariants: { variant: 'primary', size: 'md' },
   },

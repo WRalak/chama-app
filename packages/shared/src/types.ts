@@ -610,13 +610,20 @@ export interface ActivityItem {
 
 export interface PersonalDashboard {
   activeGroups: number;
+  /** All confirmed contributions across the member's Chamas (ledger). */
+  totalContributedCents: number;
   contributedThisMonthCents: number;
+  /** Contributions already due and not yet paid (includes overdue). */
+  dueNowCents: number;
+  /** Payments the member reported that no officer, statement or provider has confirmed yet. Not counted as paid. */
+  pendingVerification: { count: number; cents: number };
+  nextDeadline: { groupId: string; groupName: string; periodLabel: string; dueDate: string; amountCents: number } | null;
   upcoming: ObligationItem[];
   overdue: ObligationItem[];
   overdueCents: number;
   outstandingLoanCents: number;
   payoutsReceivedCents: number;
-  upcomingPayouts: { groupId: string; groupName: string; cycleName: string; payoutDate: string; expectedCents: number; status: PayoutStatus }[];
+  upcomingPayouts: { groupId: string; groupName: string; cycleName: string; payoutDate: string; expectedCents: number; status: PayoutStatus; round: number; totalRounds: number }[];
   recentActivity: ActivityItem[];
   groups: GroupMembershipSummary[];
   pendingInvitations: number;
@@ -1002,4 +1009,40 @@ export interface AiUsageSummary {
   budgetUsd: number;
   toolCalls: { tool: string; ok: number; denied: number; invalid: number; error: number }[];
   recentErrors: { at: string; status: string; errorCode: string | null }[];
+}
+
+/* ---------- officer handovers ---------- */
+
+/** Figures read from the ledger and open work at the moment of a handover. */
+export interface HandoverSnapshot {
+  asOf: string;
+  cashBalanceCents: number;
+  confirmedContributionsCents: number;
+  outstandingContributionsCents: number;
+  membersOwing: number;
+  pendingVerification: { count: number; cents: number };
+  unmatchedPayments: number;
+  openStatementLines: number;
+  openDisputes: number;
+  loansOutstanding: { count: number; cents: number };
+  pendingApprovals: { expenses: number; payouts: number; loans: number; destinations: number };
+  activeDestinations: string[];
+  nextPayout: { round: number; recipientName: string; payoutDate: string; status: string } | null;
+  openActionItems: number;
+}
+
+export interface HandoverRow {
+  id: string;
+  role: GroupRole;
+  outgoingName: string | null;
+  incomingName: string | null;
+  trigger: 'role_change' | 'manual';
+  snapshot: HandoverSnapshot;
+  notes: string | null;
+  createdByName: string;
+  createdAt: string;
+  acknowledgedByName: string | null;
+  acknowledgedAt: string | null;
+  acknowledgementNote: string | null;
+  can: { acknowledge: boolean };
 }

@@ -14,7 +14,7 @@ function Copyable({ label, value }: { label: string; value: string }) {
         <T variant="small">{label}</T>
         <T variant="label" style={{ fontSize: 18, letterSpacing: 0.5 }}>{value}</T>
       </View>
-      <T variant="small" style={{ color: colors.forest, fontWeight: '600' }}>Copy</T>
+      <T variant="small" style={{ color: colors.berry, fontWeight: '600' }}>Copy</T>
     </Pressable>
   );
 }

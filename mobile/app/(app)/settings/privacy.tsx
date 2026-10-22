@@ -20,7 +20,7 @@ export default function Privacy() {
     <Screen>
       <Stack.Screen options={{ title: 'Privacy' }} />
       <Section title="Who sees what">
-        <Row title="Hide my phone number from ordinary members" subtitle="Officers of your groups can always see it." right={<View><Switch value={me.data.preferences.hidePhoneFromMembers} onValueChange={(v) => prefs.mutate(v)} trackColor={{ true: colors.emerald }} accessibilityLabel="Hide my phone number" /></View>} last />
+        <Row title="Hide my phone number from ordinary members" subtitle="Officers of your groups can always see it." right={<View><Switch value={me.data.preferences.hidePhoneFromMembers} onValueChange={(v) => prefs.mutate(v)} trackColor={{ true: colors.rose }} accessibilityLabel="Hide my phone number" /></View>} last />
       </Section>
       <Notice tone="neutral">Members cannot see each other's balances unless your group turns this on. ChamaHub staff cannot see group finances unless your chairperson approves a time-limited, audited support request.</Notice>
       <Section title="Delete my account">

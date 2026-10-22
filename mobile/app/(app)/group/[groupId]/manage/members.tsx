@@ -70,7 +70,7 @@ function MemberPanel({ groupId, m, isMe, can }: { groupId: string; m: MemberRow;
   const reasonOk = reason.trim().length >= 5;
   const phoneVisible = m.phone.startsWith('+');
   return (
-    <View style={{ backgroundColor: colors.slateTint, padding: space.md, gap: space.sm }}>
+    <View style={{ backgroundColor: colors.neutralTint, padding: space.md, gap: space.sm }}>
       {m.financials && (
         <View style={{ backgroundColor: colors.white, borderRadius: 8 }}>
           <KV label="Contributed" value={kes(m.financials.contributedCents)} />

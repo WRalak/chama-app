@@ -53,7 +53,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <BrandMark className="h-10 w-10" />
-          <h1 className="mt-3 text-lg font-semibold text-navy">Reset your password</h1>
+          <h1 className="mt-3 text-lg font-semibold text-plum">Reset your password</h1>
           <p className="text-sm text-muted">We will send a code by SMS to your registered number.</p>
         </div>
         <div className="rounded-lg border border-line bg-white p-5">
@@ -80,7 +80,7 @@ export default function ForgotPasswordPage() {
           )}
           {step === 'done' && (
             <div className="space-y-4 text-center">
-              <p className="text-sm text-navy">Your password has been reset. All other sessions were signed out.</p>
+              <p className="text-sm text-plum">Your password has been reset. All other sessions were signed out.</p>
               <Button asChild className="w-full">
                 <Link href="/login">Sign in</Link>
               </Button>
@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
           )}
         </div>
         <p className="mt-4 text-center text-sm">
-          <Link href="/login" className="text-forest hover:underline">Back to sign in</Link>
+          <Link href="/login" className="text-berry hover:underline">Back to sign in</Link>
         </p>
       </div>
     </main>

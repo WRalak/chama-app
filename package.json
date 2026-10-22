@@ -2,7 +2,7 @@
   "name": "chamahub",
   "private": true,
   "version": "0.1.0",
-  "description": "ChamaHub — Every Chama. Every Contribution. One Place.",
+  "description": "ChamaHub \u2014 Every Chama. Every Contribution. One Place.",
   "engines": {
     "node": ">=20"
   },
@@ -18,7 +18,8 @@
     "db:migrate": "npm run prisma:migrate -w @chamahub/api",
     "db:seed": "npm run seed -w @chamahub/api",
     "dev:setup": "npm run build:shared && npm exec -w @chamahub/api -- prisma migrate deploy && npm run db:seed",
-    "postinstall": "npm run build:shared"
+    "postinstall": "npm run build:shared",
+    "fonts:satoshi": "node scripts/fetch-satoshi.mjs"
   },
   "workspaces": [
     "packages/*",
@@ -27,6 +28,7 @@
     "mobile"
   ],
   "devDependencies": {
-    "concurrently": "9.1.2"
+    "concurrently": "9.1.2",
+    "fflate": "0.8.2"
   }
 }

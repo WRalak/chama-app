@@ -134,7 +134,7 @@ function SecretaryTools({ groupId, d }: { groupId: string; d: MeetingDetail }) {
       {d.status !== 'CANCELLED' && (
         <Section title="Record a resolution">
           <View style={{ padding: space.lg }}>
-            <Field label="Resolution" value={resTitle} onChangeText={setResTitle} placeholder="e.g. Invest KES 50,000 in a T-bill" />
+            <Field label="Resolution" value={resTitle} onChangeText={setResTitle} placeholder="e.g. Invest KSh 50,000 in a T-bill" />
             <Field label="Details (optional)" value={resDetails} onChangeText={setResDetails} multiline />
             <Button title="Add resolution" variant="secondary" onPress={() => addResolution.mutate(undefined)} disabled={resTitle.trim().length < 3} loading={addResolution.isPending} />
           </View>

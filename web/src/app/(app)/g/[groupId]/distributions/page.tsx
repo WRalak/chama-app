@@ -25,7 +25,7 @@ function Breakdown({ r }: { r: DistributionResult }) {
           <tr className="border-b border-line"><td className="py-1.5">Less: liabilities</td><td className="text-right tabular-nums">({kes(r.liabilitiesCents)})</td></tr>
           <tr className="border-b border-line"><td className="py-1.5">Less: retained funds</td><td className="text-right tabular-nums">({kes(r.retainedCents)})</td></tr>
           <tr className="border-b border-line font-semibold"><td className="py-1.5">Distributable amount</td><td className="text-right tabular-nums">{kes(r.distributableCents)}</td></tr>
-          <tr className="border-b border-line font-semibold text-forest"><td className="py-1.5">To be distributed</td><td className="text-right tabular-nums">{kes(r.distributedCents)}</td></tr>
+          <tr className="border-b border-line font-semibold text-berry"><td className="py-1.5">To be distributed</td><td className="text-right tabular-nums">{kes(r.distributedCents)}</td></tr>
           <tr><td className="py-1.5 text-muted">Outstanding member loans (not cash, not distributable)</td><td className="text-right tabular-nums text-muted">{kes(r.outstandingLoansCents)}</td></tr>
         </tbody>
       </table>

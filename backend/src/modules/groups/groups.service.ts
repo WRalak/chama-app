@@ -153,6 +153,10 @@ export class GroupsService {
   async update(groupId: string, input: z.infer<typeof updateGroupSchema>, userId: string, meta: RequestMeta) {
     const before = await this.prisma.group.findUniqueOrThrow({ where: { id: groupId } });
     const settings = input.settings ? { ...readSettings(before.settings), ...input.settings } : undefined;
+    if (settings?.requireJointSignatory && !readSettings(before.settings).requireJointSignatory) {
+      const signatories = await this.prisma.membership.count({ where: { groupId, status: 'ACTIVE', specialRoles: { has: 'JOINT_SIGNATORY' } } });
+      if (!signatories) throw new UnprocessableEntityException('Assign at least one Joint Signatory before requiring their approval.');
+    }
     const loanPolicy = input.loanPolicy ? { ...readLoanPolicy(before.loanPolicy), ...input.loanPolicy } : undefined;
     const after = await this.prisma.$transaction(async (tx) => {
       const g = await tx.group.update({

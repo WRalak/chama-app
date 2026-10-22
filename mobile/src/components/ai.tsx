@@ -27,7 +27,7 @@ const PATH: Record<AiLink['target'], (id?: string) => string> = {
 export function AiCardView({ card, groupId }: { card: AiCard; groupId: string }) {
   const draft = card.kind === 'DRAFT';
   return (
-    <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: draft ? '#FCD34D' : colors.border, padding: space.md, marginTop: space.sm }} accessibilityRole="summary">
+    <View style={{ backgroundColor: colors.white, borderRadius: radius.lg, borderWidth: 1, borderColor: draft ? colors.pending : colors.border, padding: space.md, marginTop: space.sm }} accessibilityRole="summary">
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: space.sm }}>
         <T variant="label" style={{ flex: 1 }}>{card.title}</T>
         <Badge label={draft ? 'Draft — review' : 'From records'} tone={draft ? 'amber' : 'green'} />
@@ -41,15 +41,15 @@ export function AiCardView({ card, groupId }: { card: AiCard; groupId: string })
               {card.table.columns.map((c) => <T key={c} variant="small" style={{ width: 120, fontWeight: '700', paddingVertical: 4 }}>{c}</T>)}
             </View>
             {card.table.rows.map((r, i) => (
-              <View key={i} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.slateTint }}>
-                {r.map((c, j) => <T key={j} variant="small" style={{ width: 120, paddingVertical: 4, color: colors.navy }}>{c}</T>)}
+              <View key={i} style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.neutralTint }}>
+                {r.map((c, j) => <T key={j} variant="small" style={{ width: 120, paddingVertical: 4, color: colors.text }}>{c}</T>)}
               </View>
             ))}
           </View>
         </ScrollView>
       )}
       {card.table?.truncated && <T variant="small">Showing the first rows only.</T>}
-      {card.text ? <T variant="body" style={{ marginTop: space.sm, backgroundColor: colors.slateTint, padding: space.sm, borderRadius: radius.sm }}>{card.text}</T> : null}
+      {card.text ? <T variant="body" style={{ marginTop: space.sm, backgroundColor: colors.neutralTint, padding: space.sm, borderRadius: radius.sm }}>{card.text}</T> : null}
       {card.notes.filter(Boolean).map((n) => <T key={n} variant="small" style={{ marginTop: 4 }}>{n}</T>)}
       {card.text && draft && (
         <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
@@ -61,7 +61,7 @@ export function AiCardView({ card, groupId }: { card: AiCard; groupId: string })
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginTop: space.sm }}>
           {card.links.map((l, i) => (
             <Pressable key={`${l.target}${l.id ?? ''}${i}`} accessibilityRole="link" hitSlop={6} onPress={() => router.push(`/(app)/group/${groupId}/${PATH[l.target](l.id)}` as never)}>
-              <T variant="small" style={{ color: colors.forest, fontWeight: '600' }}>{`${l.label} ›`}</T>
+              <T variant="small" style={{ color: colors.berry, fontWeight: '600' }}>{`${l.label} ›`}</T>
             </Pressable>
           ))}
         </View>

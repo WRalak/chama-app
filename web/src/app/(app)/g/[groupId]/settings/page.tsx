@@ -75,6 +75,7 @@ export default function SettingsPage() {
             </Field>
             <div className="sm:col-span-2"><Toggle label="Allow payouts before the scheduled date" hint="Off by default: a round is paid on or after its date." checked={settings.allowEarlyPayout} onChange={(v) => setSettings({ ...settings, allowEarlyPayout: v })} /></div>
             <div className="sm:col-span-2"><Toggle label="Hold a payout while the recipient is in arrears" hint="Overdue contributions, unpaid fines or overdue loan installments in this group. When off, approvers still see the arrears." checked={settings.holdPayoutWhenRecipientInArrears} onChange={(v) => setSettings({ ...settings, holdPayoutWhenRecipientInArrears: v })} /></div>
+            <div className="sm:col-span-2"><Toggle label="Require a Joint Signatory" hint="Expenses, payouts, distributions and loans need one approval from a member holding the Joint Signatory role, on top of the approvals above. Assign the role on the Members page first." checked={settings.requireJointSignatory} onChange={(v) => setSettings({ ...settings, requireJointSignatory: v })} /></div>
           </div>
         </Panel>
         <Panel title="Loan policy" actions={<Button size="sm" onClick={() => save.mutate({ loanPolicy: policy })} loading={save.isPending}>Save</Button>}>
@@ -93,7 +94,7 @@ export default function SettingsPage() {
         <div className="space-y-5">
           <Panel title="Invite code">
             <p className="text-sm text-muted">Members can join with this code from the mobile app. Rotate it if it was shared too widely.</p>
-            <p className="my-3 font-mono text-2xl tracking-widest text-navy">{group.data.inviteCode ?? 'Disabled'}</p>
+            <p className="my-3 font-mono text-2xl tracking-widest text-plum">{group.data.inviteCode ?? 'Disabled'}</p>
             <div className="flex gap-2"><Button size="sm" variant="secondary" onClick={() => rotate.mutate(false)}>New code</Button>{group.data.inviteCode && <Button size="sm" variant="ghost" onClick={() => rotate.mutate(true)}>Disable</Button>}</div>
           </Panel>
           <Panel title="Integrations">

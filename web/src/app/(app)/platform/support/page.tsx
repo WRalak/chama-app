@@ -50,7 +50,7 @@ export default function SupportPage() {
                 { accessorKey: 'purpose', header: 'Purpose' },
                 { accessorKey: 'status', header: 'Status', cell: ({ row }) => <StatusBadge status={row.original.status} /> },
                 { accessorKey: 'expiresAt', header: 'Expires', cell: ({ row }) => dateTime(row.original.expiresAt) },
-                { id: 'open', header: '', cell: ({ row }) => (row.original.status === 'APPROVED' ? <a className="text-sm text-forest hover:underline" href={`/g/${row.original.groupId}/contributions`}>Open (read-only)</a> : null) },
+                { id: 'open', header: '', cell: ({ row }) => (row.original.status === 'APPROVED' ? <a className="text-sm text-berry hover:underline" href={`/g/${row.original.groupId}/contributions`}>Open (read-only)</a> : null) },
               ]}
             />
           </Panel>

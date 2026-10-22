@@ -50,7 +50,7 @@ export function PaymentDrawer({ payment, onClose }: { payment: PaymentItem | nul
               <ul className="divide-y divide-line rounded-md border border-line text-sm">
                 {history.data.evidence.map((e) => (
                   <li key={e.id} className="flex justify-between gap-2 px-3 py-2">
-                    <a className="text-forest hover:underline" href={fileUrl(`groups/${groupId}/payments/${payment.id}/evidence/${e.id}`)} target="_blank" rel="noreferrer">{e.fileName}</a>
+                    <a className="text-berry hover:underline" href={fileUrl(`groups/${groupId}/payments/${payment.id}/evidence/${e.id}`)} target="_blank" rel="noreferrer">{e.fileName}</a>
                     <span className="text-xs text-muted">{e.uploadedByName} · {dateTime(e.createdAt)}</span>
                   </li>
                 ))}
@@ -61,7 +61,7 @@ export function PaymentDrawer({ payment, onClose }: { payment: PaymentItem | nul
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">History</h3>
             <ol className="space-y-1.5 border-l border-line pl-3 text-sm">
               {history.data.events.map((e) => (
-                <li key={e.id}><span className="font-medium text-navy">{e.label}</span><span className="text-xs text-muted"> · {dateTime(e.at)}{e.actorName ? ` · ${e.actorName}` : ''}</span>{e.note && <p className="text-xs text-muted">{e.note}</p>}</li>
+                <li key={e.id}><span className="font-medium text-plum">{e.label}</span><span className="text-xs text-muted"> · {dateTime(e.at)}{e.actorName ? ` · ${e.actorName}` : ''}</span>{e.note && <p className="text-xs text-muted">{e.note}</p>}</li>
               ))}
             </ol>
           </div>
@@ -83,7 +83,7 @@ export function PaymentDrawer({ payment, onClose }: { payment: PaymentItem | nul
       )}
       {payment.status === 'PENDING' && can(Permission.CONTRIBUTIONS_VERIFY) && (
         <div className="mt-6 space-y-3 rounded-md border border-line bg-canvas p-3">
-          <p className="text-sm text-navy">Confirm only after checking the money is in the group account or cash box.</p>
+          <p className="text-sm text-plum">Confirm only after checking the money is in the group account or cash box.</p>
           {recordedByMe && <p className="text-xs text-warning">You recorded this payment, so another officer must verify it.</p>}
           {mode === 'fail' && (
             <Field label="Why did it fail?" htmlFor="fail">
@@ -108,7 +108,7 @@ export function PaymentDrawer({ payment, onClose }: { payment: PaymentItem | nul
       )}
       {payment.status === 'CONFIRMED' && can(Permission.LEDGER_ADJUST) && (
         <div className="mt-6 space-y-3 rounded-md border border-line p-3">
-          <p className="text-sm text-navy">Reversing posts a mirror entry. The original stays on record.</p>
+          <p className="text-sm text-plum">Reversing posts a mirror entry. The original stays on record.</p>
           {mode === 'reverse' ? (
             <>
               <Field label="Reason for reversal" htmlFor="rev" hint="Required. This is written to the audit log.">

@@ -53,7 +53,7 @@ export default function ApplyLoan() {
           <Chips value={memberId} onChange={setMemberId} options={(members.data ?? []).map((m) => ({ value: m.membershipId, label: m.fullName }))} />
         </>
       )}
-      <Field label="Amount to borrow" prefix="KES" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === null ? 'Enter a valid amount' : undefined} />
+      <Field label="Amount to borrow" prefix="KSh" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === null ? 'Enter a valid amount' : undefined} />
       <Field label="Number of installments" keyboardType="number-pad" value={installments} onChangeText={(t) => setInstallments(t.replace(/\D/g, ''))} hint={group.data ? `Up to ${group.data.loanPolicy.maxInstallments}` : undefined} />
       {quote.isFetching && !q ? <Loading /> : quote.error ? <Notice tone="red">{(quote.error as Error).message}</Notice> : q && (
         <>

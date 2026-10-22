@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BrandLockup, BrandMark } from '@/components/brand';
 import { Button, T } from '@/components/ui';
 import { markOnboarded, readOnboarded } from '@/lib/storage';
-import { colors, radius, space } from '@/theme';
+import { colors, radius, space, withFont } from '@/theme';
 
 /* ---------- illustrations: built from the app's own UI language, no image assets ---------- */
 
@@ -15,15 +15,15 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 function Pill({ label, tone }: { label: string; tone: 'green' | 'amber' | 'neutral' }) {
-  const t = { green: [colors.forestTint, colors.forest], amber: [colors.warningTint, '#B45309'], neutral: [colors.slateTint, '#334155'] }[tone];
-  return <Text style={{ backgroundColor: t[0], color: t[1], fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</Text>;
+  const t = { green: [colors.blush, colors.berry], amber: [colors.pendingTint, colors.pendingText], neutral: [colors.neutralTint, colors.muted] }[tone];
+  return <Text style={withFont({ backgroundColor: t[0], color: t[1], fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, overflow: 'hidden', textTransform: 'uppercase', letterSpacing: 0.4 })}>{label}</Text>;
 }
 
 function OweArt() {
   return (
     <Card>
       <T variant="tiny">NEXT PAYMENT · UPENDO CHAMA</T>
-      <Text style={{ fontSize: 28, fontWeight: '800', color: colors.navy }}>KES 5,000</Text>
+      <Text style={withFont({ fontSize: 28, fontWeight: '800', color: colors.text })}>KSh 5,000</Text>
       <T variant="small">Due Friday, 7 Nov · weekly contribution</T>
       <View style={{ height: 1, backgroundColor: colors.border }} />
       {[['October', 'Paid', 'green'], ['November', 'Due', 'amber'], ['December', 'Upcoming', 'neutral']].map(([m, s, t]) => (
@@ -47,12 +47,12 @@ function PayoutArt() {
     <Card>
       <T variant="tiny">PAYOUT ORDER · APPROVED</T>
       {rows.map(([n, who, when, me]) => (
-        <View key={n} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: me ? space.sm : 0, marginHorizontal: me ? -space.sm : 0, borderRadius: radius.md, backgroundColor: me ? colors.forestTint : 'transparent' }}>
-          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: me ? colors.forest : colors.slateTint, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={{ fontWeight: '700', color: me ? colors.white : colors.navy }}>{n}</Text>
+        <View key={n} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, padding: me ? space.sm : 0, marginHorizontal: me ? -space.sm : 0, borderRadius: radius.md, backgroundColor: me ? colors.blush : 'transparent' }}>
+          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: me ? colors.berry : colors.neutralTint, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={withFont({ fontWeight: '700', color: me ? colors.white : colors.text })}>{n}</Text>
           </View>
-          <Text style={{ flex: 1, fontSize: 15, fontWeight: me ? '700' : '400', color: colors.navy }}>{who}</Text>
-          <T variant="small" style={{ color: me ? colors.forest : colors.muted, fontWeight: me ? '700' : '400' }}>{when}</T>
+          <Text style={withFont({ flex: 1, fontSize: 15, fontWeight: me ? '700' : '400', color: colors.text })}>{who}</Text>
+          <T variant="small" style={{ color: me ? colors.berry : colors.muted, fontWeight: me ? '700' : '400' }}>{when}</T>
         </View>
       ))}
     </Card>
@@ -70,11 +70,11 @@ function TrustArt() {
     <Card>
       {steps.map(([icon, label]) => (
         <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.forestTint, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name={icon as never} size={18} color={colors.forest} />
+          <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.blush, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name={icon as never} size={18} color={colors.berry} />
           </View>
           <T variant="body" style={{ flex: 1 }}>{label}</T>
-          <Ionicons name="checkmark-circle" size={18} color={colors.emerald} />
+          <Ionicons name="checkmark-circle" size={18} color={colors.rose} />
         </View>
       ))}
     </Card>
@@ -131,7 +131,7 @@ export default function Welcome() {
       <View style={{ height: 48, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', paddingHorizontal: space.lg }}>
         {!last && (
           <Pressable onPress={() => finish('/(auth)/sign-in')} accessibilityRole="button" hitSlop={12} style={{ padding: space.sm }}>
-            <Text style={{ color: colors.muted, fontWeight: '600', fontSize: 15 }}>Skip</Text>
+            <Text style={withFont({ color: colors.muted, fontWeight: '600', fontSize: 15 })}>Skip</Text>
           </Pressable>
         )}
       </View>
@@ -162,7 +162,7 @@ export default function Welcome() {
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: space.sm }} accessibilityLabel={`Page ${index + 1} of ${SLIDES.length}`}>
           {SLIDES.map((s, i) => (
             <Pressable key={s.key} onPress={() => goTo(i)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`Go to page ${i + 1}`}>
-              <View style={{ width: i === index ? 22 : 8, height: 8, borderRadius: 4, backgroundColor: i === index ? colors.forest : colors.border }} />
+              <View style={{ width: i === index ? 22 : 8, height: 8, borderRadius: 4, backgroundColor: i === index ? colors.berry : colors.border }} />
             </Pressable>
           ))}
         </View>

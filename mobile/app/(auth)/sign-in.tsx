@@ -9,7 +9,7 @@ import { BrandHeader } from '@/components/brand';
 import { Button, Field, Notice, Screen, T } from '@/components/ui';
 import { errorText } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { colors, space } from '@/theme';
+import { colors, space, withFont } from '@/theme';
 
 const schema = z.object({ phone: phoneSchema, password: z.string().min(1, 'Enter your password') });
 type Form = z.input<typeof schema>;
@@ -34,12 +34,12 @@ export default function SignIn() {
       {error && <Notice tone="red" icon="alert-circle-outline">{error}</Notice>}
       <Button title="Sign in" onPress={submit} loading={formState.isSubmitting} />
       <View style={{ marginTop: space.lg, alignItems: 'center', gap: space.md }}>
-        <Link href="/(auth)/forgot-password" style={{ color: colors.forest, fontWeight: '600', padding: 8 }}>
+        <Link href="/(auth)/forgot-password" style={withFont({ color: colors.berry, fontWeight: '600', padding: 8 })}>
           Forgot password?
         </Link>
         <T variant="small">
           New to ChamaHub?{' '}
-          <Link href="/(auth)/sign-up" style={{ color: colors.forest, fontWeight: '600' }}>
+          <Link href="/(auth)/sign-up" style={withFont({ color: colors.berry, fontWeight: '600' })}>
             Create an account
           </Link>
         </T>

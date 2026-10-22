@@ -41,7 +41,7 @@ export async function registerForPush(): Promise<string | null> {
     const projectId = (Constants.expoConfig?.extra as { eas?: { projectId?: string } } | undefined)?.eas?.projectId ?? Constants.easConfig?.projectId;
     if (!projectId) return null;
     if (Platform.OS === 'android') {
-      await N.setNotificationChannelAsync('default', { name: 'ChamaHub', importance: N.AndroidImportance.HIGH, lightColor: '#14532D' });
+      await N.setNotificationChannelAsync('default', { name: 'ChamaHub', importance: N.AndroidImportance.HIGH, lightColor: '#E84D8A' });
     }
     let { status } = await N.getPermissionsAsync();
     if (status !== 'granted') status = (await N.requestPermissionsAsync()).status;

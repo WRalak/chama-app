@@ -168,6 +168,8 @@ export const groupSettingsSchema = z.object({
   allowEarlyPayout: z.boolean(),
   /** Hold a payout while the recipient has overdue contributions, fines or loan installments. */
   holdPayoutWhenRecipientInArrears: z.boolean(),
+  /** Expenses, payouts, distributions and loans also need one approval from a Joint Signatory. */
+  requireJointSignatory: z.boolean(),
 });
 export type GroupSettingsInput = z.infer<typeof groupSettingsSchema>;
 
@@ -181,6 +183,7 @@ export const defaultGroupSettings: GroupSettingsInput = {
   missedContributionPolicy: 'PAY_CONFIRMED_WITH_REASON',
   allowEarlyPayout: false,
   holdPayoutWhenRecipientInArrears: false,
+  requireJointSignatory: false,
 };
 
 export const createGroupSchema = z.object({
@@ -653,3 +656,11 @@ export const aiChatSchema = z.object({
   locale: z.enum(AI_LOCALES).default('en'),
 });
 export type AiChatInput = z.infer<typeof aiChatSchema>;
+
+/* ---------- officers ---------- */
+
+/** Roles whose change produces a handover record (auditors hand over too, but hold no working records). */
+export const HANDOVER_ROLES = ['CHAIRPERSON', 'VICE_CHAIRPERSON', 'TREASURER', 'SECRETARY'] as const;
+export const createHandoverSchema = z.object({ role: z.enum(HANDOVER_ROLES), notes: z.string().trim().max(2000).optional() });
+export const acknowledgeHandoverSchema = z.object({ note: z.string().trim().max(1000).optional() });
+export const sendRemindersSchema = z.object({ memberIds: z.array(z.string()).max(500).optional() });

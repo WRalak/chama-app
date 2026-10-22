@@ -29,7 +29,7 @@ export default function NotificationsPage() {
           {!inbox.data ? <LoadingRows /> : inbox.data.items.length === 0 ? <EmptyState title="No notifications" /> : (
             <ul className="divide-y divide-line">
               {inbox.data.items.map((n) => (
-                <li key={n.id} className={cn('px-4 py-3', !n.readAt && 'bg-forest-50/50')} onClick={() => !n.readAt && read.mutate(n.id)}>
+                <li key={n.id} className={cn('px-4 py-3', !n.readAt && 'bg-blush/50')} onClick={() => !n.readAt && read.mutate(n.id)}>
                   <div className="flex items-start justify-between gap-3">
                     <p className={cn('text-sm', !n.readAt && 'font-medium')}>{n.title}</p>
                     <span className="shrink-0 text-2xs text-muted">{dateTime(n.createdAt)}</span>

@@ -26,7 +26,7 @@ export default function NotificationSettings() {
   if (!me.data) return <Loading />;
   const prefs = save.variables ?? me.data.preferences;
   const toggle = (k: keyof NotificationPreferences, v: boolean) => save.mutate({ ...prefs, [k]: v });
-  const sw = (k: keyof NotificationPreferences, label: string) => <Switch value={prefs[k]} onValueChange={(v) => toggle(k, v)} trackColor={{ true: colors.emerald }} accessibilityLabel={label} />;
+  const sw = (k: keyof NotificationPreferences, label: string) => <Switch value={prefs[k]} onValueChange={(v) => toggle(k, v)} trackColor={{ true: colors.rose }} accessibilityLabel={label} />;
   return (
     <Screen>
       <Stack.Screen options={{ title: 'Notifications' }} />

@@ -126,7 +126,7 @@ function CreateCycle({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
               <p className="mb-1 text-xs font-medium">Participants ({order.length})</p>
               <div className="flex max-h-28 flex-wrap gap-1.5 overflow-auto">
                 {(members.data ?? []).map((m) => (
-                  <button key={m.membershipId} type="button" onClick={() => toggle(m.membershipId)} className={cn('rounded border px-2 py-0.5 text-xs', included.has(m.membershipId) ? 'border-forest bg-forest-50 text-forest' : 'border-line text-muted')}>{m.fullName}</button>
+                  <button key={m.membershipId} type="button" onClick={() => toggle(m.membershipId)} className={cn('rounded border px-2 py-0.5 text-xs', included.has(m.membershipId) ? 'border-rose bg-blush text-berry' : 'border-line text-muted')}>{m.fullName}</button>
                 ))}
               </div>
             </div>
@@ -202,7 +202,7 @@ function RoundDrawer({ cycle, round, onClose }: { cycle: RotationCycle; round: R
           ]}
         />
         <div>
-          <div className="h-2 overflow-hidden rounded bg-canvas"><div className="h-full bg-emerald" style={{ width: `${pct}%` }} /></div>
+          <div className="h-2 overflow-hidden rounded bg-canvas"><div className="h-full bg-rose" style={{ width: `${pct}%` }} /></div>
           <p className="mt-1 text-xs text-muted">{pct}% of the expected pot is confirmed. Unverified payment claims are never counted.</p>
         </div>
 
@@ -328,7 +328,7 @@ function AmendDialog({ cycle, open, onOpenChange }: { cycle: RotationCycle; open
                 <div className="flex flex-wrap gap-1.5">
                   {outside.map((m) => {
                     const on = other.includes(m.membershipId);
-                    return <button key={m.membershipId} type="button" onClick={() => setOther(kind === 'REPLACE_MEMBER' ? [m.membershipId] : on ? other.filter((x) => x !== m.membershipId) : [...other, m.membershipId])} className={cn('rounded border px-2 py-0.5 text-xs', on ? 'border-forest bg-forest-50 text-forest' : 'border-line text-muted')}>{m.fullName}</button>;
+                    return <button key={m.membershipId} type="button" onClick={() => setOther(kind === 'REPLACE_MEMBER' ? [m.membershipId] : on ? other.filter((x) => x !== m.membershipId) : [...other, m.membershipId])} className={cn('rounded border px-2 py-0.5 text-xs', on ? 'border-rose bg-blush text-berry' : 'border-line text-muted')}>{m.fullName}</button>;
                   })}
                 </div>
               ) : <p className="text-sm text-muted">Every active member is already in this rotation.</p>}
@@ -436,7 +436,7 @@ export default function RotationsPage() {
               <thead><tr className="border-b border-line bg-canvas/60 text-left text-xs text-muted"><th className="px-3 py-2 font-medium">Round</th><th className="px-3 py-2 font-medium">Recipient</th><th className="px-3 py-2 font-medium">Payout date</th><th className="px-3 py-2 text-right font-medium">{multi ? 'Share' : 'Expected'}</th><th className="px-3 py-2 text-right font-medium">Confirmed</th><th className="px-3 py-2 text-right font-medium">Shortfall</th><th className="px-3 py-2 font-medium">Stage</th><th className="px-3 py-2 font-medium">Reference</th></tr></thead>
               <tbody>
                 {cycle.rounds.map((r) => (
-                  <tr key={r.id} className={cn('cursor-pointer border-b border-line last:border-0 hover:bg-canvas', cycle.currentRound?.round === r.round && 'bg-forest-50/60', r.status === 'CANCELLED' && 'text-muted line-through')} onClick={() => setRoundId(r.id)}>
+                  <tr key={r.id} className={cn('cursor-pointer border-b border-line last:border-0 hover:bg-canvas', cycle.currentRound?.round === r.round && 'bg-blush/60', r.status === 'CANCELLED' && 'text-muted line-through')} onClick={() => setRoundId(r.id)}>
                     <td className="px-3 py-2">{r.round}{multi ? `.${r.slot}` : ''}</td>
                     <td className="px-3 py-2 font-medium">{r.recipientName}</td>
                     <td className="px-3 py-2">{date(r.payoutDate)}</td>

@@ -89,7 +89,7 @@ export default function RotationNew() {
       ) : (
         <>
           <Field label="Name" value={name} onChangeText={setName} placeholder="e.g. 2027 Cycle" />
-          <Field label="Contribution per member per round" prefix="KES" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
+          <Field label="Contribution per member per round" prefix="KSh" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} />
           <Chips value={frequency} onChange={setFrequency} options={FREQUENCIES.map((f) => ({ value: f, label: LABELS.frequency[f] }))} />
           <Field label="First payout date" value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" hint={`Later rounds follow ${LABELS.frequency[frequency].toLowerCase()} from this date (month-end dates are kept).`} />
           <T variant="label" style={{ marginBottom: 6 }}>Participants</T>
@@ -97,8 +97,8 @@ export default function RotationNew() {
             {members.data.map((m) => {
               const on = order.includes(m.membershipId);
               return (
-                <Pressable key={m.membershipId} onPress={() => setOrder(on ? order.filter((x) => x !== m.membershipId) : [...order, m.membershipId])} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={{ minHeight: 40, paddingHorizontal: space.md, justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: on ? colors.forest : colors.border, backgroundColor: on ? colors.forestTint : colors.white }}>
-                  <T variant="label" style={{ color: on ? colors.forest : colors.muted }}>{m.fullName}</T>
+                <Pressable key={m.membershipId} onPress={() => setOrder(on ? order.filter((x) => x !== m.membershipId) : [...order, m.membershipId])} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={{ minHeight: 40, paddingHorizontal: space.md, justifyContent: 'center', borderRadius: 20, borderWidth: 1, borderColor: on ? colors.berry : colors.border, backgroundColor: on ? colors.blush : colors.white }}>
+                  <T variant="label" style={{ color: on ? colors.berry : colors.muted }}>{m.fullName}</T>
                 </Pressable>
               );
             })}
@@ -110,7 +110,7 @@ export default function RotationNew() {
           <Chips value={perRound} onChange={setPerRound} options={['1', '2', '3'].map((v) => ({ value: v, label: v }))} />
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.lg }}>
             <T variant="body" style={{ flex: 1 }}>Recipients also contribute in their own round</T>
-            <Switch value={recipientContributes} onValueChange={setRecipientContributes} trackColor={{ true: colors.emerald }} />
+            <Switch value={recipientContributes} onValueChange={setRecipientContributes} trackColor={{ true: colors.rose }} />
           </View>
           <T variant="label" style={{ marginBottom: 6 }}>Who approves the schedule?</T>
           <Chips value={approval} onChange={setApproval} options={[{ value: 'OFFICERS', label: 'Another officer' }, { value: 'MEMBER_VOTE', label: 'Members vote' }]} />

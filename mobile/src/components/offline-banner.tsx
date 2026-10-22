@@ -10,7 +10,7 @@ export function OfflineBanner() {
   const net = useNetworkState();
   if (net.isConnected !== false) return null;
   return (
-    <View style={{ backgroundColor: colors.navy, paddingVertical: 6, paddingHorizontal: 16 }} accessibilityRole="alert">
+    <View style={{ backgroundColor: colors.text, paddingVertical: 6, paddingHorizontal: 16 }} accessibilityRole="alert">
       <T variant="small" style={{ color: colors.white, textAlign: 'center' }}>
         You are offline. Showing figures loaded earlier. Nothing can be recorded or approved until you reconnect.
       </T>
@@ -23,8 +23,8 @@ export function MaintenanceBanner() {
   const { data } = useQuery({ queryKey: ['platform-notice'], queryFn: () => api<{ maintenanceNotice: string | null }>('platform-notice', { auth: false }), staleTime: 5 * 60_000 });
   if (!data?.maintenanceNotice) return null;
   return (
-    <View style={{ backgroundColor: colors.warningTint, paddingVertical: 8, paddingHorizontal: 16 }} accessibilityRole="alert">
-      <T variant="small" style={{ color: '#92400E', textAlign: 'center' }}>{data.maintenanceNotice}</T>
+    <View style={{ backgroundColor: colors.pendingTint, paddingVertical: 8, paddingHorizontal: 16 }} accessibilityRole="alert">
+      <T variant="small" style={{ color: colors.pendingText, textAlign: 'center' }}>{data.maintenanceNotice}</T>
     </View>
   );
 }

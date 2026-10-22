@@ -120,7 +120,7 @@ export default function RecordPayment() {
             </>
           )}
           {params.label && purpose === 'CONTRIBUTION' && <Notice tone="neutral">{`Applied to ${params.label}`}</Notice>}
-          <Field label="Amount received" prefix="KES" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === null ? 'Enter a valid amount' : undefined} />
+          <Field label="Amount received" prefix="KSh" keyboardType="decimal-pad" value={amount} onChangeText={setAmount} error={amount && cents === null ? 'Enter a valid amount' : undefined} />
           <T variant="label" style={{ marginBottom: 6 }}>How was it paid?</T>
           <Chips value={method} onChange={setMethod} options={[{ value: 'CASH', label: 'Cash' }, { value: 'MPESA', label: 'M-Pesa' }, { value: 'BANK_TRANSFER', label: 'Bank' }]} />
           {needsRef && <Field label={method === 'MPESA' ? 'M-Pesa transaction code' : 'Bank reference'} autoCapitalize="characters" value={reference} onChangeText={setReference} hint="Required, so the payment can be checked against the statement." />}

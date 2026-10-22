@@ -34,7 +34,7 @@ function MyPayout({ cycle, r }: { cycle: RotationCycle; r: RotationRoundRow }) {
   if (r.status === 'CANCELLED') return null;
   return (
     <Notice tone={r.status === 'COMPLETED' ? 'green' : r.status === 'PROCESSING' ? 'amber' : 'blue'} icon="gift-outline">
-      <T variant="small" style={{ color: colors.navy }}>
+      <T variant="small" style={{ color: colors.text }}>
         {r.status === 'COMPLETED'
           ? `You received ${kes(r.payoutAmountCents ?? 0)} in round ${r.round}${r.payoutReference ? ` (ref ${r.payoutReference})` : ''}.`
           : r.status === 'PROCESSING' && r.disbursement
@@ -43,8 +43,8 @@ function MyPayout({ cycle, r }: { cycle: RotationCycle; r: RotationRoundRow }) {
       </T>
       {r.readiness && !r.readiness.ready && r.status !== 'PROCESSING' && (
         <View style={{ marginTop: space.sm }}>
-          <T variant="small" style={{ fontWeight: '600', color: colors.navy }}>Waiting on:</T>
-          {r.readiness.checks.filter((c) => c.status === 'FAIL').map((c) => <T key={c.key} variant="small" style={{ color: colors.navy }}>{`• ${c.detail}`}</T>)}
+          <T variant="small" style={{ fontWeight: '600', color: colors.text }}>Waiting on:</T>
+          {r.readiness.checks.filter((c) => c.status === 'FAIL').map((c) => <T key={c.key} variant="small" style={{ color: colors.text }}>{`• ${c.detail}`}</T>)}
         </View>
       )}
       {r.can.confirm && <Button title="I received it" onPress={() => askToConfirm('Confirm receipt?', 'Only confirm once the money is in your M-Pesa or account.', 'Yes, received', () => confirm.mutate(undefined))} loading={confirm.isPending} style={{ marginTop: space.sm }} />}
@@ -98,8 +98,8 @@ export default function Rotation() {
                     <View>
                       <T variant="small">{`${date(r.payoutDate)} · ${STAGE[r.status]}`}</T>
                       {['READINESS_CHECK', 'AWAITING_APPROVAL', 'APPROVED'].includes(r.status) && (
-                        <View style={{ height: 4, backgroundColor: colors.slateTint, borderRadius: 2, marginTop: 6 }} accessibilityLabel={`${pct}% collected`}>
-                          <View style={{ height: 4, width: `${pct}%`, backgroundColor: colors.emerald, borderRadius: 2 }} />
+                        <View style={{ height: 4, backgroundColor: colors.neutralTint, borderRadius: 2, marginTop: 6 }} accessibilityLabel={`${pct}% collected`}>
+                          <View style={{ height: 4, width: `${pct}%`, backgroundColor: colors.rose, borderRadius: 2 }} />
                         </View>
                       )}
                     </View>

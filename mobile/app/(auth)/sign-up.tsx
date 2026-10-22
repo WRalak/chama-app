@@ -9,7 +9,7 @@ import { BrandHeader } from '@/components/brand';
 import { Button, Field, Notice, Screen, T } from '@/components/ui';
 import { errorText } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { colors, space } from '@/theme';
+import { colors, space, withFont } from '@/theme';
 
 const schema = registerSchema.extend({ confirm: z.string() }).refine((v) => v.password === v.confirm, { message: 'Passwords do not match', path: ['confirm'] });
 type Form = z.input<typeof schema>;
@@ -40,7 +40,7 @@ export default function SignUp() {
       <View style={{ marginTop: space.lg, alignItems: 'center' }}>
         <T variant="small">
           Already registered?{' '}
-          <Link href="/(auth)/sign-in" style={{ color: colors.forest, fontWeight: '600' }}>
+          <Link href="/(auth)/sign-in" style={withFont({ color: colors.berry, fontWeight: '600' })}>
             Sign in
           </Link>
         </T>

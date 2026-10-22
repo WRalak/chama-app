@@ -45,7 +45,7 @@ export default function Findings() {
               <T variant="label">{x.title}</T>
               <T variant="body">{x.details}</T>
               <T variant="small">{`${x.raisedByName} · ${dateTime(x.createdAt)}${x.reference ? ` · ${x.reference}` : ''}`}</T>
-              {x.response && <T variant="small" style={{ marginTop: 6, color: colors.navy }}>{`${x.respondedByName}: ${x.response}`}</T>}
+              {x.response && <T variant="small" style={{ marginTop: 6, color: colors.text }}>{`${x.respondedByName}: ${x.response}`}</T>}
               {x.canRespond && (replyTo === x.id ? (
                 <View style={{ marginTop: space.sm }}>
                   <Field label="Response" value={response} onChangeText={setResponse} />

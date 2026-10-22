@@ -5,7 +5,7 @@ import { LABELS, ObligationItem, Paginated, PaymentItem } from '@chamahub/shared
 import { Button, Chips, Empty, ErrorView, Loading, Row, Screen, Section, StatusBadge, T } from '@/components/ui';
 import { api } from '@/lib/api';
 import { date, kes } from '@/lib/format';
-import { space } from '@/theme';
+import { colors, space } from '@/theme';
 
 export default function Contributions() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
@@ -19,7 +19,7 @@ export default function Contributions() {
     <Screen refreshing={obligations.isRefetching} onRefresh={() => { obligations.refetch(); payments.refetch(); }}>
       <Stack.Screen options={{ title: 'My contributions' }} />
       <T variant="small">Outstanding now</T>
-      <T variant="amount" style={{ color: outstanding ? '#DC2626' : '#15803D', marginBottom: space.md }}>{kes(outstanding)}</T>
+      <T variant="amount" style={{ color: outstanding ? colors.errorText : colors.successText, marginBottom: space.md }}>{kes(outstanding)}</T>
       <Button title="Make a contribution" onPress={() => router.push(`/(app)/group/${groupId}/pay`)} style={{ marginBottom: space.lg }} />
       <Chips value={filter} onChange={setFilter} options={[{ value: 'outstanding', label: 'Outstanding' }, { value: 'all', label: 'All periods' }, { value: 'payments', label: 'My payments' }]} />
       {filter !== 'payments' ? (

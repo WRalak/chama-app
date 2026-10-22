@@ -17,10 +17,10 @@ export function OrderList({ order, names, onChange, perRound = 1, firstRound = 1
           <T variant="small" style={{ width: 64 }}>{`Round ${firstRound + Math.floor(i / perRound)}`}</T>
           <T variant="body" style={{ flex: 1 }}>{names.get(id) ?? id}</T>
           <Pressable onPress={() => move(i, -1)} disabled={i === 0} accessibilityRole="button" accessibilityLabel={`Move ${names.get(id)} earlier`} hitSlop={6} style={{ padding: 10, opacity: i === 0 ? 0.3 : 1 }}>
-            <Ionicons name="arrow-up" size={20} color={colors.forest} />
+            <Ionicons name="arrow-up" size={20} color={colors.berry} />
           </Pressable>
           <Pressable onPress={() => move(i, 1)} disabled={i === order.length - 1} accessibilityRole="button" accessibilityLabel={`Move ${names.get(id)} later`} hitSlop={6} style={{ padding: 10, opacity: i === order.length - 1 ? 0.3 : 1 }}>
-            <Ionicons name="arrow-down" size={20} color={colors.forest} />
+            <Ionicons name="arrow-down" size={20} color={colors.berry} />
           </Pressable>
         </View>
       ))}

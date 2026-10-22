@@ -272,7 +272,7 @@ describe('Financial workflows', () => {
       const pdf = await as(app, alice).get(`/v1/me/statement/pdf`).expect(200);
       expect(pdf.body.length).toBeGreaterThan(1000);
       const dash = await as(app, alice).get('/v1/me/dashboard').expect(200);
-      expect(dash.body).toMatchObject({ activeGroups: 1, payoutsReceivedCents: 200_000, outstandingLoanCents: 0 });
+      expect(dash.body).toMatchObject({ activeGroups: 1, payoutsReceivedCents: 200_000, outstandingLoanCents: 0, totalContributedCents: 300_000, pendingVerification: { count: 0, cents: 0 } });
       const cal = await as(app, alice).get('/v1/me/calendar').expect(200);
       expect(cal.body.some((e: { kind: string }) => e.kind === 'CONTRIBUTION')).toBe(true);
     });

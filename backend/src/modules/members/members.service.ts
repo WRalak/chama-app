@@ -8,6 +8,7 @@ import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { MemberFinanceService } from '../finance/member-finance.service';
 import { ObligationsService } from '../finance/obligations.service';
 import { readSettings } from '../finance/policies';
+import { OfficersService } from '../officers/officers.service';
 import { NotificationsService, readPreferences } from '../notifications/notifications.service';
 
 const INVITE_TTL_DAYS = 14;
@@ -20,6 +21,7 @@ export class MembersService {
     private readonly finance: MemberFinanceService,
     private readonly obligations: ObligationsService,
     private readonly notifications: NotificationsService,
+    private readonly officers: OfficersService,
   ) {}
 
   async list(groupId: string, viewer: MembershipContext, opts: { status?: string; q?: string }): Promise<MemberRow[]> {
@@ -90,6 +92,14 @@ export class MembersService {
     };
   }
 
+  /** A group that requires a Joint Signatory must keep at least one, or approvals could never complete. */
+  private async assertAnotherSignatory(groupId: string, membershipId: string) {
+    const group = await this.prisma.group.findUniqueOrThrow({ where: { id: groupId }, select: { settings: true } });
+    if (!readSettings(group.settings).requireJointSignatory) return;
+    const others = await this.prisma.membership.count({ where: { groupId, status: 'ACTIVE', id: { not: membershipId }, specialRoles: { has: 'JOINT_SIGNATORY' } } });
+    if (!others) throw new UnprocessableEntityException('This is the group’s only Joint Signatory, and the group requires one. Appoint another first, or turn the requirement off in settings.');
+  }
+
   private async chairCount(groupId: string) {
     return this.prisma.membership.count({ where: { groupId, role: 'CHAIRPERSON', status: 'ACTIVE' } });
   }
@@ -106,6 +116,8 @@ export class MembersService {
     }
     const updated = await this.prisma.$transaction(async (tx) => {
       const u = await tx.membership.update({ where: { id: membershipId }, data: { role } });
+      // The outgoing and incoming officer get a permanent record of what changed hands.
+      await this.officers.recordRoleChange(tx, groupId, membershipId, target.role, role, actor.userId);
       await this.audit.log({ groupId, actorUserId: actor.userId, action: 'member.role_changed', entityType: 'Membership', entityId: membershipId, before: { role: target.role }, after: { role }, reason, meta }, tx);
       return u;
     });
@@ -119,6 +131,7 @@ export class MembersService {
     if (status !== 'ACTIVE' && target.role === 'CHAIRPERSON' && (await this.chairCount(groupId)) <= 1) {
       throw new UnprocessableEntityException('Assign another chairperson first.');
     }
+    if (status !== 'ACTIVE' && target.specialRoles.includes('JOINT_SIGNATORY')) await this.assertAnotherSignatory(groupId, membershipId);
     if (status === 'EXITED') {
       const loanBalance = (await this.finance.loanBalances(groupId, [membershipId])).get(membershipId) ?? 0;
       if (loanBalance > 0) throw new UnprocessableEntityException('This member has an outstanding loan. Settle it before exiting the member.');
@@ -138,6 +151,7 @@ export class MembersService {
     const roles = [...new Set(specialRoles)];
     if (roles.includes('READ_ONLY') && roles.length > 1) throw new UnprocessableEntityException('A read-only member cannot also hold approval roles');
     if (roles.includes('READ_ONLY') && target.role !== 'MEMBER') throw new UnprocessableEntityException('Only ordinary members can be made read-only; change their role first');
+    if (target.specialRoles.includes('JOINT_SIGNATORY') && !roles.includes('JOINT_SIGNATORY')) await this.assertAnotherSignatory(groupId, membershipId);
     await this.prisma.$transaction(async (tx) => {
       await tx.membership.update({ where: { id: membershipId }, data: { specialRoles: roles } });
       await this.audit.log({ groupId, actorUserId: actor.userId, action: 'member.special_roles_changed', entityType: 'Membership', entityId: membershipId, before: { specialRoles: target.specialRoles }, after: { specialRoles: roles }, reason, meta }, tx);

@@ -47,7 +47,7 @@ function LoginForm() {
         Sign in
       </Button>
       <p className="text-center text-sm">
-        <Link href="/forgot-password" className="text-forest hover:underline">
+        <Link href="/forgot-password" className="text-berry hover:underline">
           Forgot your password?
         </Link>
       </p>
@@ -61,7 +61,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center text-center">
           <BrandMark className="h-10 w-10" />
-          <h1 className="mt-3 text-lg font-semibold text-navy">Sign in to ChamaHub</h1>
+          <h1 className="mt-3 text-lg font-semibold text-plum">Sign in to ChamaHub</h1>
           <p className="text-sm text-muted">Administration for Chama officers and platform staff</p>
         </div>
         <div className="rounded-lg border border-line bg-white p-5">

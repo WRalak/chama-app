@@ -7,8 +7,8 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "backgroundColor": "#F8FAFC",
-    "primaryColor": "#14532D",
+    "backgroundColor": "#FFFAFC",
+    "primaryColor": "#B83270",
     "ios": {
       "bundleIdentifier": "ke.chamahub.app",
       "supportsTablet": false
@@ -21,7 +21,7 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#14532D"
+        "backgroundColor": "#42213D"
       }
     },
     "web": {
@@ -38,13 +38,13 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 120,
           "resizeMode": "contain",
-          "backgroundColor": "#F8FAFC"
+          "backgroundColor": "#FFFAFC"
         }
       ],
       [
         "expo-notifications",
         {
-          "color": "#14532D"
+          "color": "#E84D8A"
         }
       ],
       [

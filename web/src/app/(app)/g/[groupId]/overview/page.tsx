@@ -34,11 +34,11 @@ export default function OverviewPage() {
             <EmptyState title="Members use the ChamaHub mobile app" description="Your contributions, loans, payouts, votes and statements are in the app." />
           ) : (
             <div className="space-y-2 text-sm">
-              <p className="text-navy">Your tools in this group:</p>
+              <p className="text-plum">Your tools in this group:</p>
               <ul className="flex flex-wrap gap-2">
                 {[['meetings', 'Meetings', Permission.MEETINGS_MANAGE], ['members', 'Members', Permission.MEMBERS_VIEW], ['decisions', 'Decisions & Votes', Permission.GROUP_VIEW], ['notifications', 'Announcements', Permission.ANNOUNCEMENTS_SEND], ['audit', 'Audit records', Permission.AUDIT_VIEW_AREA]]
                   .filter(([, , p]) => can(p as Permission))
-                  .map(([href, label]) => <li key={href}><Link className="rounded-md border border-line px-3 py-1.5 text-forest hover:bg-canvas" href={`/g/${groupId}/${href}`}>{label}</Link></li>)}
+                  .map(([href, label]) => <li key={href}><Link className="rounded-md border border-line px-3 py-1.5 text-berry hover:bg-canvas" href={`/g/${groupId}/${href}`}>{label}</Link></li>)}
               </ul>
             </div>
           )}
@@ -74,14 +74,14 @@ export default function OverviewPage() {
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chart} margin={{ left: 0, right: 8, top: 4 }}>
-                  <CartesianGrid vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748B' }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={shortKes} tick={{ fontSize: 12, fill: '#64748B' }} axisLine={false} tickLine={false} width={44} />
-                  <Tooltip formatter={(v: number) => kes(v)} cursor={{ fill: '#F8FAFC' }} />
-                  <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="Contributions" fill="#14532D" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="Repayments" fill="#16A34A" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="Expenses" fill="#D97706" radius={[2, 2, 0, 0]} />
+                  <CartesianGrid vertical={false} stroke="#F0DCE6" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#806B7B' }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={shortKes} tick={{ fontSize: 12, fill: '#806B7B' }} axisLine={false} tickLine={false} width={44} />
+                  <Tooltip formatter={(v: number) => kes(v)} cursor={{ fill: '#FCE7F0' }} />
+                  <Legend iconType="square" wrapperStyle={{ fontSize: 12 }} formatter={(value: string) => <span style={{ color: "#42213D" }}>{value}</span>} />
+                  <Bar dataKey="Contributions" fill="#B83270" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Repayments" fill="#E84D8A" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Expenses" fill="#806B7B" radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -90,13 +90,13 @@ export default function OverviewPage() {
           )}
         </Panel>
         <div className="space-y-5">
-          <Panel title="Payments to verify" actions={<Link href={`/g/${groupId}/contributions?tab=payments`} className="text-xs text-forest hover:underline">View all</Link>} flush>
+          <Panel title="Payments to verify" actions={<Link href={`/g/${groupId}/contributions?tab=payments`} className="text-xs text-berry hover:underline">View all</Link>} flush>
             {pending.data?.items.length ? (
               <ul className="divide-y divide-line text-sm">
                 {pending.data.items.map((p) => (
                   <li key={p.id} className="flex items-center justify-between px-4 py-2">
                     <div>
-                      <p className="text-navy">{p.memberName}</p>
+                      <p className="text-plum">{p.memberName}</p>
                       <p className="text-xs text-muted">
                         {date(p.paidAt)} · {LABELS.paymentMethod[p.method]} {p.reference ?? ''}
                       </p>
@@ -109,13 +109,13 @@ export default function OverviewPage() {
               <p className="px-4 py-6 text-center text-sm text-muted">Nothing waiting for verification.</p>
             )}
           </Panel>
-          <Panel title="Loan applications" actions={<Link href={`/g/${groupId}/loans`} className="text-xs text-forest hover:underline">Open loans</Link>} flush>
+          <Panel title="Loan applications" actions={<Link href={`/g/${groupId}/loans`} className="text-xs text-berry hover:underline">Open loans</Link>} flush>
             {loans.data?.length ? (
               <ul className="divide-y divide-line text-sm">
                 {loans.data.map((l) => (
                   <li key={l.id} className="flex items-center justify-between px-4 py-2">
                     <div>
-                      <p className="text-navy">{l.memberName}</p>
+                      <p className="text-plum">{l.memberName}</p>
                       <p className="text-xs text-muted">
                         {l.approvalsReceived}/{l.approvalsRequired} approvals
                       </p>

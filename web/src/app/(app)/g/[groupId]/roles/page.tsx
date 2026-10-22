@@ -53,7 +53,7 @@ export default function RolesPage() {
       <div className="grid gap-5 xl:grid-cols-[220px_1fr]">
         <nav className="space-y-0.5" aria-label="Roles">
           {GROUP_ROLES.map((r) => (
-            <button key={r} onClick={() => setRole(r)} className={cn('flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-white', role === r && 'bg-white font-medium text-forest shadow-sm')}>
+            <button key={r} onClick={() => setRole(r)} className={cn('flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm hover:bg-white', role === r && 'bg-white font-medium text-berry shadow-sm')}>
               {LABELS.groupRole[r]}
               {policy[r] && <Badge tone="amber">custom</Badge>}
             </button>
@@ -101,7 +101,7 @@ export default function RolesPage() {
             </Field>
           </Panel>
           <Panel title="Safeguards that no group setting can override">
-            <ul className="list-disc space-y-1 pl-5 text-sm text-navy">
+            <ul className="list-disc space-y-1 pl-5 text-sm text-plum">
               <li>Whoever records a payment cannot verify it; nobody verifies their own payment.</li>
               <li>Members never approve their own loan; whoever prepares a loan cannot approve it.</li>
               <li>Expenses, payouts and distributions need approval by someone other than who prepared them.</li>

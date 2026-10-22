@@ -48,7 +48,7 @@ export class ReportsService {
         const s = await this.statements.groupStatement(groupId, q.from, q.to, { showMemberNames: true });
         return {
           title: 'Cashbook',
-          headers: ['Date', 'Type', 'Description', 'Member', 'Reference', 'In (KES)', 'Out (KES)', 'Balance (KES)'],
+          headers: ['Date', 'Type', 'Description', 'Member', 'Reference', 'In (KSh)', 'Out (KSh)', 'Balance (KSh)'],
           rows: [['', 'Opening balance', '', '', '', '', '', d(s.openingBalanceCents)], ...s.transactions.map((t) => [t.date, t.type, t.description, t.memberName, t.reference, d(t.inflowCents), d(t.outflowCents), d(t.balanceCents)])],
           totals: { openingCents: s.openingBalanceCents, closingCents: s.closingBalanceCents },
         };
@@ -69,7 +69,7 @@ export class ReportsService {
           ['Closing balance', s.closingBalanceCents],
           ['Loans outstanding (not cash)', s.loansOutstandingCents],
         ];
-        return { title: 'Group statement', headers: ['Line', 'Amount (KES)'], rows: lines.map(([k, v]) => [k, d(v)]) };
+        return { title: 'Group statement', headers: ['Line', 'Amount (KSh)'], rows: lines.map(([k, v]) => [k, d(v)]) };
       }
       case 'contributions': {
         const page = await this.contributions.ledger(groupId, { page: 1, pageSize: 100000, from: q.from, to: q.to, memberId: q.memberId });

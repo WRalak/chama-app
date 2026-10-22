@@ -110,7 +110,7 @@ export default function ImportsPage() {
             <Field label="What are you importing?" htmlFor="i-k">
               <Select id="i-k" value={kind} onChange={(e) => setKind(e.target.value as ImportKind)}>{IMPORT_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</Select>
             </Field>
-            <a className="block text-sm text-forest hover:underline" href={fileUrl(`groups/${groupId}/imports/templates/${kind}.csv`)}>Download the {KIND_LABEL[kind].toLowerCase()} template</a>
+            <a className="block text-sm text-berry hover:underline" href={fileUrl(`groups/${groupId}/imports/templates/${kind}.csv`)}>Download the {KIND_LABEL[kind].toLowerCase()} template</a>
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
             <Button className="w-full" onClick={() => fileRef.current?.click()} loading={upload.isPending}>Choose CSV or Excel file</Button>
             <ul className="list-disc space-y-1 pl-4 text-xs text-muted">
