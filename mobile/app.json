@@ -46,6 +46,13 @@
         {
           "color": "#14532D"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ChamaHub uses your photos only when you attach a payment receipt or screenshot.",
+          "cameraPermission": "ChamaHub uses the camera only when you photograph a payment receipt."
+        }
       ]
     ],
     "experiments": {

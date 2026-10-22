@@ -19,6 +19,8 @@ const PATH: Record<DashboardTask['section'], string> = {
   audit: 'findings',
   members: 'manage/members',
   reports: 'manage',
+  destinations: 'manage/destinations',
+  statements: 'manage/statements',
 };
 
 /** "Review approvals": everything waiting for this officer, counted with the same rules the actions enforce. */

@@ -58,6 +58,21 @@ Roles are per group. See `docs/ARCHITECTURE.md` → *Identity, roles and multi-C
 
 Each Chama opens with the member's own position. Officers also get a dashboard for that group (collections, next payout and readiness, items waiting for them) with shortcuts and the management sections their permissions allow: members, contributions and reconciliation, payout rotation, payout approvals, loans, expenses, meetings, announcements, reports and statements, settings, and activity/audit. Permissions are re-read per group from the API, which enforces them on every request; hidden buttons are only a convenience. Actions never run offline: an action either reaches the server and is recorded, or visibly fails.
 
+### Collections: where to pay, evidence, statements and WhatsApp
+
+- **Payment destinations.** A group can have several: Paybill, Till, bank account, the treasurer's M-Pesa number, cash and others. Each has its details, the responsible officer, how payments are confirmed, and effective dates.
+  - New or changed details need another officer's approval before members see them, and every member is told when they change.
+  - Old details stay on record as *no longer valid*, masked for members.
+  - Members see **How to pay** with copyable numbers.
+- **Evidence and history.** Members and officers can attach a receipt photo, screenshot or PDF (under 3 MB) to a payment. Every status change is logged by the database, whichever code path made it. Each payment shows its full history.
+- **Statement import.** An officer uploads a CSV or Excel statement they downloaded from M-Pesa, a Paybill/Till portal or the bank. ChamaHub detects the columns (they can be changed), previews the file, flags duplicates and matches each line:
+  - A member's own report with the same code and amount, or a single member paying from their registered phone or naming it in the account reference, is a **clear match**.
+  - A name alone is only ever a **suggestion**. Two plausible members make the line **ambiguous**, and a person always chooses.
+  - Confirming a member's report with the statement confirms it. Any other line becomes a payment that a second officer verifies.
+  - Try it with `docs/samples/upendo-paybill-statement-demo.csv` as Joyce (0700 000 003) in the demo data.
+- **WhatsApp summaries.** Collection status, payment receipts, payout notices and *how to pay* are built from confirmed records only and open in WhatsApp. They never include anyone's loans or balances, and they name who has not paid only when the group allows members to see each other's contributions.
+- ChamaHub never asks for or stores an M-Pesa PIN, bank password or OTP, never logs into these accounts, and never reads SMS.
+
 In development, OTP codes are written to the API log (`DEV_LOG_OTP=true`) because no SMS provider is configured.
 
 ## Tests
@@ -83,7 +98,8 @@ Nothing below is presented to users as working unless it is configured.
 | Push notifications | **Implemented; needs a build with an EAS project.** The API sends through the Expo push service, and the app registers on sign-in and deep-links taps to the right screen. Expo Go (Android) and the browser preview cannot receive remote push; run `npx eas init` in `mobile/` and use a development or store build. In-app notifications always work. |
 | Automated payouts (M-Pesa B2C) | **Not implemented.** Payouts are sent through the group's agreed channel and recorded with the transaction reference. Each payout completes only when the recipient confirms or a second officer verifies the reference. B2C needs separate Safaricom onboarding (initiator credentials, result/timeout callbacks). |
 | PDF statements | Working (server-side, pdfkit). |
-| CSV / Excel import, CSV export | Working. Excel is converted to CSV in the browser. |
+| CSV / Excel import, CSV export | Working. Paper-records imports convert Excel to CSV in the browser; statement imports read .xlsx on the server. |
+| Statement import (M-Pesa, Paybill/Till, bank) | **Working, from files the officer downloads.** No account access, scraping or SMS reading. PDF statements are not read yet. |
 | OCR of photographed notebooks | Planned. Extracted figures will always go through the import review queue, never straight into the books. |
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and financial rules, and [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for deployment, backups and the production checklist.

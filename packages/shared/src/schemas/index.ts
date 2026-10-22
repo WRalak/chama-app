@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   AttendanceStatus,
+  DESTINATION_TYPES,
+  DestinationVerification,
   DISTRIBUTION_METHODS,
   FREQUENCIES,
   GROUP_ROLES,
@@ -235,6 +237,8 @@ export const recordPaymentSchema = z.object({
   /** Target obligation / loan / fine. When omitted contributions are applied oldest-first. */
   targetId: z.string().optional(),
   notes: z.string().trim().max(500).optional(),
+  /** The group payment destination the money was sent to. */
+  destinationId: z.string().optional(),
   /** Client-generated key; the same key never records twice. */
   idempotencyKey: z.string().min(8).max(100),
 });
@@ -540,3 +544,101 @@ export const platformSettingsSchema = z.object({
 });
 export type PlatformSettings = z.infer<typeof platformSettingsSchema>;
 export const defaultPlatformSettings: PlatformSettings = { smsEnabled: true, whatsappEnabled: true, emailEnabled: true, maxSupportAccessHours: 24, trialDays: 30, maintenanceNotice: null };
+
+/* ---------- payment destinations ---------- */
+
+export const DESTINATION_USES = ['CONTRIBUTION', 'LOAN_REPAYMENT', 'FINE'] as const;
+
+export const createDestinationSchema = z
+  .object({
+    type: z.enum(DESTINATION_TYPES as [string, ...string[]]),
+    displayName: z.string().trim().min(3).max(80),
+    /** M-Pesa / Airtel / bank name / provider. */
+    provider: z.string().trim().max(60).optional(),
+    /** Phone, Paybill, Till or bank account number. */
+    accountNumber: z.string().trim().max(40).optional(),
+    /** For Paybill: what to enter as the account number, e.g. "UPENDO-<your phone>". */
+    accountReference: z.string().trim().max(60).optional(),
+    accountName: z.string().trim().max(120).optional(),
+    branch: z.string().trim().max(80).optional(),
+    instructions: z.string().trim().max(1000).optional(),
+    /** Empty means any purpose. */
+    intendedUse: z.array(z.enum(DESTINATION_USES)).max(3).default([]),
+    responsibleMemberId: z.string().optional(),
+    verification: z.enum([DestinationVerification.MANUAL_REVIEW, DestinationVerification.STATEMENT_IMPORT, DestinationVerification.PROVIDER_CALLBACK]).default('MANUAL_REVIEW'),
+    effectiveFrom: isoDateSchema.optional(),
+    /** The destination this one replaces; it retires when this one is approved. */
+    replacesId: z.string().optional(),
+    reason: reasonSchema,
+  })
+  .superRefine((v, ctx) => {
+    const need = (ok: boolean, path: string, message: string) => !ok && ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    if (['PERSONAL_MPESA', 'OTHER_MOBILE_MONEY'].includes(v.type)) {
+      need(!!normalizeKenyanPhone(v.accountNumber ?? ''), 'accountNumber', 'Enter a valid Kenyan phone number');
+      need(!!v.accountName, 'accountName', 'Enter the registered name members will see when paying');
+    }
+    if (v.type === 'PAYBILL') need(/^\d{5,7}$/.test(v.accountNumber ?? ''), 'accountNumber', 'A Paybill number has 5–7 digits');
+    if (v.type === 'TILL') need(/^\d{5,8}$/.test(v.accountNumber ?? ''), 'accountNumber', 'A Till number has 5–8 digits');
+    if (v.type === 'BANK_ACCOUNT') {
+      need(!!v.provider, 'provider', 'Enter the bank');
+      need(/^[0-9A-Za-z-]{6,30}$/.test(v.accountNumber ?? ''), 'accountNumber', 'Enter the account number');
+      need(!!v.accountName, 'accountName', 'Enter the account name');
+    }
+    if (['BANK_TRANSFER', 'PROVIDER', 'OTHER'].includes(v.type)) need(!!v.instructions && v.instructions.length >= 10, 'instructions', 'Explain how members should pay');
+  });
+export type CreateDestinationInput = z.infer<typeof createDestinationSchema>;
+export const retireDestinationSchema = z.object({ reason: reasonSchema });
+
+/* ---------- payment evidence ---------- */
+
+export const EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'] as const;
+export const EVIDENCE_MAX_BYTES = 3 * 1024 * 1024;
+export const uploadEvidenceSchema = z.object({
+  fileName: z.string().trim().min(1).max(120),
+  mimeType: z.enum(EVIDENCE_MIME_TYPES),
+  /** File contents, base64-encoded. */
+  dataBase64: z.string().min(16).max(Math.ceil((EVIDENCE_MAX_BYTES * 4) / 3) + 8),
+  note: z.string().trim().max(300).optional(),
+});
+
+/* ---------- statements ---------- */
+
+const statementMappingSchema = z.object({
+  date: z.string().min(1),
+  time: z.string().optional(),
+  reference: z.string().optional(),
+  amount: z.string().optional(),
+  paidIn: z.string().optional(),
+  withdrawn: z.string().optional(),
+  payer: z.string().optional(),
+  phone: z.string().optional(),
+  accountReference: z.string().optional(),
+  description: z.string().optional(),
+  status: z.string().optional(),
+});
+
+export const statementFileSchema = z
+  .object({
+    fileName: z.string().trim().min(1).max(160),
+    /** CSV text, or… */
+    csv: z.string().max(5_000_000).optional(),
+    /** …an .xlsx file, base64-encoded. */
+    xlsxBase64: z.string().max(7_000_000).optional(),
+    mapping: statementMappingSchema.partial().optional(),
+    destinationId: z.string().optional(),
+  })
+  .refine((v) => !!v.csv !== !!v.xlsxBase64, { message: 'Send the file as CSV text or as an .xlsx file' });
+export type StatementFileInput = z.infer<typeof statementFileSchema>;
+
+export const resolveStatementLineSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('CONFIRM'),
+    memberId: z.string().min(1),
+    purpose: z.enum(['CONTRIBUTION', 'LOAN_REPAYMENT', 'FINE']).default('CONTRIBUTION'),
+    targetId: z.string().optional(),
+    note: z.string().trim().max(300).optional(),
+  }),
+  z.object({ action: z.literal('IGNORE'), reason: reasonSchema }),
+]);
+export type ResolveStatementLineInput = z.infer<typeof resolveStatementLineSchema>;
+export const confirmMatchesSchema = z.object({ lineIds: z.array(z.string()).min(1).max(500) });

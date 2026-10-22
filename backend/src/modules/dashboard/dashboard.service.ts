@@ -76,6 +76,17 @@ export class DashboardService {
       if (can(Permission.CONTRIBUTIONS_VERIFY)) task('VERIFY_PAYMENTS', 'Payments to verify', toVerify, 'contributions');
       if (can(Permission.RECONCILIATION_MANAGE)) task('UNMATCHED_PAYMENTS', 'M-Pesa payments to match', unmatched, 'contributions');
       if (can(Permission.CONTRIBUTIONS_VERIFY)) task('DISPUTES', 'Open disputes', disputes, 'contributions');
+      if (can(Permission.RECONCILIATION_MANAGE)) {
+        const lines = await this.prisma.statementLine.count({ where: { groupId, state: 'OPEN', match: { notIn: ['DUPLICATE', 'OUTGOING'] }, statementImport: { status: 'REVIEWING' } } });
+        task('STATEMENT_LINES', 'Statement lines to review', lines, 'statements');
+      }
+    }
+
+    // Payment destinations waiting for this officer (never their own proposal).
+    if (can(Permission.DESTINATIONS_MANAGE) || can(Permission.PAYOUTS_APPROVE)) {
+      const pending = await this.prisma.paymentDestination.findMany({ where: { groupId, status: 'PENDING_APPROVAL', proposedByMembershipId: { not: v.id } }, select: { id: true } });
+      const decided = await this.prisma.approval.count({ where: { entityType: 'DESTINATION', entityId: { in: pending.map((p) => p.id) }, approverMembershipId: v.id } });
+      task('DESTINATION_DECISIONS', 'Payment details to approve', pending.length - decided, 'destinations');
     }
 
     // Loans.

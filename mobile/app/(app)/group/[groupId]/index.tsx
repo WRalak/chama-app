@@ -20,6 +20,8 @@ const SECTION_PATH: Record<DashboardTask['section'], string> = {
   audit: 'findings',
   members: 'manage/members',
   reports: 'manage',
+  destinations: 'manage/destinations',
+  statements: 'manage/statements',
 };
 
 export default function GroupHome() {
@@ -36,6 +38,8 @@ export default function GroupHome() {
   const shortcuts = [
     { show: can(P.CONTRIBUTIONS_RECORD), icon: 'add-circle-outline' as const, label: 'Record payment', path: 'manage/record-payment' },
     { show: canAny(P.RECONCILIATION_MANAGE, P.CONTRIBUTIONS_VERIFY), icon: 'git-compare-outline' as const, label: 'Reconcile payments', path: 'manage/contributions', badge: taskCount(['VERIFY_PAYMENTS', 'UNMATCHED_PAYMENTS', 'DISPUTES']) },
+    { show: can(P.RECONCILIATION_MANAGE), icon: 'document-attach-outline' as const, label: 'Import statement', path: 'manage/statements', badge: taskCount(['STATEMENT_LINES']) },
+    { show: can(P.DESTINATIONS_MANAGE), icon: 'wallet-outline' as const, label: 'Payment details', path: 'manage/destinations', badge: taskCount(['DESTINATION_DECISIONS']) },
     { show: can(P.ROTATIONS_VIEW), icon: 'sync-outline' as const, label: 'View rotation', path: 'rotation' },
     { show: can(P.ROTATIONS_MANAGE), icon: 'calculator-outline' as const, label: 'Prepare payout', path: 'manage/payouts', badge: taskCount(['PAYOUT_PREPARE', 'PAYOUT_SEND']) },
     { show: (d?.tasks.length ?? 0) > 0 || canAny(P.PAYOUTS_APPROVE, P.LOANS_APPROVE, P.EXPENSES_APPROVE), icon: 'checkmark-done-outline' as const, label: 'Review approvals', path: 'manage', badge: d?.tasks.reduce((a, t) => a + t.count, 0) },
@@ -64,7 +68,8 @@ export default function GroupHome() {
               <Stat label="Your next payout" value={date(summary.nextPayoutDate)} />
             </StatGrid>
           )}
-          {!readOnly && <Button title="Make a contribution" icon="phone-portrait-outline" onPress={() => go('pay')} style={{ marginBottom: space.xl }} />}
+          {!readOnly && <Button title="Make a contribution" icon="phone-portrait-outline" onPress={() => go('pay')} style={{ marginBottom: space.sm }} />}
+          <Button title="How to pay" variant="secondary" icon="wallet-outline" onPress={() => go('how-to-pay')} style={{ marginBottom: space.xl }} />
 
           {dash.error && <Notice tone="red" icon="alert-circle-outline">Could not load the group dashboard. Pull down to retry.</Notice>}
           {officer && d && (

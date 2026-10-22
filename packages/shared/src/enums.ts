@@ -281,6 +281,7 @@ export const NotificationType = {
   PAYOUT_SENT: 'PAYOUT_SENT',
   PAYOUT_FAILED: 'PAYOUT_FAILED',
   ROTATION_UPDATED: 'ROTATION_UPDATED',
+  DESTINATION_CHANGED: 'DESTINATION_CHANGED',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -422,4 +423,46 @@ export const LABELS = {
     CONTRIBUTION_PROPORTIONAL: 'Proportional to contributions',
     SHARE_BASED: 'By shareholding',
   } satisfies Record<DistributionMethod, string>,
+};
+
+/* ---------- payment destinations ---------- */
+
+export const DestinationType = {
+  PERSONAL_MPESA: 'PERSONAL_MPESA',
+  OTHER_MOBILE_MONEY: 'OTHER_MOBILE_MONEY',
+  PAYBILL: 'PAYBILL',
+  TILL: 'TILL',
+  BANK_ACCOUNT: 'BANK_ACCOUNT',
+  BANK_TRANSFER: 'BANK_TRANSFER',
+  CASH: 'CASH',
+  PROVIDER: 'PROVIDER',
+  OTHER: 'OTHER',
+} as const;
+export type DestinationType = (typeof DestinationType)[keyof typeof DestinationType];
+export const DESTINATION_TYPES = Object.values(DestinationType) as DestinationType[];
+
+export const DestinationStatus = { PENDING_APPROVAL: 'PENDING_APPROVAL', ACTIVE: 'ACTIVE', RETIRED: 'RETIRED', REJECTED: 'REJECTED' } as const;
+export type DestinationStatus = (typeof DestinationStatus)[keyof typeof DestinationStatus];
+
+/** How money arriving at a destination is confirmed. ChamaHub never gets account access just because a destination is configured. */
+export const DestinationVerification = { MANUAL_REVIEW: 'MANUAL_REVIEW', STATEMENT_IMPORT: 'STATEMENT_IMPORT', PROVIDER_CALLBACK: 'PROVIDER_CALLBACK' } as const;
+export type DestinationVerification = (typeof DestinationVerification)[keyof typeof DestinationVerification];
+
+export const DESTINATION_LABELS = {
+  type: {
+    PERSONAL_MPESA: 'Treasurer’s M-Pesa number',
+    OTHER_MOBILE_MONEY: 'Other mobile money number',
+    PAYBILL: 'M-Pesa Paybill',
+    TILL: 'M-Pesa Till (Buy Goods)',
+    BANK_ACCOUNT: 'Bank account',
+    BANK_TRANSFER: 'Bank transfer instructions',
+    CASH: 'Cash to an officer',
+    PROVIDER: 'Payment provider',
+    OTHER: 'Other method',
+  } satisfies Record<DestinationType, string>,
+  verification: {
+    MANUAL_REVIEW: 'An officer checks each payment',
+    STATEMENT_IMPORT: 'Matched from imported statements',
+    PROVIDER_CALLBACK: 'Confirmed automatically by the provider',
+  } satisfies Record<DestinationVerification, string>,
 };

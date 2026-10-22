@@ -16,6 +16,8 @@ export function routeForNotification(n: { type?: NotificationType | string; grou
   if (s('proposalId')) return `${base}/votes`;
   if (s('meetingId')) return `${base}/meetings/${s('meetingId')}`;
   if (s('disputeId')) return `${base}/manage/contributions`;
+  if (s('destinationId')) return n.type === 'APPROVAL_REQUIRED' ? `${base}/manage/destinations` : `${base}/how-to-pay`;
+  if (s('paymentId')) return n.type === 'APPROVAL_REQUIRED' ? `${base}/manage/contributions` : `${base}/payments/${s('paymentId')}`;
   if (s('changeId') || (s('cycleId') && (n.type === 'APPROVAL_REQUIRED' || n.type === 'PAYOUT_APPROVED'))) return `${base}/manage/payouts`;
   if (s('cycleId')) return `${base}/rotation`;
   switch (n.type) {
@@ -40,6 +42,8 @@ export function routeForNotification(n: { type?: NotificationType | string; grou
     case 'PAYOUT_FAILED':
     case 'ROTATION_UPDATED':
       return `${base}/rotation`;
+    case 'DESTINATION_CHANGED':
+      return `${base}/how-to-pay`;
     case 'ANNOUNCEMENT':
       return `${base}/manage/announcements`;
     default:

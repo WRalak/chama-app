@@ -81,6 +81,33 @@ Business rules live in the API. The shared package gives both clients the same v
     - Joiners owe only rounds due from the approval date (`schedule_members.fromDate` / `untilDate`).
     - Shortening the schedule cancels the last round; it is never deleted.
   - **Closing.** A cycle closes only when every round is completed or cancelled.
+- **Collections (`modules/collections`).**
+  - **Payment destinations.**
+    - Proposed by an officer with `destinations.manage`. Approved by `requiredFinancialApprovals` other officers who manage destinations or approve payouts; the proposer never counts (approvals use the `DESTINATION` entity).
+    - A database trigger makes the details immutable and allows only `PENDING_APPROVAL → ACTIVE | REJECTED` and `ACTIVE → RETIRED`. Destinations are never deleted.
+    - A change is a new destination with `replacesId`. Approving it retires the old one atomically, with `effectiveTo`. All members are notified when a destination is activated, replaced or retired.
+    - Members see active destinations in full and retired ones masked. Officers with manage, view-all-contributions or audit permissions see everything.
+    - A reported payment may name its destination. It must have been valid on the payment date.
+  - **Evidence.**
+    - Evidence files are stored in `payment_evidence` as `bytea`: JPEG, PNG, WebP, HEIC or PDF, at most 3 MB. The first bytes must match the declared type.
+    - The table is append-only, and each file is unique per payment by SHA-256. Re-using a receipt on another payment is flagged.
+    - Only the payment's member and the group's treasury officers can upload or read evidence.
+  - **Payment history.** `payment_events` is append-only. An `AFTER INSERT OR UPDATE OF status` trigger on `payments` writes every status change with its actor and reason. The application adds evidence, statement-match and dispute events.
+  - **Statement import.**
+    - Parsing and matching live in `packages/shared/src/statements.ts`. Both are pure and unit-tested.
+    - The header row is found below any title block. M-Pesa, Paybill and bank layouts are recognised, and dates are read as Nairobi time.
+    - Each line gets a fingerprint (the provider's code, otherwise time, amount and payer) to catch duplicates within a file and across imports. Re-uploading the same file is refused.
+    - **Matching.**
+      - A report with the same code and amount is `REPORT_MATCH`.
+      - Exactly one member with independent evidence (their registered phone, or the account reference naming their phone) and no other plausible candidate is `STRONG`.
+      - A name, or a report whose amount differs, is `SUGGESTED`. More than one plausible member is `AMBIGUOUS`.
+      - The other outcomes are `UNMATCHED`, `DUPLICATE` and `OUTGOING`.
+    - Nothing is applied at import. An officer confirms lines:
+      - Bulk confirmation accepts only `REPORT_MATCH` and `STRONG` lines.
+      - A confirmed report becomes `CONFIRMED`, posted with the statement as proof.
+      - Any other assigned line becomes a `PENDING` payment (source `STATEMENT`) that a second officer verifies.
+      - Duplicates and money out can only be ignored, and only with a reason.
+  - **Shareable summaries.** Built only from confirmed records, at the moment of sharing. Group-wide texts contain no loans or personal balances. Unpaid members are named only when `membersCanViewMemberBalances` is on. Payout notices are available only after a payout is confirmed received.
 - **Distributions.** Distributable = confirmed cash − liabilities − retained funds. Outstanding loans are shown but are never distributable. Methods: equal, contribution-proportional, share-based. The full calculation is stored before approval. Cash is re-checked at approval. Loan offsets post as real repayments.
 - **Statements.** Group statements are computed from journal lines, classified by account (a reversal counts as the type it reverses). The tests check that opening + inflows − outflows = closing. Members see only published snapshots, with member names hidden unless the group allows it. Personal consolidated statements count each journal entry once and list loans received separately from income.
 

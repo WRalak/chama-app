@@ -7,6 +7,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 export const paymentInclude = {
   group: { select: { name: true } },
   membership: { select: { user: { select: { fullName: true } } } },
+  destination: { select: { displayName: true } },
+  _count: { select: { evidence: true } },
   allocations: {
     include: {
       obligation: { select: { periodLabel: true } },
@@ -39,6 +41,8 @@ export async function toPaymentItems(prisma: PrismaService, rows: PaymentWithRel
     verifiedByName: p.verifiedById ? (name.get(p.verifiedById) ?? null) : p.verifiedAt ? 'System (validated callback)' : null,
     verifiedAt: p.verifiedAt?.toISOString() ?? null,
     notes: p.notes,
+    destinationName: p.destination?.displayName ?? null,
+    evidenceCount: p._count.evidence,
     createdAt: p.createdAt.toISOString(),
     allocations: p.allocations.map((a) => ({
       label: a.obligation

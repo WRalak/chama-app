@@ -22,6 +22,7 @@ import { PostingService } from '../finance/posting.service';
 import { readSettings } from '../finance/policies';
 import { NotificationsService } from '../notifications/notifications.service';
 import { paymentInclude, toPaymentItems } from './payment-mapper';
+import { DestinationsService } from '../collections/destinations.service';
 
 /** Methods whose references are externally issued and must be unique within a group. */
 const UNIQUE_REFERENCE_METHODS = ['MPESA', 'BANK_TRANSFER', 'CHEQUE'];
@@ -34,6 +35,7 @@ export class ContributionsService {
     private readonly posting: PostingService,
     private readonly obligations: ObligationsService,
     private readonly notifications: NotificationsService,
+    private readonly destinations: DestinationsService,
   ) {}
 
   /* ---------- schedules ---------- */
@@ -116,6 +118,7 @@ export class ContributionsService {
     if (input.paidAt > today()) throw new UnprocessableEntityException('Payment date cannot be in the future');
     await this.validateTarget(groupId, input.memberId, input.purpose, input.targetId, input.amountCents);
     if (input.reference && UNIQUE_REFERENCE_METHODS.includes(input.method)) await this.assertReferenceUnused(groupId, input.reference);
+    if (input.destinationId) await this.destinations.assertPayable(this.prisma, groupId, input.destinationId, input.paidAt);
 
     try {
       const payment = await this.prisma.$transaction(async (tx) => {
@@ -133,6 +136,7 @@ export class ContributionsService {
             idempotencyKey: input.idempotencyKey,
             targetId: input.targetId ?? null,
             notes: input.notes ?? null,
+            destinationId: input.destinationId ?? null,
             recordedById: actor.userId,
           },
         });

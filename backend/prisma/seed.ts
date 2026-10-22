@@ -23,6 +23,7 @@ import { RotationsService } from '../src/modules/rotations/rotations.service';
 import { MeetingsService } from '../src/modules/meetings/meetings.service';
 import { ExpensesService } from '../src/modules/expenses/expenses.service';
 import { FinesService } from '../src/modules/fines/fines.service';
+import { DestinationsService } from '../src/modules/collections/destinations.service';
 import { DEFAULT_PREFERENCES } from '../src/modules/notifications/notifications.service';
 import { DEFAULT_SETTINGS } from '../src/modules/finance/policies';
 import { newInviteCode } from '../src/modules/groups/groups.service';
@@ -41,6 +42,7 @@ async function main() {
   const meetings = app.get(MeetingsService);
   const expenses = app.get(ExpensesService);
   const fines = app.get(FinesService);
+  const destinations = app.get(DestinationsService);
 
   if (await prisma.group.count()) {
     console.log('Database already has groups — skipping demo seed. Recreate the dev database to reseed.');
@@ -173,6 +175,17 @@ async function main() {
     }
   }
 
+  // Where Upendo members pay. DEMO details: 174379 is Safaricom's Daraja sandbox shortcode, not a real Paybill.
+  await prisma.group.update({ where: { id: up.id }, data: { settings: { ...(await prisma.group.findUniqueOrThrow({ where: { id: up.id } })).settings as object, accountReferencePrefix: 'UPENDO' } } });
+  const paybill = await destinations.propose(up.id, { type: 'PAYBILL', displayName: 'Upendo Paybill (demo)', accountNumber: '174379', accountReference: 'UPENDO-<your phone>', accountName: 'UPENDO MERRY GO ROUND (DEMO)', intendedUse: ['CONTRIBUTION'], verification: 'STATEMENT_IMPORT', reason: 'Group Paybill opened (demo data)' }, up.ctx.Joyce, meta);
+  const first = await destinations.decide(up.id, paybill.id, 'APPROVE', 'Checked with the bank', up.ctx.Peter, meta);
+  if (first.status === 'PENDING_APPROVAL') await destinations.decide(up.id, paybill.id, 'APPROVE', undefined, up.ctx.Mercy, meta);
+  // A proposal waiting for approval, so the approval flow has something to show.
+  await destinations.propose(up.id, { type: 'PERSONAL_MPESA', displayName: 'Treasurer M-Pesa — Joyce (demo)', accountNumber: '0700000003', accountName: 'JOYCE WANJIRU', intendedUse: [], verification: 'MANUAL_REVIEW', reason: 'Backup for members whose Paybill payments fail (demo)' }, up.ctx.Joyce, meta);
+  // Daniel reports his round-4 payment; docs/samples/upendo-paybill-statement-demo.csv contains the matching line.
+  const round4 = await prisma.contributionObligation.findFirst({ where: { groupId: up.id, membershipId: up.ctx.Daniel.id, round: { round: 4 } } });
+  if (round4) await contributions.record(up.id, { memberId: up.ctx.Daniel.id, amountCents: 100_000, method: 'MPESA', reference: 'SDAN4RPT01', paidAt: today, purpose: 'CONTRIBUTION', targetId: round4.id, destinationId: paybill.id, idempotencyKey: k() }, up.ctx.Daniel, meta);
+
   // 3) Mombasa Investment Chama — Amina is CHAIRPERSON.
   const mi = await group('Mombasa Investment Chama', 'INVESTMENT', [['Amina', 'CHAIRPERSON'], ['Brian', 'TREASURER'], ['Lucy', 'SECRETARY'], ['Daniel', 'MEMBER'], ['Samuel', 'AUDITOR']], 3);
   await contributions.createSchedule(mi.id, { name: 'Investment contribution', amountCents: 500_000, frequency: 'MONTHLY', startDate: addDays(today, -31 * 3) }, mi.ctx.Brian, meta);
@@ -202,6 +215,7 @@ async function main() {
   console.log('Demo data seeded. Password for all demo users: Demo1234');
   console.log('  0700 000 001  Amina — treasurer / chairperson / member in different Chamas');
   console.log('  Upendo: 002 Peter (chair) · 003 Joyce (treasurer) · 005 Mercy (payout approver) · 004 Daniel (member)');
+  console.log('  Try statement import as Joyce with docs/samples/upendo-paybill-statement-demo.csv');
   console.log('  Mombasa: 009 Lucy (secretary) · 006 Samuel (auditor)');
   console.log('  0700 000 099  Super Admin · 0700 000 098 Platform Admin · 0700 000 097 Support Agent');
   await app.close();

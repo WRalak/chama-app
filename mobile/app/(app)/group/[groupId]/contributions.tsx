@@ -1,12 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert } from 'react-native';
 import { LABELS, ObligationItem, Paginated, PaymentItem } from '@chamahub/shared';
 import { Button, Chips, Empty, ErrorView, Loading, Row, Screen, Section, StatusBadge, T } from '@/components/ui';
 import { api } from '@/lib/api';
 import { date, kes } from '@/lib/format';
-import { useAct } from '@/lib/queries';
 import { space } from '@/theme';
 
 export default function Contributions() {
@@ -14,7 +12,6 @@ export default function Contributions() {
   const [filter, setFilter] = useState<'outstanding' | 'all' | 'payments'>('outstanding');
   const obligations = useQuery({ queryKey: ['my-obligations', groupId], queryFn: () => api<ObligationItem[]>('me/obligations', { query: { groupId, from: '2000-01-01' } }) });
   const payments = useQuery({ queryKey: ['my-payments', groupId], queryFn: () => api<Paginated<PaymentItem>>(`groups/${groupId}/payments`, { query: { pageSize: 100 } }) });
-  const dispute = useAct((p: PaymentItem) => api(`groups/${groupId}/disputes`, { body: { paymentId: p.id, subject: `Query on payment ${p.reference ?? kes(p.amountCents)}`, details: `I would like officers to review this ${p.status.toLowerCase()} payment of ${kes(p.amountCents)} dated ${p.paidAt}.` } }), { invalidate: [['my-payments', groupId]], successMessage: 'Your officers have been asked to review this payment.' });
   const list = (obligations.data ?? []).filter((o) => (filter === 'outstanding' ? o.outstandingCents > 0 : true)).reverse();
   const outstanding = (obligations.data ?? []).reduce((a, o) => a + (o.dueDate <= new Date().toISOString().slice(0, 10) ? o.outstandingCents : 0), 0);
 
@@ -41,13 +38,7 @@ export default function Contributions() {
               title={`${kes(p.amountCents)} · ${p.purpose === 'CONTRIBUTION' ? 'Contribution' : p.purpose === 'LOAN_REPAYMENT' ? 'Loan repayment' : 'Fine'}`}
               subtitle={`${date(p.paidAt)} · ${LABELS.paymentMethod[p.method]}${p.reference ? ` · ${p.reference}` : ''}`}
               rightSub={<StatusBadge status={p.status} />}
-              onPress={() =>
-                Alert.alert(
-                  `${kes(p.amountCents)} — ${p.status.toLowerCase()}`,
-                  [`Paid ${date(p.paidAt)} by ${LABELS.paymentMethod[p.method]}`, p.reference && `Reference: ${p.reference}`, p.recordedByName && `Recorded by ${p.recordedByName}`, p.verifiedByName && `Verified by ${p.verifiedByName}`, p.status === 'PENDING' && 'This payment counts once an officer confirms the money was received.', ...(p.allocations ?? []).map((a) => `• ${a.label}: ${kes(a.amountCents)}`)].filter(Boolean).join('\n'),
-                  [{ text: 'Close' }, { text: 'Query this payment', onPress: () => dispute.mutate(p) }],
-                )
-              }
+              onPress={() => router.push(`/(app)/group/${groupId}/payments/${p.id}`)}
               last={i === payments.data!.items.length - 1}
             />
           ))}

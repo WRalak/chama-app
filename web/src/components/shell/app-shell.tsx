@@ -33,6 +33,8 @@ import {
   KeyRound,
   UserCog,
   SlidersHorizontal,
+  FileSearch,
+  Landmark,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -53,6 +55,8 @@ const GROUP_NAV: NavItem[] = [
   { href: 'members', label: 'Members', icon: Users, permission: Permission.MEMBERS_VIEW },
   { href: 'contributions', label: 'Contributions', icon: Wallet, permission: Permission.CONTRIBUTIONS_VIEW_ALL },
   { href: 'collections', label: 'Collections', icon: ArrowLeftRight, permission: Permission.RECONCILIATION_MANAGE },
+  { href: 'statement-imports', label: 'Statement import', icon: FileSearch, permission: [Permission.RECONCILIATION_MANAGE, Permission.AUDIT_VIEW] },
+  { href: 'payment-destinations', label: 'Payment destinations', icon: Landmark },
   { href: 'loans', label: 'Loans', icon: HandCoins, permission: Permission.LOANS_VIEW_ALL },
   { href: 'repayments', label: 'Repayments', icon: RefreshCcw, permission: Permission.LOANS_VIEW_ALL },
   { href: 'expenses', label: 'Expenses', icon: Receipt, permission: Permission.EXPENSES_VIEW },

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { AuthTokens } from '@chamahub/shared';
 import { ACCESS_COOKIE, API_URL, clearSessionCookies, REFRESH_COOKIE, sameOrigin, setSessionCookies } from '@/lib/server/session';
 
-const PASS_HEADERS = ['content-type', 'content-disposition', 'x-request-id', 'cache-control'];
+const PASS_HEADERS = ['content-type', 'content-disposition', 'x-request-id', 'cache-control', 'x-content-type-options'];
 
 async function forward(req: NextRequest, path: string, token: string | undefined, body: ArrayBuffer | undefined) {
   const url = `${API_URL}/v1/${path}${req.nextUrl.search}`;

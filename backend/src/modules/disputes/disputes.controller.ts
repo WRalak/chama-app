@@ -41,6 +41,7 @@ export class DisputesController {
       if (p.status === 'PENDING') await this.prisma.payment.update({ where: { id: p.id }, data: { status: 'DISPUTED' } });
     }
     const d = await this.prisma.dispute.create({ data: { groupId, membershipId: m.id, paymentId: body.paymentId ?? null, subject: body.subject, details: body.details } });
+    if (body.paymentId) await this.prisma.paymentEvent.create({ data: { groupId, paymentId: body.paymentId, kind: 'DISPUTE_OPENED', actorUserId: m.userId, note: body.subject } });
     await this.audit.log({ groupId, actorUserId: m.userId, action: 'dispute.opened', entityType: 'Dispute', entityId: d.id, after: body, meta });
     const officers = (await this.notifications.groupUserIds(groupId, ['CHAIRPERSON', 'TREASURER'])).filter((u) => u !== m.userId);
     await this.notifications.notify(officers, { groupId, type: 'APPROVAL_REQUIRED', title: 'New dispute', body: body.subject });

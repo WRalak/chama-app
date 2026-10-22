@@ -146,6 +146,61 @@ enum PaymentSource {
   MPESA_STK
   MPESA_C2B
   IMPORT
+  STATEMENT
+}
+
+enum DestinationType {
+  PERSONAL_MPESA
+  OTHER_MOBILE_MONEY
+  PAYBILL
+  TILL
+  BANK_ACCOUNT
+  BANK_TRANSFER
+  CASH
+  PROVIDER
+  OTHER
+}
+
+enum DestinationStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  RETIRED
+  REJECTED
+}
+
+enum DestinationVerification {
+  MANUAL_REVIEW
+  STATEMENT_IMPORT
+  PROVIDER_CALLBACK
+}
+
+enum StatementImportStatus {
+  REVIEWING
+  CLOSED
+  DISCARDED
+}
+
+/// What the matching engine concluded about a statement line.
+enum StatementMatch {
+  /// The line matches a payment a member reported (same reference and amount).
+  REPORT_MATCH
+  /// Exactly one member fits strongly (phone, or account reference).
+  STRONG
+  /// One weak candidate (name only, or amount differs). Needs a person.
+  SUGGESTED
+  /// Several members fit. Never assigned without a person choosing.
+  AMBIGUOUS
+  UNMATCHED
+  /// The reference was already recorded or imported.
+  DUPLICATE
+  /// Money leaving the account: not a contribution.
+  OUTGOING
+}
+
+enum StatementLineState {
+  OPEN
+  CONFIRMED
+  IGNORED
 }
 
 enum InterestMethod {
@@ -181,6 +236,7 @@ enum ApprovalEntity {
   CYCLE_CHANGE
   CYCLE_ACTIVATION
   SUPPORT_ACCESS
+  DESTINATION
 }
 
 enum ApprovalStatus {
@@ -331,6 +387,7 @@ enum NotificationType {
   PAYOUT_SENT
   PAYOUT_FAILED
   ROTATION_UPDATED
+  DESTINATION_CHANGED
 }
 
 enum NotificationChannel {
@@ -490,30 +547,32 @@ model Group {
   createdAt               DateTime    @default(now())
   updatedAt               DateTime    @updatedAt
 
-  createdBy      User                     @relation("GroupCreatedBy", fields: [createdById], references: [id])
-  memberships    Membership[]
-  invitations    Invitation[]
-  schedules      ContributionSchedule[]
-  obligations    ContributionObligation[]
-  payments       Payment[]
-  journalEntries JournalEntry[]
-  loans          Loan[]
-  fines          Fine[]
-  expenses       Expense[]
-  cycles         PayoutCycle[]
-  distributions  Distribution[]
-  meetings       Meeting[]
-  announcements  Announcement[]
-  importBatches  ImportBatch[]
-  disputes       Dispute[]
-  holdings       InvestmentHolding[]
-  subscription   Subscription?
-  approvals      Approval[]
-  unmatched      UnmatchedPayment[]
-  supportGrants  SupportAccessGrant[]
-  statements     PublishedStatement[]
-  proposals      Proposal[]
-  findings       AuditFinding[]
+  createdBy        User                     @relation("GroupCreatedBy", fields: [createdById], references: [id])
+  memberships      Membership[]
+  invitations      Invitation[]
+  schedules        ContributionSchedule[]
+  obligations      ContributionObligation[]
+  payments         Payment[]
+  journalEntries   JournalEntry[]
+  loans            Loan[]
+  fines            Fine[]
+  expenses         Expense[]
+  cycles           PayoutCycle[]
+  distributions    Distribution[]
+  meetings         Meeting[]
+  announcements    Announcement[]
+  importBatches    ImportBatch[]
+  disputes         Dispute[]
+  holdings         InvestmentHolding[]
+  subscription     Subscription?
+  approvals        Approval[]
+  unmatched        UnmatchedPayment[]
+  supportGrants    SupportAccessGrant[]
+  statements       PublishedStatement[]
+  proposals        Proposal[]
+  findings         AuditFinding[]
+  destinations     PaymentDestination[]
+  statementImports StatementImport[]
 
   @@map("groups")
 }
@@ -681,14 +740,19 @@ model Payment {
   reversedById   String?
   reversedAt     DateTime?
   reversalReason String?
+  /// Where the member says they sent the money.
+  destinationId  String?
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
   group        Group               @relation(fields: [groupId], references: [id])
   membership   Membership?         @relation(fields: [membershipId], references: [id])
+  destination  PaymentDestination? @relation(fields: [destinationId], references: [id])
   allocations  PaymentAllocation[]
   mpesaRequest MpesaRequest?
   disputes     Dispute[]
+  evidence     PaymentEvidence[]
+  events       PaymentEvent[]
 
   @@unique([groupId, idempotencyKey])
   @@index([groupId, status])
@@ -1489,4 +1553,146 @@ model PushDevice {
 
   @@index([userId])
   @@map("push_devices")
+}
+
+// ───────────────────────────── collections ─────────────────────────────
+
+/// Where members send money. Details never change after creation: a change
+/// is a new destination that replaces the old one once another officer approves.
+model PaymentDestination {
+  id                      String                  @id @default(cuid())
+  groupId                 String
+  type                    DestinationType
+  displayName             String
+  provider                String?
+  accountNumber           String?
+  accountReference        String?
+  accountName             String?
+  branch                  String?
+  instructions            String?
+  /// CONTRIBUTION / LOAN_REPAYMENT / FINE. Empty means any purpose.
+  intendedUse             String[]                @default([])
+  responsibleMembershipId String?
+  verification            DestinationVerification @default(MANUAL_REVIEW)
+  status                  DestinationStatus       @default(PENDING_APPROVAL)
+  effectiveFrom           DateTime                @db.Date
+  effectiveTo             DateTime?               @db.Date
+  replacesId              String?
+  proposedByMembershipId  String
+  proposalReason          String?
+  requiredApprovals       Int                     @default(1)
+  decidedAt               DateTime?
+  rejectionReason         String?
+  retiredReason           String?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  group      Group                @relation(fields: [groupId], references: [id])
+  replaces   PaymentDestination?  @relation("DestinationReplacement", fields: [replacesId], references: [id])
+  replacedBy PaymentDestination[] @relation("DestinationReplacement")
+  payments   Payment[]
+  imports    StatementImport[]
+
+  @@index([groupId, status])
+  @@map("payment_destinations")
+}
+
+/// A receipt photo, screenshot or bank slip attached to a payment. Stored in
+/// the database (small files only) so evidence travels with the records.
+model PaymentEvidence {
+  id           String   @id @default(cuid())
+  groupId      String
+  paymentId    String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  sha256       String
+  data         Bytes
+  note         String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@unique([paymentId, sha256])
+  @@index([groupId])
+  @@map("payment_evidence")
+}
+
+/// Append-only history of a payment. Status changes are written by a database
+/// trigger, so no code path can change a payment's status without a record.
+model PaymentEvent {
+  id          String             @id @default(cuid())
+  groupId     String
+  paymentId   String
+  kind        String
+  fromStatus  TransactionStatus?
+  toStatus    TransactionStatus?
+  actorUserId String?
+  note        String?
+  createdAt   DateTime           @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId, createdAt])
+  @@map("payment_events")
+}
+
+/// An uploaded M-Pesa / Paybill / bank statement, kept for review.
+model StatementImport {
+  id             String                @id @default(cuid())
+  groupId        String
+  destinationId  String?
+  fileName       String
+  fileSha256     String
+  mapping        Json
+  status         StatementImportStatus @default(REVIEWING)
+  lineCount      Int
+  duplicateCount Int                   @default(0)
+  periodFrom     DateTime?             @db.Date
+  periodTo       DateTime?             @db.Date
+  uploadedById   String
+  createdAt      DateTime              @default(now())
+
+  group       Group               @relation(fields: [groupId], references: [id])
+  destination PaymentDestination? @relation(fields: [destinationId], references: [id])
+  lines       StatementLine[]
+
+  @@index([groupId, createdAt])
+  @@map("statement_imports")
+}
+
+model StatementLine {
+  id                    String             @id @default(cuid())
+  importId              String
+  groupId               String
+  rowNo                 Int
+  transactionAt         DateTime
+  /// Positive = money in; negative = money out.
+  amountCents           BigInt
+  reference             String?
+  payerName             String?
+  payerPhone            String?
+  accountReference      String?
+  description           String?
+  /// Stable identity of the transaction, for duplicate detection across imports.
+  fingerprint           String
+  match                 StatementMatch
+  /// Candidate memberships with scores and reasons, as the engine saw them.
+  candidates            Json               @default("[]")
+  suggestedMembershipId String?
+  reportPaymentId       String?
+  state                 StatementLineState @default(OPEN)
+  resolvedMembershipId  String?
+  resolvedPaymentId     String?
+  resolvedById          String?
+  resolvedAt            DateTime?
+  resolutionNote        String?
+
+  statementImport StatementImport @relation(fields: [importId], references: [id])
+
+  @@index([groupId, state])
+  @@index([groupId, fingerprint])
+  @@index([importId, rowNo])
+  @@map("statement_lines")
 }

@@ -7,6 +7,7 @@ import { Button, Chips, Empty, ErrorView, Field, Loading, Notice, Row, Screen, S
 import { api } from '@/lib/api';
 import { askToConfirm } from '@/lib/confirm';
 import { date, kes, relativeDay } from '@/lib/format';
+import { shareSummary } from '@/lib/share';
 import { useAct } from '@/lib/queries';
 import { colors, space } from '@/theme';
 
@@ -105,6 +106,7 @@ export default function Rotation() {
                   }
                   right={r.status === 'COMPLETED' ? kes(r.payoutAmountCents ?? 0) : kes(multi ? r.expectedShareCents : r.expectedCents)}
                   rightSub={<StatusBadge status={r.status} />}
+                  onPress={r.status === 'COMPLETED' ? () => askToConfirm('Share on WhatsApp?', `Round ${r.round} payout to ${r.recipientName}, from the group’s confirmed records.`, 'Share', () => shareSummary(`groups/${groupId}/share/payout/${r.id}`)) : undefined}
                   last={i === c.rounds.length - 1}
                 />
               );

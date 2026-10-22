@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { askToConfirm } from '@/lib/confirm';
 import { downloadCsv, downloadPdf } from '@/lib/download';
 import { date, kes } from '@/lib/format';
+import { shareSummary } from '@/lib/share';
 import { useGroupAccess } from '@/lib/group';
 import { useAct } from '@/lib/queries';
 import { space } from '@/theme';
@@ -44,7 +45,8 @@ export default function Reports() {
     <Screen refreshing={live.isRefetching} onRefresh={live.refetch}>
       <Stack.Screen options={{ title: 'Reports & statements' }} />
       <Section>
-        <Row icon="document-text-outline" title="Published statements" subtitle="What members see" onPress={() => router.push(`/(app)/group/${groupId}/statements` as never)} last />
+        <Row icon="document-text-outline" title="Published statements" subtitle="What members see" onPress={() => router.push(`/(app)/group/${groupId}/statements` as never)} last={!can(P.CONTRIBUTIONS_VIEW_ALL)} />
+        {can(P.CONTRIBUTIONS_VIEW_ALL) && <Row icon="logo-whatsapp" title="Share this month’s collections" subtitle="Group totals from confirmed payments — no one’s loans or balances" onPress={() => shareSummary(`groups/${groupId}/share/collections`)} last />}
       </Section>
       {can(P.REPORTS_VIEW) && (
         <>

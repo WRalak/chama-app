@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { LABELS, PaymentItem } from '@chamahub/shared';
 import { Badge, Button, Field, StatusBadge, T } from './ui';
 import { date, kes } from '@/lib/format';
@@ -9,6 +10,7 @@ import { colors, space } from '@/theme';
 export function SourceBadge({ p }: { p: Pick<PaymentItem, 'source' | 'method'> }) {
   if (p.source === 'MPESA_STK' || p.source === 'MPESA_C2B') return <Badge label="M-Pesa confirmed" tone="green" />;
   if (p.source === 'IMPORT') return <Badge label="Imported" tone="neutral" />;
+  if (p.source === 'STATEMENT') return <Badge label="From statement" tone="blue" />;
   return <Badge label={`Manual · ${LABELS.paymentMethod[p.method]}`} tone="blue" />;
 }
 
@@ -32,6 +34,10 @@ export function PaymentCard({ p, actions, last, duplicate }: { p: PaymentItem; a
           <T variant="small">{`${date(p.paidAt)} · ${LABELS.paymentMethod[p.method]}${p.reference ? ` · ${p.reference}` : ''} · ${p.purpose.replace('_', ' ').toLowerCase()}`}</T>
           <T variant="small">{`Recorded by ${p.recordedByName ?? '—'}${p.verifiedByName ? ` · verified by ${p.verifiedByName}` : ''}`}</T>
           {p.notes && <T variant="small" style={{ fontStyle: 'italic' }}>{`“${p.notes}”`}</T>}
+          {(p.destinationName || p.evidenceCount > 0) && <T variant="small">{[p.destinationName && `Sent to ${p.destinationName}`, p.evidenceCount > 0 && `${p.evidenceCount} evidence file${p.evidenceCount > 1 ? 's' : ''}`].filter(Boolean).join(' · ')}</T>}
+          <Pressable onPress={() => router.push(`/(app)/group/${p.groupId}/payments/${p.id}`)} accessibilityRole="link" hitSlop={8}>
+            <T variant="small" style={{ color: colors.forest, fontWeight: '600', marginTop: 2 }}>History & evidence ›</T>
+          </Pressable>
         </View>
         <View style={{ alignItems: 'flex-end', gap: 4 }}>
           <StatusBadge status={p.status} />

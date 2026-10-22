@@ -3,8 +3,11 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { FineRow, LoanSummary, MemberRow, parseKes, Permission, todayInNairobi } from '@chamahub/shared';
+import { EvidencePicker } from '@/components/evidence';
 import { Button, Chips, Field, KV, Loading, NoAccess, Notice, Screen, Section, T } from '@/components/ui';
 import { api } from '@/lib/api';
+import { uploadEvidence, useDestinations } from '@/lib/collections';
+import type { PickedFile } from '@/lib/files';
 import { kes, newKey } from '@/lib/format';
 import { useGroupAccess } from '@/lib/group';
 import { useAct } from '@/lib/queries';
@@ -38,6 +41,10 @@ export default function RecordPayment() {
   const [targetId, setTargetId] = useState(params.targetId ?? '');
   const [review, setReview] = useState(false);
   const [key] = useState(newKey);
+  const [receipt, setReceipt] = useState<PickedFile | null>(null);
+  const [destinationId, setDestinationId] = useState('');
+  const destinations = useDestinations(groupId);
+  const live = (destinations.data ?? []).filter((d) => d.validNow);
   const members = useQuery({ queryKey: ['members', groupId, 'ACTIVE'], queryFn: () => api<MemberRow[]>(`groups/${groupId}/members`, { query: { status: 'ACTIVE' } }) });
   const loans = useQuery({ queryKey: ['loans', groupId, 'member', memberId], queryFn: () => api<LoanSummary[]>(`groups/${groupId}/loans`, { query: { memberId, status: 'DISBURSED' } }), enabled: purpose === 'LOAN_REPAYMENT' && !!memberId });
   const fines = useQuery({ queryKey: ['fines', groupId], queryFn: () => api<FineRow[]>(`groups/${groupId}/fines`), enabled: purpose === 'FINE' });
@@ -53,7 +60,11 @@ export default function RecordPayment() {
   const memberFines = (fines.data ?? []).filter((f) => f.membershipId === memberId && ['OUTSTANDING', 'PARTIAL'].includes(f.status));
   const valid = !!memberId && !!cents && cents > 0 && (!needsRef || reference.trim().length >= 4) && evidence.trim().length >= 3 && /^\d{4}-\d{2}-\d{2}$/.test(paidAt) && paidAt <= todayInNairobi() && (purpose === 'CONTRIBUTION' || !!targetId);
   const record = useAct(
-    () => api(`groups/${groupId}/payments`, { body: { memberId, amountCents: cents, method, reference: reference.trim() || undefined, paidAt, purpose, targetId: targetId || undefined, notes: evidence.trim(), idempotencyKey: key } }),
+    async () => {
+      const p = await api<{ id: string }>(`groups/${groupId}/payments`, { body: { memberId, amountCents: cents, method, reference: reference.trim() || undefined, paidAt, purpose, targetId: targetId || undefined, notes: evidence.trim(), destinationId: destinationId || undefined, idempotencyKey: key } });
+      if (receipt) await uploadEvidence(groupId, p.id, receipt).catch(() => undefined);
+      return p;
+    },
     { invalidate: [['payments', groupId], ['ledger', groupId], ['group-dashboard', groupId], ['reconciliation', groupId]], successMessage: 'Recorded as pending. It counts once another officer verifies it.', onSuccess: () => router.back() },
   );
 
@@ -72,7 +83,8 @@ export default function RecordPayment() {
             <KV label="Method" value={method === 'MPESA' ? 'M-Pesa (manual entry)' : method === 'BANK_TRANSFER' ? 'Bank transfer' : 'Cash'} />
             {reference ? <KV label="Reference" value={reference.toUpperCase()} /> : null}
             <KV label="Date received" value={paidAt} />
-            <KV label="Evidence" value={evidence} last />
+            {destinationId ? <KV label="Received at" value={live.find((d) => d.id === destinationId)?.displayName ?? ''} /> : null}
+            <KV label="Evidence" value={`${evidence}${receipt ? ` · ${receipt.fileName} attached` : ''}`} last />
           </Section>
           <Button title="Record as pending" onPress={() => record.mutate(undefined)} loading={record.isPending} />
           <Button title="Go back and edit" variant="ghost" onPress={() => setReview(false)} style={{ marginTop: space.sm }} />
@@ -112,8 +124,15 @@ export default function RecordPayment() {
           <T variant="label" style={{ marginBottom: 6 }}>How was it paid?</T>
           <Chips value={method} onChange={setMethod} options={[{ value: 'CASH', label: 'Cash' }, { value: 'MPESA', label: 'M-Pesa' }, { value: 'BANK_TRANSFER', label: 'Bank' }]} />
           {needsRef && <Field label={method === 'MPESA' ? 'M-Pesa transaction code' : 'Bank reference'} autoCapitalize="characters" value={reference} onChangeText={setReference} hint="Required, so the payment can be checked against the statement." />}
+          {live.length > 0 && (
+            <>
+              <T variant="label" style={{ marginBottom: 6 }}>Received at</T>
+              <Chips value={destinationId} onChange={setDestinationId} options={[{ value: '', label: 'Not specified' }, ...live.map((d) => ({ value: d.id, label: d.displayName }))]} />
+            </>
+          )}
           <Field label="Date received" value={paidAt} onChangeText={setPaidAt} placeholder="YYYY-MM-DD" error={paidAt > todayInNairobi() ? 'Cannot be in the future' : undefined} />
           <Field label="Evidence" value={evidence} onChangeText={setEvidence} multiline placeholder={method === 'CASH' ? 'Receipt book no. 214; handed over at the meeting' : 'e.g. Seen on the group M-Pesa statement'} hint="Who handed it over, receipt number, or where you checked it." />
+          <EvidencePicker value={receipt} onChange={setReceipt} />
           <Button title="Review" onPress={() => setReview(true)} disabled={!valid} />
         </>
       )}

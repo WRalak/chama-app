@@ -210,7 +210,7 @@ export interface PaymentItem {
   amountCents: number;
   method: PaymentMethod;
   /** MANUAL entries were recorded by a person; MPESA_* came from a validated M-Pesa callback. */
-  source: 'MANUAL' | 'MPESA_STK' | 'MPESA_C2B' | 'IMPORT';
+  source: 'MANUAL' | 'MPESA_STK' | 'MPESA_C2B' | 'IMPORT' | 'STATEMENT';
   reference: string | null;
   purpose: PaymentPurpose;
   status: TransactionStatus;
@@ -219,6 +219,9 @@ export interface PaymentItem {
   verifiedByName: string | null;
   verifiedAt: string | null;
   notes: string | null;
+  /** The group destination the member says they paid to. */
+  destinationName: string | null;
+  evidenceCount: number;
   createdAt: string;
   allocations?: { label: string; amountCents: number }[];
 }
@@ -745,11 +748,11 @@ export interface PlatformStaffRow {
 
 /** Something waiting for the viewer, counted only when the viewer is allowed to act on it. */
 export interface DashboardTask {
-  key: 'VERIFY_PAYMENTS' | 'UNMATCHED_PAYMENTS' | 'DISPUTES' | 'LOAN_DECISIONS' | 'LOAN_DISBURSEMENTS' | 'EXPENSE_DECISIONS' | 'EXPENSE_PAYMENTS' | 'PAYOUT_PREPARE' | 'PAYOUT_DECISIONS' | 'PAYOUT_SEND' | 'PAYOUT_CONFIRM' | 'ROTATION_APPROVALS' | 'DISTRIBUTION_DECISIONS' | 'MINUTES_APPROVAL' | 'FINDINGS' | 'INVITATIONS';
+  key: 'VERIFY_PAYMENTS' | 'UNMATCHED_PAYMENTS' | 'DISPUTES' | 'LOAN_DECISIONS' | 'LOAN_DISBURSEMENTS' | 'EXPENSE_DECISIONS' | 'EXPENSE_PAYMENTS' | 'PAYOUT_PREPARE' | 'PAYOUT_DECISIONS' | 'PAYOUT_SEND' | 'PAYOUT_CONFIRM' | 'ROTATION_APPROVALS' | 'DISTRIBUTION_DECISIONS' | 'MINUTES_APPROVAL' | 'FINDINGS' | 'INVITATIONS' | 'DESTINATION_DECISIONS' | 'STATEMENT_LINES';
   label: string;
   count: number;
   /** Which management section handles it. */
-  section: 'contributions' | 'loans' | 'expenses' | 'payouts' | 'meetings' | 'audit' | 'members' | 'reports';
+  section: 'contributions' | 'loans' | 'expenses' | 'payouts' | 'meetings' | 'audit' | 'members' | 'reports' | 'destinations' | 'statements';
 }
 
 export interface GroupDashboard {
@@ -787,4 +790,130 @@ export interface GroupDashboard {
   tasks: DashboardTask[];
   recentActivity: { id: string; date: string; description: string; amountCents: number; direction: 'IN' | 'OUT' | 'NONE' }[] | null;
   upcoming: { date: string; label: string; amountCents: number | null; kind: 'CONTRIBUTION' | 'PAYOUT' | 'MEETING' | 'LOAN' }[];
+}
+
+/* ---------- payment destinations ---------- */
+
+export interface PaymentDestinationRow {
+  id: string;
+  type: import('./enums').DestinationType;
+  displayName: string;
+  provider: string | null;
+  /** Full for members only while ACTIVE; masked once retired; officers see it in full. */
+  accountNumber: string | null;
+  accountReference: string | null;
+  accountName: string | null;
+  branch: string | null;
+  instructions: string | null;
+  intendedUse: ('CONTRIBUTION' | 'LOAN_REPAYMENT' | 'FINE')[];
+  responsibleName: string | null;
+  verification: import('./enums').DestinationVerification;
+  status: import('./enums').DestinationStatus;
+  /** Whether members may pay here today. */
+  validNow: boolean;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  replacesId: string | null;
+  replacedByName: string | null;
+  proposedByName: string;
+  proposalReason: string | null;
+  approvals: ApprovalRecord[];
+  approvalsRequired: number;
+  rejectionReason: string | null;
+  can: { approve: boolean; retire: boolean; replace: boolean };
+}
+
+/* ---------- payment evidence & history ---------- */
+
+export interface PaymentEvidenceRow {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  note: string | null;
+  uploadedByName: string;
+  createdAt: string;
+}
+
+export interface PaymentEventRow {
+  id: string;
+  kind: string;
+  /** Plain-language description of what happened. */
+  label: string;
+  fromStatus: TransactionStatus | null;
+  toStatus: TransactionStatus | null;
+  actorName: string | null;
+  note: string | null;
+  at: string;
+}
+
+export interface PaymentHistory {
+  paymentId: string;
+  payment: PaymentItem;
+  /** Whether the viewer may attach more evidence. */
+  canAddEvidence: boolean;
+  destination: { id: string; displayName: string; validNow: boolean } | null;
+  evidence: PaymentEvidenceRow[];
+  events: PaymentEventRow[];
+}
+
+/* ---------- statement imports ---------- */
+
+export interface StatementImportRow {
+  id: string;
+  fileName: string;
+  destinationName: string | null;
+  status: 'REVIEWING' | 'CLOSED' | 'DISCARDED';
+  lineCount: number;
+  duplicateCount: number;
+  openCount: number;
+  periodFrom: string | null;
+  periodTo: string | null;
+  uploadedByName: string;
+  createdAt: string;
+  counts: Partial<Record<import('./statements').MatchKind, number>>;
+}
+
+export interface StatementLineRow {
+  id: string;
+  rowNo: number;
+  transactionAt: string;
+  amountCents: number;
+  reference: string | null;
+  payerName: string | null;
+  /** Masked unless the viewer manages reconciliation. */
+  payerPhone: string | null;
+  accountReference: string | null;
+  description: string | null;
+  match: import('./statements').MatchKind;
+  explanation: string;
+  candidates: import('./statements').MatchCandidate[];
+  suggestedMemberId: string | null;
+  reportPaymentId: string | null;
+  state: 'OPEN' | 'CONFIRMED' | 'IGNORED';
+  resolvedMemberName: string | null;
+  resolvedPaymentId: string | null;
+  resolvedPaymentStatus: TransactionStatus | null;
+  resolvedByName: string | null;
+  resolutionNote: string | null;
+}
+
+export interface StatementPreview {
+  headers: string[];
+  mapping: Partial<import('./statements').StatementMapping>;
+  problems: string[];
+  rowCount: number;
+  sample: { rowNo: number; ok: boolean; error?: string; skipped?: boolean; transactionAt?: string; amountCents?: number; reference?: string | null; payer?: string | null; match?: import('./statements').MatchKind; explanation?: string }[];
+  counts: Partial<Record<import('./statements').MatchKind | 'ERROR' | 'SKIPPED', number>>;
+}
+
+/* ---------- shareable summaries ---------- */
+
+export interface ShareableSummary {
+  kind: string;
+  title: string;
+  /** Plain text ready for WhatsApp; uses only group-level figures unless addressed to one member. */
+  text: string;
+  /** Whether the text names individual members (only for summaries the group agreed to share). */
+  namesMembers: boolean;
 }
