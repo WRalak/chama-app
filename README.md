@@ -45,6 +45,7 @@ The mobile app finds the API on the computer running the Expo dev server, so a p
   | Treasurer | `0700 000 003` (Joyce) | Upendo Merry-Go-Round |
   | Payout approver (optional role) | `0700 000 005` (Mercy) | Upendo Merry-Go-Round |
   | Ordinary member | `0700 000 004` (Daniel) | Upendo Merry-Go-Round |
+  | Joint signatory (optional role) | `0700 000 004` (Daniel) | Mombasa Investment Chama |
   | Secretary | `0700 000 009` (Lucy) | Mombasa Investment Chama |
   | Auditor | `0700 000 006` (Samuel) | Mombasa Investment Chama |
   | Loan committee (optional role) | `0700 000 002` (Peter) | Jitegemee Table Banking |

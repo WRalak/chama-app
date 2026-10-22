@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { ContributionLedgerRow, MemberRow, Paginated, parseKes, PaymentItem, Permission, ReconciliationSummary, TRANSACTION_STATUSES } from '@chamahub/shared';
+import { ContributionLedgerRow, MemberRow, Paginated, parseKes, PaymentItem, Permission, ReconciliationSummary, PAYMENT_METHODS, TRANSACTION_STATUSES } from '@chamahub/shared';
 import { PaymentCard } from '@/components/payment';
 import { Button, Chips, Empty, ErrorView, Field, KV, Loading, NoAccess, Notice, Row, Screen, Section, StatusBadge, T } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -82,6 +82,7 @@ function SearchTab({ groupId, actionsFor }: { groupId: string; actionsFor: Actio
   const [amount, setAmount] = useState('');
   const [from, setFrom] = useState('');
   const [status, setStatus] = useState<string>('ALL');
+  const [method, setMethod] = useState<string>('ALL');
   const [submitted, setSubmitted] = useState<Record<string, string | number | undefined>>({});
   let cents: number | undefined;
   try {
@@ -99,7 +100,8 @@ function SearchTab({ groupId, actionsFor }: { groupId: string; actionsFor: Actio
         <View style={{ flex: 1 }}><Field label="On or after" placeholder="YYYY-MM-DD" value={from} onChangeText={setFrom} error={ok ? undefined : 'Use YYYY-MM-DD'} /></View>
       </View>
       <Chips value={status} onChange={setStatus} options={[{ value: 'ALL', label: 'All' }, ...TRANSACTION_STATUSES.map((s) => ({ value: s, label: s.toLowerCase() }))]} />
-      <Button title="Search" icon="search-outline" onPress={() => setSubmitted({ q: text.trim() || undefined, amountCents: cents, from: from || undefined, status: status === 'ALL' ? undefined : status })} disabled={!ok} style={{ marginBottom: space.lg }} />
+      <Chips value={method} onChange={setMethod} options={[{ value: 'ALL', label: 'Any method' }, ...PAYMENT_METHODS.map((m) => ({ value: m, label: m.replace(/_/g, ' ').toLowerCase() }))]} />
+      <Button title="Search" icon="search-outline" onPress={() => setSubmitted({ q: text.trim() || undefined, amountCents: cents, from: from || undefined, status: status === 'ALL' ? undefined : status, method: method === 'ALL' ? undefined : method })} disabled={!ok} style={{ marginBottom: space.lg }} />
       <Section title={q.data ? `${q.data.total} payment${q.data.total === 1 ? '' : 's'}` : 'Results'}>
         {q.error ? <ErrorView error={q.error} onRetry={q.refetch} /> : !q.data ? <Loading /> : q.data.items.length === 0 ? <Empty title="No payments match" /> : q.data.items.map((p, i) => <PaymentCard key={p.id} p={p} actions={actionsFor(p)} last={i === q.data!.items.length - 1} />)}
       </Section>
