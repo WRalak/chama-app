@@ -11,6 +11,7 @@ import { readSettings } from '../finance/policies';
 import { installmentStatus } from '../finance/posting.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DecisionsService } from '../decisions/decisions.service';
+import { BillingService } from '../billing/billing.service';
 
 export const SYSTEM_ACTOR = 'system';
 
@@ -24,7 +25,14 @@ export class JobsService {
     private readonly obligations: ObligationsService,
     private readonly notifications: NotificationsService,
     private readonly decisions: DecisionsService,
+    private readonly billing: BillingService,
   ) {}
+
+  /** Subscription trials, renewals, grace periods, reminders and pending-payment checks. */
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  billingLifecycle() {
+    return this.track('billing-lifecycle', async () => ({ ...(await this.billing.lifecycle()) }));
+  }
 
   /** Runs a job once at a time and records the outcome for platform health monitoring. */
   private async track(name: string, fn: () => Promise<Record<string, unknown>>) {

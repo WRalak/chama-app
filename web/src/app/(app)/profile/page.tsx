@@ -2,14 +2,14 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { formatKenyanPhone, passwordSchema, type IntegrationStatus, type NotificationPreferences, type SessionInfo } from '@chamahub/shared';
+import { formatKenyanPhone, LOCALE_CODES, LOCALES, passwordSchema, type IntegrationStatus, type NotificationPreferences, type SessionInfo } from '@chamahub/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Textarea } from '@/components/ui/input';
+import { Field, Input, Select, Textarea } from '@/components/ui/input';
 import { PageHeader, Panel } from '@/components/ui/layout-parts';
 import { LoadingRows } from '@/components/ui/states';
 import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs';
-import { api } from '@/lib/api';
+import { api, fileUrl } from '@/lib/api';
 import { useAction } from '@/lib/hooks';
 import { useMe } from '@/lib/session';
 import { date, dateTime } from '@/lib/utils';
@@ -50,13 +50,19 @@ function Personal() {
   const { data: me } = useMe();
   const [fullName, setFullName] = useState(me!.fullName);
   const [email, setEmail] = useState(me!.email ?? '');
-  const save = useAction(() => api('me', { method: 'PATCH', body: { fullName: fullName.trim(), email: email.trim() || null } }), { success: 'Your details were saved', invalidate: [['me']] });
+  const [locale, setLocale] = useState(me!.locale ?? 'en');
+  const save = useAction(() => api('me', { method: 'PATCH', body: { fullName: fullName.trim(), email: email.trim() || null, locale } }), { success: 'Your details were saved', invalidate: [['me']] });
   return (
     <Panel className="max-w-xl">
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save.mutate(undefined); }}>
         <Field label="Full name" htmlFor="p-name"><Input id="p-name" autoComplete="name" value={fullName} onChange={(e) => setFullName(e.target.value)} /></Field>
         <Field label="Phone number" htmlFor="p-phone" hint="Your phone number is your sign-in. Contact support to change it."><Input id="p-phone" value={formatKenyanPhone(me!.phone)} disabled /></Field>
         <Field label="Email (optional)" htmlFor="p-email"><Input id="p-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
+        <Field label="Language / Lugha" htmlFor="p-lang" hint="Menus and statuses are translated first; more of the app follows. Kiswahili text is being reviewed.">
+          <Select id="p-lang" value={locale} onChange={(e) => setLocale(e.target.value)}>
+            {LOCALE_CODES.map((l) => <option key={l} value={l}>{LOCALES[l].nativeName}</option>)}
+          </Select>
+        </Field>
         <Button type="submit" loading={save.isPending} disabled={fullName.trim().length < 3}>Save</Button>
       </form>
     </Panel>
@@ -138,6 +144,10 @@ function Privacy() {
       <Panel title="Who sees what">
         <Toggle label="Hide my phone number from ordinary members" description="Officers of your groups can always see it." checked={prefs.variables ?? me!.preferences.hidePhoneFromMembers} onChange={(v) => prefs.mutate(v)} />
         <p className="mt-2 text-xs text-muted">Members cannot see each other’s balances unless your group turns this on. ChamaHub staff cannot see group finances unless your chairperson approves a time-limited, audited support request.</p>
+      </Panel>
+      <Panel title="Download my data">
+        <p className="text-sm text-muted">A copy of everything ChamaHub holds about you — your profile, memberships, your own payments and loans, notifications, devices and AI conversations — as a JSON file. Other members’ records are not included.</p>
+        <Button asChild variant="secondary" className="mt-3"><a href={fileUrl('me/export')} download>Download my data</a></Button>
       </Panel>
       <Panel title="Delete my account">
         {me!.deletionRequestedAt ? (

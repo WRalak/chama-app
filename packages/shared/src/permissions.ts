@@ -57,6 +57,8 @@ export const Permission = {
   VOTES_CAST: 'votes.cast',
   FINDINGS_RAISE: 'findings.raise',
   FINDINGS_RESOLVE: 'findings.resolve',
+  /** Choose the group's ChamaHub plan, pay for it, cancel it and see billing history. Not the group's own money. */
+  BILLING_MANAGE: 'billing.manage',
 } as const;
 export type Permission = (typeof Permission)[keyof typeof Permission];
 export const ALL_PERMISSIONS = Object.values(Permission) as Permission[];
@@ -111,6 +113,7 @@ export const PERMISSION_INFO: Record<Permission, { label: string; area: 'Group' 
   'votes.cast': { label: 'Vote on group decisions', area: 'Decisions' },
   'findings.raise': { label: 'Raise audit findings', area: 'Decisions' },
   'findings.resolve': { label: 'Respond to audit findings', area: 'Decisions' },
+  'billing.manage': { label: 'Manage the ChamaHub plan and billing', area: 'Group' },
 };
 
 const MEMBER_DEFAULT: Permission[] = [
@@ -129,6 +132,7 @@ export const ROLE_PERMISSIONS: Record<GroupRole, readonly Permission[]> = {
   CHAIRPERSON: [
     ...MEMBER_DEFAULT,
     P.GROUP_CONFIGURE,
+    P.BILLING_MANAGE,
     P.PERMISSIONS_CONFIGURE,
     P.MEMBERS_VIEW_FINANCIALS,
     P.MEMBERS_INVITE,
@@ -181,6 +185,7 @@ export const ROLE_PERMISSIONS: Record<GroupRole, readonly Permission[]> = {
   // The treasurer prepares; another officer approves sensitive transactions.
   TREASURER: [
     ...MEMBER_DEFAULT,
+    P.BILLING_MANAGE,
     P.MEMBERS_VIEW_FINANCIALS,
     P.CONTRIBUTIONS_VIEW_ALL,
     P.CONTRIBUTIONS_RECORD,
@@ -320,6 +325,16 @@ export const PlatformPermission = {
   PLATFORM_SUPPORT: 'platform.support',
   PLATFORM_MANAGE_ADMINS: 'platform.manage_admins',
   PLATFORM_CONFIGURE: 'platform.configure',
+  /** See groups' plans, subscription status and billing payments (never group finances). */
+  PLATFORM_VIEW_BILLING: 'platform.view_billing',
+  /** Promotional access, billing support cases, subscription corrections. */
+  PLATFORM_MANAGE_BILLING: 'platform.manage_billing',
+  /** Refund subscription payments. */
+  PLATFORM_REFUND: 'platform.refund',
+  /** Revenue, recurring revenue, churn and profit reports. */
+  PLATFORM_VIEW_REVENUE: 'platform.view_revenue',
+  /** Record operating costs and exchange rates used in reports. */
+  PLATFORM_MANAGE_FINANCE: 'platform.manage_finance',
 } as const;
 export type PlatformPermission = (typeof PlatformPermission)[keyof typeof PlatformPermission];
 
@@ -327,8 +342,9 @@ const PP = PlatformPermission;
 
 export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly PlatformPermission[]> = {
   USER: [],
-  SUPPORT: [PP.PLATFORM_SUPPORT],
-  PLATFORM_ADMIN: [PP.PLATFORM_VIEW_STATS, PP.PLATFORM_MANAGE_PLANS, PP.PLATFORM_MANAGE_ACCOUNTS, PP.PLATFORM_SUPPORT],
+  SUPPORT: [PP.PLATFORM_SUPPORT, PP.PLATFORM_VIEW_BILLING],
+  PLATFORM_ADMIN: [PP.PLATFORM_VIEW_STATS, PP.PLATFORM_MANAGE_PLANS, PP.PLATFORM_MANAGE_ACCOUNTS, PP.PLATFORM_SUPPORT, PP.PLATFORM_VIEW_BILLING, PP.PLATFORM_MANAGE_BILLING],
+  FINANCE: [PP.PLATFORM_VIEW_BILLING, PP.PLATFORM_MANAGE_BILLING, PP.PLATFORM_REFUND, PP.PLATFORM_VIEW_REVENUE, PP.PLATFORM_MANAGE_FINANCE],
   SUPER_ADMIN: Object.values(PP),
 };
 

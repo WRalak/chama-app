@@ -102,12 +102,16 @@ Rose, berry and deep plum on a warm white background, with Satoshi as the typefa
 
 Members and officers can ask about their group's records on mobile (**Ask assistant**) and on the web (**AI Assistant**). The assistant only reads records through server-side tools allowed for the user's role in that group, and every figure comes from ChamaHub's financial engine. It cannot record, approve or move anything. Set `ANTHROPIC_API_KEY` in `backend/.env` to turn chat on. Without it, the same screens offer **quick answers** read straight from the records. See [`docs/AI.md`](docs/AI.md).
 
+### Plans, billing and global settings
+
+Groups pick a country (only open regions), and each group has one base currency fixed once money is recorded; time zone and language are configurable. Plans (Free, Starter, Standard, Premium), their features, member limits and regional prices live in the database and are edited under **Platform › Plans & pricing**. The API enforces paid features (`402` with the plan that unlocks them); records, statements and reports are never locked. Chairpersons and treasurers manage the plan under **Settings › Plan & billing** (web and mobile). Subscription payments are separate from group money, verified with the provider before activation, and recorded immutably. Owners see revenue under **Platform › Revenue** (finance role). Menus and statuses are available in English and Kiswahili. See [`docs/BILLING.md`](docs/BILLING.md).
+
 In development, OTP codes are written to the API log (`DEV_LOG_OTP=true`) because no SMS provider is configured.
 
 ## Tests
 
 ```bash
-npm run test -w @chamahub/shared   # finance math: loan schedules, distributions, rotations, money parsing
+npm run test -w @chamahub/shared   # finance math, currencies and exact conversion, billing rules, translations
 npm run test -w @chamahub/api      # e2e against a real Postgres (TEST_DATABASE_URL, default chamahub_test)
 npm run typecheck
 ```
@@ -127,6 +131,11 @@ Nothing below is presented to users as working unless it is configured.
 | Push notifications | **Implemented; needs a build with an EAS project.** The API sends through the Expo push service, and the app registers on sign-in and deep-links taps to the right screen. Expo Go (Android) and the browser preview cannot receive remote push; run `npx eas init` in `mobile/` and use a development or store build. In-app notifications always work. |
 | Automated payouts (M-Pesa B2C) | **Not implemented.** Payouts are sent through the group's agreed channel and recorded with the transaction reference. Each payout completes only when the recipient confirms or a second officer verifies the reference. B2C needs separate Safaricom onboarding (initiator credentials, result/timeout callbacks). |
 | AI assistant (Claude) | **Implemented; needs `ANTHROPIC_API_KEY`.** Tested with a scripted provider and against a local stub of the API, not against the live service. Without a key, chat is off and quick answers work. |
+| Subscription billing — M-Pesa Daraja (ChamaHub's own shortcode) | **Implemented, not verified.** STK push + STK Query confirmation; disabled until `BILLING_MPESA_*`, `BILLING_CALLBACK_BASE_URL` and `BILLING_WEBHOOK_TOKEN` are set and a real payment has been tested end to end. No API refunds (refund in the M-Pesa portal, then record it). |
+| Subscription billing — Paystack | **Implemented, not verified.** Hosted checkout, HMAC-SHA512 webhooks, Verify API, refunds. Disabled in every country until `PAYSTACK_SECRET_KEY` is set and a country row is enabled. |
+| Subscription billing — bank transfer / invoice | Working: finance staff confirm against the bank statement. |
+| Subscription billing — sandbox | Development and tests only; refuses to run in production; never counted as revenue. |
+| Automatic recurring charges | **Not implemented.** Officers renew; reminders and a grace period are automatic. |
 | PDF statements | Working (server-side, pdfkit). |
 | CSV / Excel import, CSV export | Working. Paper-records imports convert Excel to CSV in the browser; statement imports read .xlsx on the server. |
 | Statement import (M-Pesa, Paybill/Till, bank) | **Working, from files the officer downloads.** No account access, scraping or SMS reading. PDF statements are not read yet. |

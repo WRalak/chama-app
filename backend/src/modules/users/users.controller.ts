@@ -1,4 +1,6 @@
-import { Body, Controller, Delete, Get, HttpCode, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Patch, Post, Put, Res } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { ConflictException } from '@nestjs/common';
 import {
   accountDeletionSchema,
@@ -40,17 +42,53 @@ export class UsersController {
   @AllowUnverified()
   @Patch()
   async update(@CurrentUser() user: AuthContext, @Body(new ZodPipe(updateProfileSchema)) body: z.infer<typeof updateProfileSchema>, @ReqMeta() meta: RequestMeta) {
-    const before = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { fullName: true, email: true } });
+    const before = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id }, select: { fullName: true, email: true, locale: true } });
     if (body.email) {
       const taken = await this.prisma.user.findFirst({ where: { email: body.email.toLowerCase(), id: { not: user.id } } });
       if (taken) throw new ConflictException('This email is already in use.');
     }
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { fullName: body.fullName, email: body.email === undefined ? undefined : (body.email?.toLowerCase() ?? null), nationalIdLast4: body.nationalIdLast4 },
+      data: { fullName: body.fullName, email: body.email === undefined ? undefined : (body.email?.toLowerCase() ?? null), nationalIdLast4: body.nationalIdLast4, locale: body.locale },
     });
     await this.audit.log({ actorUserId: user.id, action: 'user.profile_updated', entityType: 'User', entityId: user.id, before, after: body, meta });
     return this.me(user.id);
+  }
+
+  /**
+   * Everything ChamaHub holds about the signed-in person, as JSON (Data Protection Act right of
+   * access and portability). Only their own records: never other members' details or balances.
+   */
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Get('export')
+  async export(@CurrentUser() user: AuthContext, @Res({ passthrough: true }) res: Response, @ReqMeta() meta: RequestMeta) {
+    const id = user.id;
+    const [profile, memberships, payments, loans, notifications, sessions, conversations, actions] = await Promise.all([
+      this.me(id),
+      this.prisma.membership.findMany({ where: { userId: id }, select: { id: true, role: true, specialRoles: true, status: true, shares: true, joinedAt: true, exitedAt: true, group: { select: { name: true, type: true, countryCode: true, currency: true } } } }),
+      this.prisma.payment.findMany({ where: { membership: { userId: id } }, select: { id: true, amountCents: true, currency: true, method: true, purpose: true, status: true, reference: true, paidAt: true, createdAt: true, group: { select: { name: true } } }, orderBy: { paidAt: 'desc' } }),
+      this.prisma.loan.findMany({ where: { membership: { userId: id } }, select: { id: true, principalCents: true, totalInterestCents: true, status: true, purpose: true, appliedAt: true, disbursedAt: true, installments: { select: { number: true, dueDate: true, principalCents: true, interestCents: true, principalPaidCents: true, interestPaidCents: true, status: true } }, group: { select: { name: true, currency: true } } } }),
+      this.prisma.notification.findMany({ where: { userId: id }, select: { type: true, title: true, body: true, createdAt: true, readAt: true }, orderBy: { createdAt: 'desc' }, take: 1000 }),
+      this.prisma.session.findMany({ where: { userId: id }, select: { deviceName: true, ipAddress: true, createdAt: true, lastUsedAt: true, revokedAt: true } }),
+      this.prisma.aiConversation.findMany({ where: { userId: id }, select: { title: true, createdAt: true, messages: { select: { role: true, content: true, createdAt: true } } } }),
+      this.prisma.auditEvent.findMany({ where: { actorUserId: id }, select: { action: true, entityType: true, createdAt: true, ipAddress: true }, orderBy: { createdAt: 'desc' }, take: 1000 }),
+    ]);
+    await this.audit.log({ actorUserId: id, action: 'user.data_exported', entityType: 'User', entityId: id, meta });
+    res.setHeader('Content-Disposition', `attachment; filename="chamahub-my-data-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    const plain = (v: unknown) => JSON.parse(JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? Number(x) : x)));
+    return plain({
+      exportedAt: new Date().toISOString(),
+      note: 'Amounts are in minor units (cents) of the currency shown. Group records about other members are not included.',
+      profile,
+      memberships,
+      payments,
+      loans,
+      notifications,
+      sessions,
+      aiConversations: conversations,
+      actionsYouTook: actions,
+    });
   }
 
   @Put('preferences')

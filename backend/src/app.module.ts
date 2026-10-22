@@ -34,6 +34,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { DecisionsModule } from './modules/decisions/decisions.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { CollectionsModule } from './modules/collections/collections.module';
+import { BillingModule } from './modules/billing/billing.module';
 import { AiModule } from './modules/ai/ai.module';
 import { OfficersModule } from './modules/officers/officers.module';
 import { PlatformSettingsModule } from './modules/platform/platform-settings.service';
@@ -74,6 +75,7 @@ const featureModules = [
     FinanceModule,
     PlatformSettingsModule,
     NotificationsModule,
+    BillingModule,
     JwtModule.registerAsync({
       global: true,
       useFactory: () => ({ secret: env().JWT_ACCESS_SECRET, signOptions: { expiresIn: env().ACCESS_TOKEN_TTL_SECONDS } }),

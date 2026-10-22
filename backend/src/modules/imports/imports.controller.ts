@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Header, HttpCode, Param, Post } from '@nestjs/common';
 import { ImportKind } from '@prisma/client';
-import { createImportSchema, IMPORT_KINDS, Permission } from '@chamahub/shared';
+import { createImportSchema, IMPORT_KINDS, Permission, Feature } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentMembership, ReqMeta, RequireAnyPermission, RequirePermission } from '../../common/decorators';
+import { CurrentMembership, ReqMeta, RequireAnyPermission, RequirePermission, RequireFeature } from '../../common/decorators';
 import { MembershipContext, RequestMeta } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { IMPORT_TEMPLATES, ImportsService } from './imports.service';
@@ -34,6 +34,7 @@ export class ImportsController {
   }
 
   @RequirePermission(Permission.IMPORTS_MANAGE)
+  @RequireFeature(Feature.BULK_IMPORT)
   @Post()
   create(@Param('groupId') groupId: string, @Body(new ZodPipe(createImportSchema)) body: z.infer<typeof createImportSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.imports.create(groupId, body, m, meta);

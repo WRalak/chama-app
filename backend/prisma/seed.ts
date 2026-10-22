@@ -53,13 +53,8 @@ async function main() {
   const today = todayInNairobi();
   const passwordHash = await bcrypt.hash('Demo1234', 10);
 
-  await prisma.plan.createMany({
-    data: [
-      { code: 'STARTER', name: 'Starter', priceCents: 0n, maxMembers: 15, features: ['Contributions', 'Statements', 'Mobile app'] },
-      { code: 'GROWTH', name: 'Growth', priceCents: 50_000n, maxMembers: 50, features: ['Loans', 'Rotations', 'Imports', 'SMS reminders'] },
-      { code: 'PRO', name: 'Pro', priceCents: 150_000n, maxMembers: 500, features: ['Distributions', 'Investments', 'Priority support'] },
-    ],
-  });
+  // Plans, prices, regions and payment providers come from the migrations (editable in Platform › Plans & pricing).
+
 
   const people = [
     ['Amina Odhiambo', '+254700000001'],
@@ -81,10 +76,33 @@ async function main() {
     ['ChamaHub Super Admin', '+254700000099', 'SUPER_ADMIN'],
     ['ChamaHub Platform Admin', '+254700000098', 'PLATFORM_ADMIN'],
     ['ChamaHub Support Agent', '+254700000097', 'SUPPORT'],
+    ['ChamaHub Finance', '+254700000096', 'FINANCE'],
   ] as const) {
     await prisma.user.create({ data: { fullName, phone, passwordHash, phoneVerifiedAt: new Date(), platformRole, preferences: DEFAULT_PREFERENCES } });
   }
-  const plan = await prisma.plan.findUniqueOrThrow({ where: { code: 'GROWTH' } });
+  /**
+   * DEMO billing: a subscription paid through the SANDBOX provider (test mode), so it never
+   * counts as revenue. Shows plans, receipts and the billing history in the apps.
+   */
+  let receiptNo = 1;
+  async function paidPlan(groupId: string, planCode: string, interval: 'MONTH' | 'YEAR', startedDaysAgo: number) {
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { code: planCode }, include: { prices: { where: { countryCode: 'KE', currency: 'KES', interval } } } });
+    const start = new Date(Date.now() - startedDaysAgo * 86_400_000);
+    const end = new Date(start);
+    if (interval === 'YEAR') end.setUTCFullYear(end.getUTCFullYear() + 1);
+    else end.setUTCMonth(end.getUTCMonth() + 1);
+    const price = plan.prices[0].amountMinor;
+    const sub = await prisma.subscription.create({ data: { groupId, planId: plan.id, status: 'ACTIVE', interval, currency: 'KES', amountMinor: price, currentPeriodStart: start, currentPeriodEnd: end } });
+    const p = await prisma.billingPayment.create({
+      data: { reference: `CHB-DEMO${String(receiptNo).padStart(4, '0')}`, groupId, subscriptionId: sub.id, planId: plan.id, interval, purpose: 'NEW', provider: 'SANDBOX', providerRef: `sbx_demo_${receiptNo}`, livemode: false, currency: 'KES', priceMinor: price, amountMinor: price, status: 'SUCCEEDED', idempotencyKey: `demo-billing-${receiptNo}`, receiptNumber: `CHB-R-DEMO-${String(receiptNo++).padStart(4, '0')}`, paidAt: start, periodStart: start, periodEnd: end, createdAt: start },
+    });
+    await prisma.subscriptionEvent.create({ data: { groupId, type: 'activated', toPlan: planCode, toStatus: 'ACTIVE', paymentId: p.id, reason: 'Demo data (sandbox, test mode)', createdAt: start } });
+  }
+  async function trial(groupId: string, planCode: string, daysLeft: number) {
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { code: planCode } });
+    await prisma.subscription.create({ data: { groupId, planId: plan.id, status: 'TRIALING', trialEndsAt: new Date(Date.now() + daysLeft * 86_400_000) } });
+    await prisma.subscriptionEvent.create({ data: { groupId, type: 'trial_started', toPlan: planCode, toStatus: 'TRIALING', reason: 'Demo data' } });
+  }
 
   async function group(name: string, type: 'MERRY_GO_ROUND' | 'TABLE_BANKING' | 'INVESTMENT' | 'WELFARE', roster: [string, GroupRole][], monthsHistory: number, extra: Record<string, unknown> = {}) {
     const g = await prisma.group.create({
@@ -97,7 +115,6 @@ async function main() {
         settings: { ...DEFAULT_SETTINGS, requiredFinancialApprovals: 1, accountReferencePrefix: name.slice(0, 4).toUpperCase(), ...extra },
         loanPolicy: { ...defaultLoanPolicy, enabled: type !== 'MERRY_GO_ROUND', requiredApprovals: 2 },
         createdById: users[roster[0][0]],
-        subscription: { create: { planId: plan.id, status: 'ACTIVE', currentPeriodEnd: new Date(Date.now() + 20 * 86_400_000) } },
       },
     });
     const joinedAt = new Date(`${addDays(today, -31 * monthsHistory - 3)}T06:00:00Z`);
@@ -129,6 +146,7 @@ async function main() {
 
   // 1) Jitegemee Table Banking — Amina is TREASURER.
   const jt = await group('Jitegemee Table Banking', 'TABLE_BANKING', [['Samuel', 'CHAIRPERSON'], ['Amina', 'TREASURER'], ['Faith', 'MEMBER'], ['Brian', 'MEMBER'], ['Lucy', 'MEMBER'], ['Peter', 'MEMBER']], 5);
+  await paidPlan(jt.id, 'PREMIUM', 'MONTH', 12);
   await contributions.createSchedule(jt.id, { name: 'Monthly shares', amountCents: 200_000, frequency: 'MONTHLY', startDate: addDays(today, -31 * 5) }, jt.ctx.Amina, meta);
   const jtObl = await pastObligations(jt.id);
   const lastDue = jtObl.at(-1)?.dueDate.getTime();
@@ -150,6 +168,7 @@ async function main() {
 
   // 2) Upendo Merry-Go-Round — Amina is a MEMBER.
   const up = await group('Upendo Merry-Go-Round', 'MERRY_GO_ROUND', [['Peter', 'CHAIRPERSON'], ['Joyce', 'TREASURER'], ['Amina', 'MEMBER'], ['Daniel', 'MEMBER'], ['Mercy', 'MEMBER']], 2);
+  await trial(up.id, 'PREMIUM', 9);
   // Mercy is the group's Payout Approver (an optional role), so payouts to the chair can still be approved independently.
   await prisma.membership.update({ where: { id: up.ctx.Mercy.id }, data: { specialRoles: ['PAYOUT_APPROVER'] } });
   up.ctx.Mercy = { ...up.ctx.Mercy, permissions: resolvePermissions('MEMBER', null, ['PAYOUT_APPROVER']) };
@@ -188,6 +207,7 @@ async function main() {
 
   // 3) Mombasa Investment Chama — Amina is CHAIRPERSON.
   const mi = await group('Mombasa Investment Chama', 'INVESTMENT', [['Amina', 'CHAIRPERSON'], ['Brian', 'TREASURER'], ['Lucy', 'SECRETARY'], ['Daniel', 'MEMBER'], ['Samuel', 'AUDITOR']], 3);
+  await paidPlan(mi.id, 'STANDARD', 'YEAR', 40);
   // Daniel is a Joint Signatory, so Mombasa can switch on "require a joint signatory" for money movements.
   await prisma.membership.update({ where: { id: mi.ctx.Daniel.id }, data: { specialRoles: ['JOINT_SIGNATORY'] } });
   mi.ctx.Daniel = { ...mi.ctx.Daniel, permissions: resolvePermissions('MEMBER', null, ['JOINT_SIGNATORY']) };
@@ -220,7 +240,8 @@ async function main() {
   console.log('  Upendo: 002 Peter (chair) · 003 Joyce (treasurer) · 005 Mercy (payout approver) · 004 Daniel (member)');
   console.log('  Try statement import as Joyce with docs/samples/upendo-paybill-statement-demo.csv');
   console.log('  Mombasa: 009 Lucy (secretary) · 006 Samuel (auditor) · 004 Daniel (joint signatory)');
-  console.log('  0700 000 099  Super Admin · 0700 000 098 Platform Admin · 0700 000 097 Support Agent');
+  console.log('  0700 000 099  Super Admin · 0700 000 098 Platform Admin · 0700 000 097 Support Agent · 0700 000 096 Finance');
+  console.log('  Plans: Jitegemee Premium (paid, test mode) · Mombasa Standard annual · Upendo Premium trial · Family Welfare Free');
   await app.close();
 }
 

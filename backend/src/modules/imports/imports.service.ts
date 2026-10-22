@@ -11,6 +11,7 @@ import { MembershipContext, RequestMeta } from '../../common/request';
 import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { PostingService } from '../finance/posting.service';
 import { LedgerService } from '../ledger/ledger.service';
+import { EntitlementService, PaymentRequiredException } from '../billing/entitlements.service';
 import { DEFAULT_PREFERENCES } from '../notifications/notifications.service';
 
 export const IMPORT_TEMPLATES: Record<ImportKind, { required: string[]; optional: string[]; example: string[] }> = {
@@ -39,6 +40,7 @@ export class ImportsService {
     private readonly audit: AuditService,
     private readonly posting: PostingService,
     private readonly ledger: LedgerService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   template(kind: ImportKind) {
@@ -260,6 +262,11 @@ export class ImportsService {
       if (claimed.count !== 1) throw new UnprocessableEntityException('Already committed');
       for (const r of results) {
         if (await this.commitRow(tx, b.kind, groupId, id, r, actor)) created++;
+      }
+      if (b.kind === 'MEMBERS') {
+        const max = (await this.entitlements.access(groupId)).plan.entitlements.limits.maxMembers;
+        const active = await tx.membership.count({ where: { groupId, status: 'ACTIVE' } });
+        if (active > max) throw new PaymentRequiredException(`This import would take the group to ${active} members; its plan allows ${max}. Nothing was imported.`, { code: 'MEMBER_LIMIT', limit: max, current: active });
       }
       await this.audit.log({ groupId, actorUserId: actor.userId, action: 'import.committed', entityType: 'ImportBatch', entityId: id, after: { kind: b.kind, created }, approvalStatus: 'APPROVED', meta }, tx);
     }, 1);

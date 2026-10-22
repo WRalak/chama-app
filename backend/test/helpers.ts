@@ -24,7 +24,7 @@ export function uniquePhone() {
 
 export async function createTestApp() {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication({ rawBody: true });
   configureApp(app);
   await app.init();
   return { app, prisma: app.get(PrismaService) };
@@ -32,7 +32,7 @@ export async function createTestApp() {
 
 /** Wipes all data. Journal/audit tables are append-only, so triggers are bypassed for the test DB only. */
 export async function resetDatabase(prisma: PrismaService) {
-  const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'`;
+  const tables = await prisma.$queryRaw<{ tablename: string }[]>`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('_prisma_migrations', 'plans', 'plan_prices', 'regions', 'billing_provider_availability')`;
   const list = tables.map((t) => `"public"."${t.tablename}"`).join(', ');
   await prisma.$transaction([
     prisma.$executeRawUnsafe(`SET LOCAL session_replication_role = replica`),

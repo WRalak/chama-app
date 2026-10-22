@@ -12,7 +12,8 @@ import { PageHeader, Panel, StatStrip } from '@/components/ui/layout-parts';
 import { ErrorState, LoadingRows } from '@/components/ui/states';
 import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs';
 import { api, errorMessage } from '@/lib/api';
-import { useCan, useGroupId } from '@/lib/session';
+import { useCan, useGroup, useGroupId, useMe } from '@/lib/session';
+import { t } from '@chamahub/shared';
 import { dateTime } from '@/lib/utils';
 
 const HREF: Record<AiLink['target'], (g: string, id?: string) => string> = {
@@ -72,7 +73,7 @@ function CardView({ card, groupId }: { card: AiCard; groupId: string }) {
 
 interface Turn { role: 'user' | 'assistant' | 'records' | 'error'; text: string; cards: AiCard[]; refused: string[] }
 
-function Chat({ status }: { status: AiStatus }) {
+function Chat({ status, inPlan }: { status: AiStatus; inPlan: boolean }) {
   const groupId = useGroupId();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
@@ -80,7 +81,8 @@ function Chat({ status }: { status: AiStatus }) {
   const [conversationId, setConversationId] = useState<string>();
   const end = useRef<HTMLDivElement>(null);
   const add = (t: Turn) => { setTurns((x) => [...x, t]); setTimeout(() => end.current?.scrollIntoView({ behavior: 'smooth' }), 50); };
-  const chatOn = status.chatAvailable;
+  // Chat is a Premium feature (the API enforces it); quick answers from the records work on every plan.
+  const chatOn = status.chatAvailable && inPlan;
 
   const quick = async (tool: string, label: string, args?: Record<string, unknown>) => {
     add({ role: 'user', text: label, cards: [], refused: [] });
@@ -200,16 +202,25 @@ export default function AssistantPage() {
   const groupId = useGroupId();
   const can = useCan();
   const status = useQuery({ queryKey: ['ai-status', groupId], queryFn: () => api<AiStatus>(`groups/${groupId}/ai/status`) });
+  const group = useGroup();
+  const { data: me } = useMe();
+  const inPlan = group.data?.plan.features.includes('ai_assistant') ?? false;
   return (
     <>
       <PageHeader title="AI Assistant" description="Answers, summaries and WhatsApp drafts built from the group’s records. Every figure is calculated by ChamaHub; the AI only explains and drafts." />
+      {group.data && !inPlan && (
+        <p className="mb-4 rounded-md bg-blush px-3 py-2 text-sm text-plum">
+          {t(me?.locale, 'billing.upgradeBody', { feature: 'Chat with the AI assistant', plan: 'Premium' })} Quick answers below still work.{' '}
+          <Link href={`/g/${groupId}/billing`} className="font-medium text-berry hover:underline">See plans</Link>
+        </p>
+      )}
       {status.error ? <ErrorState error={status.error} onRetry={status.refetch} /> : !status.data ? <LoadingRows rows={4} /> : can(Permission.GROUP_CONFIGURE) ? (
         <Tabs defaultValue="chat">
           <TabsList tabs={[{ value: 'chat', label: 'Assistant' }, { value: 'usage', label: 'Usage & errors' }]} />
-          <TabsContent value="chat" className="mt-4"><Chat status={status.data} /></TabsContent>
+          <TabsContent value="chat" className="mt-4"><Chat status={status.data} inPlan={inPlan} /></TabsContent>
           <TabsContent value="usage" className="mt-4"><Usage /></TabsContent>
         </Tabs>
-      ) : <Chat status={status.data} />}
+      ) : <Chat status={status.data} inPlan={inPlan} />}
     </>
   );
 }

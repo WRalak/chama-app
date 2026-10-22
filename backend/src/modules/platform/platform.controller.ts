@@ -1,6 +1,6 @@
 import { Body, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { paginationSchema, planSchema, PlatformOverview, PlatformPermission, platformRoleHas, platformRoleSchema, platformSettingsSchema, PlatformStaffRow, reasonSchema, supportAccessRequestSchema } from '@chamahub/shared';
+import { paginationSchema, PlatformOverview, PlatformPermission, platformRoleHas, platformRoleSchema, platformSettingsSchema, PlatformStaffRow, reasonSchema, supportAccessRequestSchema } from '@chamahub/shared';
 import { z } from 'zod';
 import { AuditService } from '../../common/audit.service';
 import { CurrentUser, Public, ReqMeta, RequirePlatform } from '../../common/decorators';
@@ -49,7 +49,7 @@ export class PlatformController {
       this.prisma.group.count({ where: { status: 'ACTIVE', journalEntries: { some: { createdAt: { gte: since30 } } } } }),
       this.prisma.user.count(),
       this.prisma.user.count({ where: { createdAt: { gte: since30 } } }),
-      this.prisma.subscription.findMany({ include: { plan: { select: { priceCents: true } } } }),
+      this.prisma.subscription.findMany({ select: { status: true } }),
       this.prisma.jobRun.count({ where: { status: 'FAILED', startedAt: { gte: since24 } } }),
       this.prisma.notificationDelivery.count({ where: { status: 'FAILED', createdAt: { gte: since24 } } }),
       this.prisma.supportTicket.count({ where: { status: 'OPEN' } }),
@@ -64,7 +64,6 @@ export class PlatformController {
       totalUsers,
       newUsers30d: newUsers,
       subscriptions: bySubStatus,
-      monthlyRecurringRevenueCents: subs.filter((s) => s.status === 'ACTIVE').reduce((a, s) => a + n(s.plan.priceCents), 0),
       failedJobs24h: failedJobs + failedDeliveries,
       openSupportRequests: openTickets,
       health: {
@@ -94,43 +93,6 @@ export class PlatformController {
       q.page,
       q.pageSize,
     );
-  }
-
-  @RequirePlatform(PlatformPermission.PLATFORM_MANAGE_PLANS)
-  @Patch('groups/:groupId/subscription')
-  async subscription(@Param('groupId') groupId: string, @Body(new ZodPipe(z.object({ planId: z.string(), status: z.enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELLED']), currentPeriodEnd: z.string().datetime().optional() }))) body: { planId: string; status: 'TRIALING' | 'ACTIVE' | 'PAST_DUE' | 'CANCELLED'; currentPeriodEnd?: string }, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    const before = await this.prisma.subscription.findUnique({ where: { groupId } });
-    const s = await this.prisma.subscription.upsert({
-      where: { groupId },
-      create: { groupId, planId: body.planId, status: body.status, currentPeriodEnd: body.currentPeriodEnd ? new Date(body.currentPeriodEnd) : null },
-      update: { planId: body.planId, status: body.status, currentPeriodEnd: body.currentPeriodEnd ? new Date(body.currentPeriodEnd) : undefined },
-    });
-    await this.audit.log({ groupId, actorUserId: user.id, action: 'platform.subscription_changed', entityType: 'Subscription', entityId: s.id, before, after: s, meta });
-    return { ok: true };
-  }
-
-  @RequirePlatform(PlatformPermission.PLATFORM_VIEW_STATS)
-  @Get('plans')
-  async plans() {
-    const rows = await this.prisma.plan.findMany({ orderBy: { priceCents: 'asc' }, include: { _count: { select: { subscriptions: true } } } });
-    return rows.map((p) => ({ id: p.id, code: p.code, name: p.name, priceCents: n(p.priceCents), maxMembers: p.maxMembers, features: p.features as string[], active: p.active, subscribers: p._count.subscriptions }));
-  }
-
-  @RequirePlatform(PlatformPermission.PLATFORM_MANAGE_PLANS)
-  @Post('plans')
-  async createPlan(@Body(new ZodPipe(planSchema)) body: z.infer<typeof planSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    const p = await this.prisma.plan.create({ data: { ...body, priceCents: big(body.priceCents) } });
-    await this.audit.log({ actorUserId: user.id, action: 'platform.plan_created', entityType: 'Plan', entityId: p.id, after: body, meta });
-    return { id: p.id };
-  }
-
-  @RequirePlatform(PlatformPermission.PLATFORM_MANAGE_PLANS)
-  @Patch('plans/:id')
-  async updatePlan(@Param('id') id: string, @Body(new ZodPipe(planSchema.partial())) body: Partial<z.infer<typeof planSchema>>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    const before = await this.prisma.plan.findUniqueOrThrow({ where: { id } });
-    await this.prisma.plan.update({ where: { id }, data: { ...body, priceCents: body.priceCents === undefined ? undefined : big(body.priceCents) } });
-    await this.audit.log({ actorUserId: user.id, action: 'platform.plan_updated', entityType: 'Plan', entityId: id, before, after: body, meta });
-    return { ok: true };
   }
 
   @RequirePlatform(PlatformPermission.PLATFORM_SUPPORT)
@@ -229,9 +191,10 @@ export class PlatformController {
 
   @RequirePlatform(PlatformPermission.PLATFORM_CONFIGURE)
   @Patch('settings')
-  async updateSettings(@Body(new ZodPipe(platformSettingsSchema)) body: z.infer<typeof platformSettingsSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async updateSettings(@Body(new ZodPipe(platformSettingsSchema.partial())) body: Partial<z.infer<typeof platformSettingsSchema>>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
     const before = await this.settings.get();
-    const after = await this.settings.set(body, user.id);
+    if (body.trialPlanCode && !(await this.prisma.plan.findFirst({ where: { code: body.trialPlanCode, active: true } }))) throw new NotFoundException('Trial plan not found or inactive');
+    const after = await this.settings.set({ ...before, ...body }, user.id);
     await this.audit.log({ actorUserId: user.id, action: 'platform.settings_changed', entityType: 'PlatformSetting', entityId: 'platform', before, after, meta });
     return after;
   }

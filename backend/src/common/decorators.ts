@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
-import type { Permission, PlatformPermission } from '@chamahub/shared';
+import type { Feature, Permission, PlatformPermission } from '@chamahub/shared';
 import { AppRequest, metaFrom } from './request';
 
 export const IS_PUBLIC = 'isPublic';
@@ -12,6 +12,10 @@ export const RequirePermission = (...permissions: Permission[]) => SetMetadata(R
 export const ANY_PERMISSION = 'anyPermission';
 /** Requires the caller's membership in `:groupId` to grant AT LEAST ONE of the listed permissions (e.g. preparer or approver). */
 export const RequireAnyPermission = (...permissions: Permission[]) => SetMetadata(ANY_PERMISSION, permissions);
+
+export const REQUIRED_FEATURE = 'requiredFeature';
+/** The group's plan must include this feature (checked on the server; 402 otherwise). Never put this on read-only record routes. */
+export const RequireFeature = (feature: Feature) => SetMetadata(REQUIRED_FEATURE, feature);
 
 export const REQUIRED_PLATFORM_PERMISSION = 'requiredPlatformPermission';
 export const RequirePlatform = (permission: PlatformPermission) => SetMetadata(REQUIRED_PLATFORM_PERMISSION, permission);

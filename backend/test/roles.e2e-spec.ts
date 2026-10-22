@@ -154,7 +154,7 @@ describe('Roles: platform vs Chama, multi-group, configurable within safeguards'
     // Support agent: tickets and account help, no stats, no plans, no finances.
     await as(app, supportAgent).get('/v1/platform/support-tickets').expect(200);
     await as(app, supportAgent).get('/v1/platform/overview').expect(403);
-    await as(app, supportAgent).post('/v1/platform/plans', { code: 'X1', name: 'X', priceCents: 0, maxMembers: 5, features: [] }).expect(403);
+    await as(app, supportAgent).put('/v1/platform/plans/X1', { code: 'X1', name: 'X', tier: 5, entitlements: { features: [], limits: { maxMembers: 5 } }, active: true, isPublic: false }).expect(403);
     await as(app, supportAgent).get(`/v1/groups/${A.groupId}/contributions/ledger`).expect(404);
     await as(app, supportAgent).post(`/v1/platform/users/${member.id}/send-reset-code`, { reason: 'Member lost access to phone PIN' }).expect(200);
     expect(testOtpOutbox.get(`${member.phone}:RESET_PASSWORD`)).toMatch(/^\d{6}$/);

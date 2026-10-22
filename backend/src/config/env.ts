@@ -16,6 +16,31 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:8081'),
   DEV_LOG_OTP: bool,
   /** Optional: receives a small JSON report (no request data) for every 5xx, e.g. a Slack/Teams/alerting webhook. */
+  // ---- Subscription billing (ChamaHub's own fees; separate from groups' M-Pesa) ----
+  /** Public base URL providers call back, e.g. https://api.example.co.ke/v1/billing/webhooks */
+  BILLING_CALLBACK_BASE_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
+  /** Secret in M-Pesa callback URLs (Daraja does not sign callbacks). */
+  BILLING_WEBHOOK_TOKEN: z.string().min(24).optional().or(z.literal('').transform(() => undefined)),
+  BILLING_MPESA_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  BILLING_MPESA_CONSUMER_KEY: z.string().optional(),
+  BILLING_MPESA_CONSUMER_SECRET: z.string().optional(),
+  BILLING_MPESA_SHORTCODE: z.string().optional(),
+  BILLING_MPESA_PASSKEY: z.string().optional(),
+  BILLING_MPESA_TRANSACTION_TYPE: z.enum(['CustomerPayBillOnline', 'CustomerBuyGoodsOnline']).default('CustomerPayBillOnline'),
+  /** Till number for Buy Goods; defaults to the shortcode. */
+  BILLING_MPESA_PARTY_B: z.string().optional(),
+  PAYSTACK_SECRET_KEY: z.string().optional(),
+  /** Where Paystack sends the payer back after checkout (the web billing page). */
+  PAYSTACK_CALLBACK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
+  /** HMAC secret for the development/test sandbox provider. Ignored in production. */
+  BILLING_SANDBOX_SECRET: z.string().default('chamahub-sandbox-secret-not-for-production'),
+  /** Bank transfer instructions shown for manual (invoice) payments. */
+  BILLING_MANUAL_INSTRUCTIONS: z.string().optional(),
+  /** Shown on subscription receipts. Add a tax registration (e.g. KRA PIN) only once registered. */
+  BILLING_SELLER_NAME: z.string().default('ChamaHub'),
+  BILLING_SELLER_ADDRESS: z.string().optional(),
+  BILLING_SELLER_EMAIL: z.string().optional(),
+  BILLING_SELLER_TAX_ID: z.string().optional(),
   ERROR_WEBHOOK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   AT_USERNAME: z.string().optional(),
   AT_API_KEY: z.string().optional(),

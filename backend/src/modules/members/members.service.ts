@@ -8,6 +8,7 @@ import { PrismaService, Tx } from '../../prisma/prisma.service';
 import { MemberFinanceService } from '../finance/member-finance.service';
 import { ObligationsService } from '../finance/obligations.service';
 import { readSettings } from '../finance/policies';
+import { EntitlementService } from '../billing/entitlements.service';
 import { OfficersService } from '../officers/officers.service';
 import { NotificationsService, readPreferences } from '../notifications/notifications.service';
 
@@ -22,6 +23,7 @@ export class MembersService {
     private readonly obligations: ObligationsService,
     private readonly notifications: NotificationsService,
     private readonly officers: OfficersService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   async list(groupId: string, viewer: MembershipContext, opts: { status?: string; q?: string }): Promise<MemberRow[]> {
@@ -186,6 +188,8 @@ export class MembersService {
     }
     const pending = await this.prisma.invitation.findFirst({ where: { groupId, phone: input.phone, status: 'PENDING', expiresAt: { gt: new Date() } } });
     if (pending) throw new ConflictException('An invitation is already pending for this number.');
+    // The plan's member limit counts pending invitations, so accepted ones never fail later.
+    await this.entitlements.assertCanAddMembers(groupId, 1, { countPendingInvitations: true });
     const group = await this.prisma.group.findUniqueOrThrow({ where: { id: groupId }, select: { name: true } });
     const inv = await this.prisma.invitation.create({
       data: { groupId, phone: input.phone, fullName: input.fullName ?? null, role: input.role, invitedById: actor.userId, expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * 86_400_000) },
@@ -261,6 +265,7 @@ export class MembersService {
   private async join(tx: Tx, groupId: string, userId: string, role: GroupRole) {
     const existing = await tx.membership.findUnique({ where: { groupId_userId: { groupId, userId } } });
     if (existing && existing.status !== 'EXITED') throw new ConflictException('You are already a member of this group.');
+    await this.entitlements.assertCanAddMembers(groupId, 1, { countPendingInvitations: false, tx });
     if (existing) {
       return tx.membership.update({ where: { id: existing.id }, data: { status: 'ACTIVE', role, joinedAt: new Date(), exitedAt: null } });
     }

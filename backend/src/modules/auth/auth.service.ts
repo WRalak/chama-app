@@ -25,6 +25,7 @@ export function toAuthUser(u: User): AuthUser {
     email: u.email,
     phoneVerified: !!u.phoneVerifiedAt,
     platformRole: u.platformRole,
+    locale: u.locale,
     createdAt: u.createdAt.toISOString(),
   };
 }

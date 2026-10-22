@@ -1,12 +1,25 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { formatDate, formatKes } from '@chamahub/shared';
+import { formatDate, formatMoney } from '@chamahub/shared';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const kes = (cents: number | null | undefined, compact = false) => (cents === null || cents === undefined ? '—' : formatKes(cents, { compact }));
+/**
+ * The currency amounts on the current page are in. Group pages set it to the group's base
+ * currency (see RouteGuard); pages outside a group use KES, the only launch currency so far.
+ */
+let displayCurrency = 'KES';
+export function setDisplayCurrency(code: string) {
+  displayCurrency = code;
+}
+export const currentCurrency = () => displayCurrency;
+
+/** Formats minor units in the page's currency ("KSh 1,234.50"). Named `kes` for history; it follows the group's currency. */
+export const kes = (cents: number | null | undefined, compact = false) => (cents === null || cents === undefined ? '—' : formatMoney(cents, displayCurrency, { compact }));
+/** Formats an amount whose currency is known explicitly (billing, revenue). */
+export const money = (minor: number | null | undefined, currency: string, compact = false) => (minor === null || minor === undefined ? '—' : formatMoney(minor, currency, { compact }));
 export const date = (iso: string | null | undefined) => (iso ? formatDate(iso.length > 10 ? new Date(new Date(iso).getTime() + 3 * 3600_000) : iso) : '—');
 export const dateTime = (iso: string | null | undefined) => {
   if (!iso) return '—';

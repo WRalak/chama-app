@@ -10,3 +10,7 @@ process.env.MPESA_CONSUMER_KEY = '';
 process.env.DISABLE_THROTTLE = 'true';
 // Tests never call a real AI provider; they script one where needed.
 process.env.ANTHROPIC_API_KEY = '';
+// Billing: test keys only, so webhook authentication can be checked without any network call.
+process.env.PAYSTACK_SECRET_KEY = 'sk_test_chamahub_dummy_key';
+process.env.BILLING_WEBHOOK_TOKEN = 'test-billing-webhook-token-0123456789';
+process.env.BILLING_MPESA_CONSUMER_KEY = '';

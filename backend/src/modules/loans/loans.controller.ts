@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { isoDateSchema, loanApplicationSchema, loanDecisionSchema, loanDisburseSchema, Permission, prepareLoanSchema } from '@chamahub/shared';
+import { isoDateSchema, loanApplicationSchema, loanDecisionSchema, loanDisburseSchema, Permission, prepareLoanSchema, Feature } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentMembership, ReqMeta, RequirePermission } from '../../common/decorators';
+import { CurrentMembership, ReqMeta, RequirePermission, RequireFeature } from '../../common/decorators';
 import { MembershipContext, RequestMeta } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { LoansService } from './loans.service';
@@ -24,12 +24,14 @@ export class LoansController {
   }
 
   @RequirePermission(Permission.LOANS_APPLY)
+  @RequireFeature(Feature.LOANS)
   @Post()
   apply(@Param('groupId') groupId: string, @Body(new ZodPipe(loanApplicationSchema)) body: z.infer<typeof loanApplicationSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.loans.apply(groupId, body, m, meta);
   }
 
   @RequirePermission(Permission.LOANS_PREPARE)
+  @RequireFeature(Feature.LOANS)
   @Post('prepare')
   prepare(@Param('groupId') groupId: string, @Body(new ZodPipe(prepareLoanSchema)) body: z.infer<typeof prepareLoanSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.loans.prepare(groupId, body, m, meta);

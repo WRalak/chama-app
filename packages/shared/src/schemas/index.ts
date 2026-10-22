@@ -13,6 +13,9 @@ import {
   TRANSACTION_STATUSES,
 } from '../enums';
 import { isIsoDate } from '../dates';
+import { CURRENCY_CODES } from '../currency';
+import { BILLING_INTERVALS, FEATURES } from '../billing';
+import { LOCALE_CODES } from '../i18n';
 import { ALL_PERMISSIONS, SPECIAL_ROLES } from '../permissions';
 import { normalizeKenyanPhone } from '../phone';
 import { MAX_LOAN_INSTALLMENTS } from '../finance/loans';
@@ -100,6 +103,7 @@ export const changePasswordSchema = z.object({ currentPassword: z.string().min(1
 
 export const updateProfileSchema = z.object({
   fullName: z.string().trim().min(3).max(120).optional(),
+  locale: z.enum(LOCALE_CODES).optional(),
   email: z.string().trim().email().nullable().optional(),
   nationalIdLast4: z.string().regex(/^\d{4}$/).nullable().optional(),
 });
@@ -186,9 +190,34 @@ export const defaultGroupSettings: GroupSettingsInput = {
   requireJointSignatory: false,
 };
 
+/** IANA zone such as "Africa/Nairobi"; checked against the runtime's time-zone database. */
+export const timezoneSchema = z.string().trim().min(3).max(64).refine((tz) => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}, 'Unknown time zone');
+export const countryCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/, 'Use a two-letter country code');
+export const currencyCodeSchema = z.enum(CURRENCY_CODES);
+export const localeTagSchema = z.string().trim().regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Use a language tag such as en-KE or sw-TZ');
+
+/** Where the group operates. The currency is fixed once the group has money records. */
+export const groupRegionSchema = z.object({
+  countryCode: countryCodeSchema,
+  currency: currencyCodeSchema,
+  timezone: timezoneSchema,
+  locale: localeTagSchema,
+});
+
 export const createGroupSchema = z.object({
   name: z.string().trim().min(3, 'Group name is too short').max(120),
   type: z.enum(GROUP_TYPES),
+  countryCode: countryCodeSchema.optional(),
+  currency: currencyCodeSchema.optional(),
+  timezone: timezoneSchema.optional(),
+  locale: localeTagSchema.optional(),
   description: z.string().trim().max(1000).optional(),
   county: z.string().trim().max(60).optional(),
   registrationNumber: z.string().trim().max(60).optional(),
@@ -473,14 +502,6 @@ export const createImportSchema = z.object({
 
 /* ---------- platform ---------- */
 
-export const planSchema = z.object({
-  code: z.string().trim().regex(/^[A-Z0-9_]{2,30}$/),
-  name: z.string().trim().min(2).max(60),
-  priceCents: nonNegativeCentsSchema,
-  maxMembers: z.number().int().min(1).max(100000),
-  features: z.array(z.string().max(80)).max(30),
-  active: z.boolean().default(true),
-});
 export const supportAccessRequestSchema = z.object({
   groupId: z.string(),
   purpose: reasonSchema,
@@ -532,7 +553,7 @@ export const respondFindingSchema = z.object({ status: z.enum(['ACKNOWLEDGED', '
 
 /* ---------- platform administration ---------- */
 
-export const platformRoleSchema = z.object({ platformRole: z.enum(['USER', 'SUPPORT', 'PLATFORM_ADMIN', 'SUPER_ADMIN']), reason: reasonSchema });
+export const platformRoleSchema = z.object({ platformRole: z.enum(['USER', 'SUPPORT', 'PLATFORM_ADMIN', 'FINANCE', 'SUPER_ADMIN']), reason: reasonSchema });
 
 export const platformSettingsSchema = z.object({
   /** Kill switches for outbound channels (e.g. if a provider misbehaves). */
@@ -542,11 +563,20 @@ export const platformSettingsSchema = z.object({
   /** Longest support access a chairperson can grant. */
   maxSupportAccessHours: z.number().int().min(1).max(72),
   trialDays: z.number().int().min(0).max(180),
+  /** New groups start a trial of `trialPlanCode` for `trialDays` days. */
+  trialEnabled: z.boolean(),
+  trialPlanCode: z.string().trim().min(2).max(30),
+  /** Days paid features keep working after a missed renewal before the group drops to Free. */
+  graceDays: z.number().int().min(0).max(60),
+  /** Currency for consolidated revenue reports. Source amounts stay visible. */
+  reportingCurrency: currencyCodeSchema,
+  /** Days before the period end when officers are reminded to renew. */
+  renewalReminderDays: z.array(z.number().int().min(1).max(60)).max(5),
   /** Shown to every user when set. */
   maintenanceNotice: z.string().trim().max(300).nullable(),
 });
 export type PlatformSettings = z.infer<typeof platformSettingsSchema>;
-export const defaultPlatformSettings: PlatformSettings = { smsEnabled: true, whatsappEnabled: true, emailEnabled: true, maxSupportAccessHours: 24, trialDays: 30, maintenanceNotice: null };
+export const defaultPlatformSettings: PlatformSettings = { smsEnabled: true, whatsappEnabled: true, emailEnabled: true, maxSupportAccessHours: 24, trialDays: 30, maintenanceNotice: null, trialEnabled: true, trialPlanCode: 'PREMIUM', graceDays: 7, reportingCurrency: 'KES', renewalReminderDays: [7, 3, 1] };
 
 /* ---------- payment destinations ---------- */
 
@@ -664,3 +694,115 @@ export const HANDOVER_ROLES = ['CHAIRPERSON', 'VICE_CHAIRPERSON', 'TREASURER', '
 export const createHandoverSchema = z.object({ role: z.enum(HANDOVER_ROLES), notes: z.string().trim().max(2000).optional() });
 export const acknowledgeHandoverSchema = z.object({ note: z.string().trim().max(1000).optional() });
 export const sendRemindersSchema = z.object({ memberIds: z.array(z.string()).max(500).optional() });
+
+/* ---------- subscriptions & billing (ChamaHub's own fees, separate from group money) ---------- */
+
+export const planCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z][A-Z0-9_]{1,29}$/, 'Use capitals, digits and _');
+
+export const checkoutSchema = z.object({
+  planCode: planCodeSchema,
+  interval: z.enum(BILLING_INTERVALS),
+  provider: z.string().trim().min(2).max(30),
+  /** For M-Pesa: the phone that receives the prompt. ChamaHub never asks for the PIN. */
+  phone: phoneSchema.optional(),
+  email: z.string().trim().email().optional(),
+  idempotencyKey: z.string().min(8).max(100),
+});
+
+export const changePlanSchema = z.object({ planCode: planCodeSchema, interval: z.enum(BILLING_INTERVALS) });
+export const cancelSubscriptionSchema = z.object({ reason: z.string().trim().max(500).optional() });
+
+export const promoGrantSchema = z.object({
+  planCode: planCodeSchema,
+  endsAt: z.string().datetime(),
+  reason: z.string().trim().min(5, 'Give a reason (at least 5 characters)').max(500),
+});
+export const promoRevokeSchema = z.object({ reason: z.string().trim().min(5).max(500) });
+
+export const entitlementsSchema = z.object({
+  features: z.array(z.enum(FEATURES)).max(FEATURES.length),
+  limits: z.object({ maxMembers: z.number().int().min(1).max(100000) }),
+});
+
+export const planUpsertSchema = z.object({
+  code: planCodeSchema,
+  name: z.string().trim().min(2).max(60),
+  description: z.string().trim().max(500).nullable().optional(),
+  tier: z.number().int().min(0).max(100),
+  entitlements: entitlementsSchema,
+  active: z.boolean(),
+  isPublic: z.boolean(),
+});
+
+export const planPriceSchema = z.object({
+  planCode: planCodeSchema,
+  /** "*" applies to every country without a specific price. */
+  countryCode: z.union([z.literal('*'), countryCodeSchema]),
+  currency: currencyCodeSchema,
+  interval: z.enum(BILLING_INTERVALS),
+  amountMinor: z.number().int().min(0).max(1_000_000_000_00),
+  active: z.boolean(),
+});
+
+export const regionSchema = z.object({
+  countryCode: countryCodeSchema,
+  name: z.string().trim().min(2).max(80),
+  defaultCurrency: currencyCodeSchema,
+  defaultTimezone: timezoneSchema,
+  defaultLocale: localeTagSchema,
+  /** New groups may be created in this country. */
+  available: z.boolean(),
+  /** Subscriptions can be bought here (needs at least one enabled provider). */
+  billingAvailable: z.boolean(),
+  notes: z.string().trim().max(1000).nullable().optional(),
+});
+
+export const providerAvailabilitySchema = z.object({
+  provider: z.string().trim().min(2).max(30),
+  countryCode: countryCodeSchema,
+  currency: currencyCodeSchema,
+  methods: z.array(z.string().trim().min(2).max(30)).min(1).max(10),
+  recurring: z.boolean(),
+  refunds: z.boolean(),
+  enabled: z.boolean(),
+});
+
+export const refundSchema = z.object({ amountMinor: z.number().int().positive(), reason: z.string().trim().min(5).max(500) });
+
+export const billingCaseSchema = z.object({
+  groupId: z.string().optional(),
+  paymentId: z.string().optional(),
+  subject: z.string().trim().min(3).max(200),
+  details: z.string().trim().min(5).max(4000),
+  priority: z.enum(['LOW', 'NORMAL', 'HIGH']).default('NORMAL'),
+});
+export const billingCaseUpdateSchema = z.object({
+  status: z.enum(['OPEN', 'WAITING', 'RESOLVED']),
+  resolution: z.string().trim().max(2000).optional(),
+  assignToMe: z.boolean().optional(),
+});
+
+export const exchangeRateSchema = z.object({
+  baseCurrency: currencyCodeSchema,
+  quoteCurrency: currencyCodeSchema,
+  /** 1 base = rate quote, as a decimal string so it is stored exactly. */
+  rate: z.string().trim().regex(/^\d{1,10}(\.\d{1,10})?$/, 'Use a decimal such as 129.45'),
+  asOf: isoDateSchema,
+  source: z.string().trim().min(2).max(120),
+}).refine((v) => v.baseCurrency !== v.quoteCurrency, { message: 'Choose two different currencies', path: ['quoteCurrency'] });
+
+export const OPERATING_COST_CATEGORIES = ['ACQUISITION', 'AI', 'INFRASTRUCTURE', 'PAYMENT_FEES', 'SMS_MESSAGING', 'STAFF', 'OTHER'] as const;
+export const operatingCostSchema = z.object({
+  category: z.enum(OPERATING_COST_CATEGORIES),
+  description: z.string().trim().min(3).max(300),
+  currency: currencyCodeSchema,
+  amountMinor: z.number().int().positive(),
+  incurredOn: isoDateSchema,
+  source: z.string().trim().max(200).optional(),
+});
+
+export const revenueQuerySchema = z.object({
+  from: isoDateSchema.optional(),
+  to: isoDateSchema.optional(),
+  livemode: z.enum(['live', 'test']).default('live'),
+});

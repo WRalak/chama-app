@@ -12,9 +12,10 @@ import {
   statementFileSchema,
   StatementFileInput,
   uploadEvidenceSchema,
+  Feature,
 } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentMembership, ReqMeta, RequirePermission } from '../../common/decorators';
+import { CurrentMembership, ReqMeta, RequirePermission, RequireFeature } from '../../common/decorators';
 import { MembershipContext, RequestMeta } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { DestinationsService } from './destinations.service';
@@ -90,12 +91,14 @@ export class CollectionsController {
 
   @RequirePermission(Permission.RECONCILIATION_MANAGE)
   @HttpCode(200)
+  @RequireFeature(Feature.STATEMENT_IMPORT)
   @Post('statement-imports/preview')
   preview(@Param('groupId') groupId: string, @Body(new ZodPipe(statementFileSchema)) body: StatementFileInput, @CurrentMembership() m: MembershipContext) {
     return this.statements.preview(groupId, body, m);
   }
 
   @RequirePermission(Permission.RECONCILIATION_MANAGE)
+  @RequireFeature(Feature.STATEMENT_IMPORT)
   @Post('statement-imports')
   importStatement(@Param('groupId') groupId: string, @Body(new ZodPipe(statementFileSchema)) body: StatementFileInput, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.statements.create(groupId, body, m, meta);
@@ -151,6 +154,7 @@ export class CollectionsController {
   /* ---------- WhatsApp summaries ---------- */
 
   @RequirePermission(Permission.GROUP_VIEW)
+  @RequireFeature(Feature.WHATSAPP_SUMMARIES)
   @Get('share/collections')
   shareCollections(@Param('groupId') groupId: string, @CurrentMembership() m: MembershipContext, @Query('month') month?: string) {
     return this.summaries.collections(groupId, m, month);

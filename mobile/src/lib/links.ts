@@ -44,6 +44,8 @@ export function routeForNotification(n: { type?: NotificationType | string; grou
       return `${base}/rotation`;
     case 'DESTINATION_CHANGED':
       return `${base}/how-to-pay`;
+    case 'BILLING':
+      return `${base}/manage/billing`;
     case 'ANNOUNCEMENT':
       return `${base}/manage/announcements`;
     default:

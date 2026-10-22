@@ -10,6 +10,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import {
+  Feature,
   GroupRole,
   Permission,
   PlatformPermission,
@@ -21,7 +22,8 @@ import {
 } from '@chamahub/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from './audit.service';
-import { ALLOW_UNVERIFIED, ANY_PERMISSION, IS_PUBLIC, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
+import { ALLOW_UNVERIFIED, ANY_PERMISSION, IS_PUBLIC, REQUIRED_FEATURE, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
+import { EntitlementService } from '../modules/billing/entitlements.service';
 import { AppRequest, metaFrom } from './request';
 
 export interface AccessTokenPayload {
@@ -98,6 +100,7 @@ export class GroupAccessGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -147,6 +150,9 @@ export class GroupAccessGuard implements CanActivate {
     if (anyOf?.length && !anyOf.some((p) => req.membership!.permissions.includes(p))) {
       throw new ForbiddenException('Your role in this group does not allow this action.');
     }
+    // Paid features: checked after permissions, so a caller without the role gets 403, not an upsell.
+    const feature = this.reflector.getAllAndOverride<Feature>(REQUIRED_FEATURE, targets);
+    if (feature) await this.entitlements.assertFeature(groupId, feature);
     return true;
   }
 

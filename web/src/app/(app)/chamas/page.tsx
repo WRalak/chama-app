@@ -25,7 +25,8 @@ export default function ChamasPage() {
   const router = useRouter();
   const groups = useMyGroups();
   const [open, setOpen] = useState(false);
-  const form = useForm<Form>({ resolver: zodResolver(createGroupSchema), defaultValues: { type: 'TABLE_BANKING', financialYearStartMonth: 1 } });
+  const form = useForm<Form>({ resolver: zodResolver(createGroupSchema), defaultValues: { type: 'TABLE_BANKING', financialYearStartMonth: 1, countryCode: 'KE' } });
+  const regions = useQuery({ queryKey: ['regions-available'], queryFn: () => api<{ countryCode: string; name: string; currency: string }[]>('regions'), staleTime: 10 * 60_000 });
   const create = useAction((v: Form) => api<{ id: string }>('groups', { body: v }), { success: 'Chama created. You are its chairperson.', invalidate: [['groups']], onSuccess: (g) => router.push(`/g/${g.id}/settings`) });
 
   return (
@@ -108,7 +109,12 @@ export default function ChamasPage() {
                   ))}
                 </Select>
               </Field>
-              <Field label="County" htmlFor="county">
+              <Field label="Country" htmlFor="country" hint={regions.data?.find((r) => r.countryCode === (form.watch('countryCode') ?? 'KE')) ? `Amounts in ${regions.data.find((r) => r.countryCode === (form.watch('countryCode') ?? 'KE'))!.currency}; fixed once money is recorded` : undefined}>
+                <Select id="country" {...form.register('countryCode')}>
+                  {(regions.data ?? [{ countryCode: 'KE', name: 'Kenya' }]).map((r) => <option key={r.countryCode} value={r.countryCode}>{r.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="County / region" htmlFor="county">
                 <Input id="county" {...form.register('county')} placeholder="e.g. Kisumu" />
               </Field>
               <Field label="Registration number (optional)" htmlFor="reg">

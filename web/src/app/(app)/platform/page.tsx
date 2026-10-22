@@ -20,7 +20,7 @@ export default function PlatformPage() {
         stats={[
           { label: 'Registered Chamas', value: d.totalGroups.toLocaleString(), hint: `${d.activeGroups} active in 30 days` },
           { label: 'Registered users', value: d.totalUsers.toLocaleString(), hint: `+${d.newUsers30d} in 30 days` },
-          { label: 'Monthly recurring revenue', value: kes(d.monthlyRecurringRevenueCents), hint: 'Active paid subscriptions' },
+          { label: 'Subscriptions', value: (d.subscriptions.ACTIVE ?? 0).toLocaleString(), hint: `${d.subscriptions.TRIALING ?? 0} trials · ${d.subscriptions.PAST_DUE ?? 0} in grace` },
           { label: 'Failed jobs / deliveries (24h)', value: d.failedJobs24h, tone: d.failedJobs24h ? 'danger' : 'success' },
           { label: 'Open support requests', value: d.openSupportRequests, tone: d.openSupportRequests ? 'warning' : 'default' },
         ]}

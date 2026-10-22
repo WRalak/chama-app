@@ -14,6 +14,11 @@ export const GroupType = {
   WELFARE: 'WELFARE',
   SAVINGS: 'SAVINGS',
   HYBRID: 'HYBRID',
+  /** South African rotating or saving club. */
+  STOKVEL: 'STOKVEL',
+  COMMUNITY_FUND: 'COMMUNITY_FUND',
+  FAMILY: 'FAMILY',
+  OTHER: 'OTHER',
 } as const;
 export type GroupType = (typeof GroupType)[keyof typeof GroupType];
 export const GROUP_TYPES = values(GroupType);
@@ -35,6 +40,8 @@ export const PlatformRole = {
   SUPPORT: 'SUPPORT',
   /** Platform Admin: groups, subscriptions, accounts and operations. */
   PLATFORM_ADMIN: 'PLATFORM_ADMIN',
+  /** Finance: revenue, refunds, costs and exchange rates. No group finances, no accounts. */
+  FINANCE: 'FINANCE',
   /** Super Admin: platform configuration, administrators and security. */
   SUPER_ADMIN: 'SUPER_ADMIN',
 } as const;
@@ -282,6 +289,7 @@ export const NotificationType = {
   PAYOUT_FAILED: 'PAYOUT_FAILED',
   ROTATION_UPDATED: 'ROTATION_UPDATED',
   DESTINATION_CHANGED: 'DESTINATION_CHANGED',
+  BILLING: 'BILLING',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -351,17 +359,22 @@ export type FindingStatus = (typeof FindingStatus)[keyof typeof FindingStatus];
 
 export const LABELS = {
   groupType: {
-    MERRY_GO_ROUND: 'Merry-Go-Round',
+    MERRY_GO_ROUND: 'Merry-Go-Round (rotating savings)',
     TABLE_BANKING: 'Table Banking',
     INVESTMENT: 'Investment',
     WELFARE: 'Welfare',
-    SAVINGS: 'Savings',
+    SAVINGS: 'Savings club',
     HYBRID: 'Hybrid',
+    STOKVEL: 'Stokvel',
+    COMMUNITY_FUND: 'Community fund',
+    FAMILY: 'Family savings',
+    OTHER: 'Other',
   } satisfies Record<GroupType, string>,
   platformRole: {
     USER: 'User',
     SUPPORT: 'Support Agent',
     PLATFORM_ADMIN: 'Platform Admin',
+    FINANCE: 'Finance',
     SUPER_ADMIN: 'Super Admin',
   } satisfies Record<PlatformRole, string>,
   groupRole: {

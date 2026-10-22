@@ -22,6 +22,7 @@ enum PlatformRole {
   USER
   SUPPORT
   PLATFORM_ADMIN
+  FINANCE
   SUPER_ADMIN
 }
 
@@ -65,6 +66,10 @@ enum GroupType {
   WELFARE
   SAVINGS
   HYBRID
+  STOKVEL
+  COMMUNITY_FUND
+  FAMILY
+  OTHER
 }
 
 enum GroupStatus {
@@ -388,6 +393,7 @@ enum NotificationType {
   PAYOUT_FAILED
   ROTATION_UPDATED
   DESTINATION_CHANGED
+  BILLING
 }
 
 enum NotificationChannel {
@@ -432,7 +438,57 @@ enum SubscriptionStatus {
   TRIALING
   ACTIVE
   PAST_DUE
+  EXPIRED
   CANCELLED
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+enum BillingPaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+}
+
+enum BillingPurpose {
+  NEW
+  UPGRADE
+  RENEWAL
+}
+
+enum BillingRefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum BillingCaseStatus {
+  OPEN
+  WAITING
+  RESOLVED
+}
+
+enum BillingCasePriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum OperatingCostCategory {
+  ACQUISITION
+  AI
+  INFRASTRUCTURE
+  PAYMENT_FEES
+  SMS_MESSAGING
+  STAFF
+  OTHER
 }
 
 enum ReconciliationStatus {
@@ -472,6 +528,8 @@ model User {
   phoneVerifiedAt     DateTime?
   platformRole        PlatformRole @default(USER)
   preferences         Json         @default("{}")
+  /// App language (en, sw, …).
+  locale              String       @default("en")
   nationalIdLast4     String?
   failedLoginCount    Int          @default(0)
   lockedUntil         DateTime?
@@ -536,6 +594,11 @@ model Group {
   status                  GroupStatus @default(ACTIVE)
   description             String?
   county                  String?
+  /// ISO 3166-1 alpha-2. The group's base currency is fixed once it has money records (database trigger).
+  countryCode             String      @default("KE")
+  currency                String      @default("KES")
+  timezone                String      @default("Africa/Nairobi")
+  locale                  String      @default("en-KE")
   registrationNumber      String?
   financialYearStartMonth Int         @default(1)
   inviteCode              String?     @unique
@@ -565,6 +628,8 @@ model Group {
   disputes         Dispute[]
   holdings         InvestmentHolding[]
   subscription     Subscription?
+  promotions       PromotionalGrant[]
+  billingPayments  BillingPayment[]
   approvals        Approval[]
   unmatched        UnmatchedPayment[]
   supportGrants    SupportAccessGrant[]
@@ -724,6 +789,8 @@ model Payment {
   groupId        String
   membershipId   String?
   amountCents    BigInt
+  /// Always the group's base currency (set by a database trigger).
+  currency       String            @default("KES")
   method         PaymentMethod
   source         PaymentSource     @default(MANUAL)
   purpose        PaymentPurpose
@@ -830,6 +897,8 @@ model UnmatchedPayment {
 model JournalEntry {
   id           String          @id @default(cuid())
   groupId      String
+  /// Always the group's base currency (set by a database trigger).
+  currency     String          @default("KES")
   entryDate    DateTime        @db.Date
   type         LedgerEntryType
   description  String
@@ -1341,35 +1410,282 @@ model NotificationDelivery {
 
 // ───────────────────────────── platform ─────────────────────────────
 
+/// A ChamaHub plan. Prices are per region/currency/interval in plan_prices; entitlements are enforced by the API.
 model Plan {
-  id         String   @id @default(cuid())
-  code       String   @unique
-  name       String
-  priceCents BigInt
-  maxMembers Int
-  features   Json     @default("[]")
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  description  String?
+  /// Higher tier = more capable. Used to compare plans (upgrade vs downgrade).
+  tier         Int      @default(0)
+  /// { features: Feature[], limits: { maxMembers } }
+  entitlements Json
+  active       Boolean  @default(true)
+  isPublic     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  subscriptions Subscription[]
+  prices          PlanPrice[]
+  subscriptions   Subscription[]
+  promotions      PromotionalGrant[]
+  billingPayments BillingPayment[]
 
   @@map("plans")
 }
 
+model PlanPrice {
+  id          String          @id @default(cuid())
+  planId      String
+  /// "*" = any country without a more specific price.
+  countryCode String          @default("*")
+  currency    String
+  interval    BillingInterval
+  amountMinor BigInt
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@unique([planId, countryCode, currency, interval])
+  @@map("plan_prices")
+}
+
 model Subscription {
-  id               String             @id @default(cuid())
-  groupId          String             @unique
-  planId           String
-  status           SubscriptionStatus @default(TRIALING)
-  trialEndsAt      DateTime?
-  currentPeriodEnd DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  groupId            String             @unique
+  planId             String
+  status             SubscriptionStatus @default(TRIALING)
+  interval           BillingInterval?
+  /// The price paid for the current period, kept so later price changes do not rewrite history.
+  currency           String?
+  amountMinor        BigInt?
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  graceEndsAt        DateTime?
+  cancelAtPeriodEnd  Boolean            @default(false)
+  cancelledAt        DateTime?
+  /// A downgrade or interval change that takes effect at the end of the current period.
+  scheduledPlanId    String?
+  scheduledInterval  BillingInterval?
+  /// Renewal reminders already sent for this period (days before end).
+  remindersSent      Int[]              @default([])
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  group    Group            @relation(fields: [groupId], references: [id])
+  plan     Plan             @relation(fields: [planId], references: [id])
+  payments BillingPayment[]
+
+  @@index([status, currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+/// Time-limited access to a plan granted by platform staff, with a reason. Revoking keeps the row.
+model PromotionalGrant {
+  id           String    @id @default(cuid())
+  groupId      String
+  planId       String
+  reason       String
+  startsAt     DateTime  @default(now())
+  endsAt       DateTime
+  grantedById  String
+  createdAt    DateTime  @default(now())
+  revokedAt    DateTime?
+  revokedById  String?
+  revokeReason String?
 
   group Group @relation(fields: [groupId], references: [id])
   plan  Plan  @relation(fields: [planId], references: [id])
 
-  @@map("subscriptions")
+  @@index([groupId, endsAt])
+  @@map("promotional_grants")
+}
+
+/// A subscription charge. Amount and currency never change after creation (database trigger).
+model BillingPayment {
+  id             String               @id @default(cuid())
+  /// Unique, human-readable reference given to the provider and shown on receipts.
+  reference      String               @unique
+  groupId        String
+  subscriptionId String?
+  planId         String
+  interval       BillingInterval
+  purpose        BillingPurpose
+  provider       String
+  providerRef    String?
+  /// false = provider test/sandbox mode. Test payments never count as revenue.
+  livemode       Boolean
+  currency       String
+  /// List price for the period.
+  priceMinor     BigInt
+  /// Unused time from the previous period credited on an upgrade.
+  creditMinor    BigInt               @default(0)
+  /// What the payer is asked to pay: price − credit.
+  amountMinor    BigInt
+  feeMinor       BigInt?
+  refundedMinor  BigInt               @default(0)
+  status         BillingPaymentStatus @default(PENDING)
+  failureReason  String?
+  idempotencyKey String               @unique
+  initiatedById  String?
+  /// Masked, e.g. 2547****5678. Never a PIN or OTP.
+  payerHint      String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  receiptNumber  String?              @unique
+  paidAt         DateTime?
+  lastCheckedAt  DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  group        Group           @relation(fields: [groupId], references: [id])
+  subscription Subscription?   @relation(fields: [subscriptionId], references: [id])
+  refunds      BillingRefund[]
+  events       BillingEvent[]
+  plan         Plan            @relation(fields: [planId], references: [id])
+
+  @@unique([provider, providerRef])
+  @@index([status, createdAt])
+  @@index([groupId, createdAt])
+  @@map("billing_payments")
+}
+
+/// Every provider notification, stored once (by provider event id) and never edited.
+model BillingEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  providerEventId String
+  type            String
+  paymentId       String?
+  livemode        Boolean
+  signatureValid  Boolean
+  /// Provider payload with personal data removed.
+  payload         Json
+  result          String?
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+
+  payment BillingPayment? @relation(fields: [paymentId], references: [id])
+
+  @@unique([provider, providerEventId])
+  @@map("billing_events")
+}
+
+model BillingRefund {
+  id          String              @id @default(cuid())
+  paymentId   String
+  amountMinor BigInt
+  currency    String
+  reason      String
+  provider    String
+  providerRef String?
+  status      BillingRefundStatus @default(PENDING)
+  createdById String
+  createdAt   DateTime            @default(now())
+
+  payment BillingPayment @relation(fields: [paymentId], references: [id])
+
+  @@map("billing_refunds")
+}
+
+/// Subscription history: every plan or status change, with who and why. Append-only.
+model SubscriptionEvent {
+  id          String   @id @default(cuid())
+  groupId     String
+  type        String
+  fromPlan    String?
+  toPlan      String?
+  fromStatus  String?
+  toStatus    String?
+  paymentId   String?
+  actorUserId String?
+  reason      String?
+  meta        Json?
+  createdAt   DateTime @default(now())
+
+  @@index([groupId, createdAt])
+  @@index([type, createdAt])
+  @@map("subscription_events")
+}
+
+model BillingCase {
+  id           String              @id @default(cuid())
+  groupId      String?
+  paymentId    String?
+  subject      String
+  details      String
+  status       BillingCaseStatus   @default(OPEN)
+  priority     BillingCasePriority @default(NORMAL)
+  createdById  String
+  assignedToId String?
+  resolution   String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@map("billing_cases")
+}
+
+/// Countries ChamaHub knows about. Only `available` ones accept new groups.
+model Region {
+  countryCode      String   @id
+  name             String
+  defaultCurrency  String
+  defaultTimezone  String
+  defaultLocale    String
+  available        Boolean  @default(false)
+  billingAvailable Boolean  @default(false)
+  notes            String?
+  updatedAt        DateTime @updatedAt
+
+  @@map("regions")
+}
+
+/// Which provider can take subscription payments in which country and currency, and how.
+model BillingProviderAvailability {
+  id          String   @id @default(cuid())
+  provider    String
+  countryCode String
+  currency    String
+  methods     String[]
+  recurring   Boolean  @default(false)
+  refunds     Boolean  @default(false)
+  enabled     Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([provider, countryCode, currency])
+  @@map("billing_provider_availability")
+}
+
+/// 1 base = rate quote on asOf, entered by finance staff with its source. Used only for consolidated reports.
+model ExchangeRate {
+  id            String   @id @default(cuid())
+  baseCurrency  String
+  quoteCurrency String
+  rate          Decimal  @db.Decimal(24, 12)
+  asOf          DateTime @db.Date
+  source        String
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@unique([baseCurrency, quoteCurrency, asOf])
+  @@map("exchange_rates")
+}
+
+model OperatingCost {
+  id           String                @id @default(cuid())
+  category     OperatingCostCategory
+  description  String
+  currency     String
+  amountMinor  BigInt
+  incurredOn   DateTime              @db.Date
+  source       String?
+  recordedById String
+  createdAt    DateTime              @default(now())
+
+  @@index([incurredOn])
+  @@map("operating_costs")
 }
 
 model AuditEvent {

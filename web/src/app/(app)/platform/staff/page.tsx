@@ -17,7 +17,8 @@ import { date } from '@/lib/utils';
 const DESCRIPTIONS: Record<PlatformRole, string> = {
   USER: 'No platform access.',
   SUPPORT: 'Support tickets and account assistance. No financial records, plans or statistics.',
-  PLATFORM_ADMIN: 'Chamas, subscriptions, account status and operational reports.',
+  PLATFORM_ADMIN: 'Chamas, plans, promotional access, billing cases, account status and operational reports. No revenue figures.',
+  FINANCE: 'Revenue, refunds, manual payment confirmation, operating costs and exchange rates. No accounts or group finances.',
   SUPER_ADMIN: 'Platform configuration, administrators, security and everything above.',
 };
 

@@ -29,7 +29,7 @@ export interface LegalDocument {
   sections: LegalSection[];
 }
 
-export const LEGAL_UPDATED = '2026-10-22';
+export const LEGAL_UPDATED = '2026-10-23';
 
 const orUnset = (v: string | undefined, label: string) => (v && v.trim() ? v.trim() : `[${label} — not yet configured]`);
 
@@ -55,6 +55,7 @@ export function privacyPolicy(o: LegalOperator): LegalDocument {
           'Security records: the devices you are signed in on, the network (IP) address used, sign-in attempts and an audit log of important actions in each group.',
           'Messages you send us, and questions you ask the optional AI assistant.',
           'Notification preferences and, if you allow push notifications, a device push token.',
+          'Subscription billing records for your group: plan, payment reference, amount, status, receipt, and a masked payer hint (for example 2547****5678). Card numbers, PINs and passwords are handled only by the payment provider and never reach ChamaHub.',
         ],
       },
       {
@@ -79,7 +80,7 @@ export function privacyPolicy(o: LegalOperator): LegalDocument {
         bullets: [
           'Officers of your Chama (for example the treasurer, chairperson, secretary or auditor) can see the group records their role allows. Ordinary members see their own records and group-level information; they do not see other members’ balances unless your group turns this on. You can hide your phone number from ordinary members in Privacy settings.',
           'ChamaHub staff cannot see a group’s finances unless the group’s chairperson approves a time-limited support request. Every such access is recorded.',
-          'Service providers that help us run ChamaHub, only for that purpose: our hosting and database provider; SMS delivery (Africa’s Talking) and WhatsApp Business messages, if enabled; Safaricom M-Pesa, if your group uses in-app M-Pesa payments; e-mail delivery; and, only when you use the AI assistant, the AI provider (Anthropic). Phone numbers, e-mail addresses and long account numbers are removed from your question before it is sent to the AI provider.',
+          'Service providers that help us run ChamaHub, only for that purpose: our hosting and database provider; SMS delivery (Africa’s Talking) and WhatsApp Business messages, if enabled; Safaricom M-Pesa, if your group uses in-app M-Pesa payments or pays its ChamaHub plan by M-Pesa; a card payment provider (such as Paystack) if your group pays its plan by card; e-mail delivery; and, only when you use the AI assistant, the AI provider (Anthropic). Phone numbers, e-mail addresses and long account numbers are removed from your question before it is sent to the AI provider.',
           'Authorities, where the law requires us to disclose information.',
         ],
       },
@@ -95,7 +96,7 @@ export function privacyPolicy(o: LegalOperator): LegalDocument {
       {
         heading: 'Your rights',
         paragraphs: [
-          'Under the Data Protection Act you may ask to access the personal data we hold about you, have it corrected, object to or restrict certain processing, have it deleted where we are not required to keep it, and receive a copy in a portable format. You can correct your details and request account deletion in the app under Profile. For anything else, contact us using the details below.',
+          'Under the Data Protection Act you may ask to access the personal data we hold about you, have it corrected, object to or restrict certain processing, have it deleted where we are not required to keep it, and receive a copy in a portable format. You can correct your details, download a copy of your data (Profile › Privacy › Download my data) and request account deletion in the app under Profile. For anything else, contact us using the details below.',
           'If you are not satisfied with our response, you may complain to the Office of the Data Protection Commissioner (ODPC), Kenya — www.odpc.go.ke.',
         ],
       },
@@ -173,8 +174,17 @@ export function termsOfUse(o: LegalOperator): LegalDocument {
         ],
       },
       {
-        heading: 'Fees',
-        paragraphs: ['If a group’s plan has a fee, it is shown before the group agrees to it. Mobile-money and bank charges are set by those providers.'],
+        heading: 'Plans, payments and cancellation',
+        bullets: [
+          'ChamaHub has a Free plan and paid plans. A plan belongs to a group and is chosen and paid for by the group’s chairperson or treasurer. The price, currency and what each plan includes are shown before payment.',
+          'Subscription fees are ChamaHub’s charges for the software. They are separate from the group’s own contributions, loans and payouts, and are never taken from them.',
+          'Plans are paid monthly or annually in advance. ChamaHub does not charge anyone automatically: before each period ends we remind the officers to renew. A plan is active only once the payment provider has confirmed the payment, and a receipt is issued for every payment.',
+          'Upgrades start immediately; the unused part of the current period is credited. Downgrades and cancellations take effect at the end of the paid period, and paid features remain until then. Cancelling does not delete anything.',
+          'If a renewal is not paid, paid features continue for a grace period shown in the app, after which the group moves to the Free plan. Records, statements, reports and payment history always remain available on every plan, including after a plan ends.',
+          'Refunds: the remaining time of a period is not refunded on cancellation, except where the law requires or ChamaHub agrees, for example after a duplicate payment or a service failure. Ask through Help. A full refund ends the period the payment covered.',
+          'Free trials and promotional access last for the period stated and end automatically without charge.',
+          'Prices may change; a change applies from the next period you pay for, never to a period already paid. Mobile-money and card charges by the payment provider are set by that provider.',
+        ],
       },
       {
         heading: 'Availability and changes',

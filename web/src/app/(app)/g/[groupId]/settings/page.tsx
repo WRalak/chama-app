@@ -49,6 +49,7 @@ export default function SettingsPage() {
     <>
       <PageHeader title="Settings" description="Group profile, contribution rules and loan policy. Every change is audited." />
       <div className="grid gap-5 xl:grid-cols-2">
+        <RegionPanel />
         <Panel title="Group profile" actions={<Button size="sm" onClick={() => save.mutate({ name: profile.name, type: profile.type, description: profile.description ?? undefined, county: profile.county ?? undefined, registrationNumber: profile.registrationNumber ?? undefined })} loading={save.isPending}>Save</Button>}>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Name" htmlFor="p-n" className="sm:col-span-2"><Input id="p-n" value={profile.name ?? ''} onChange={(e) => setProfile({ ...profile, name: e.target.value })} /></Field>
@@ -128,5 +129,34 @@ export default function SettingsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+const LOCALE_CHOICES = ['en-KE', 'sw-KE', 'en-UG', 'sw-TZ', 'en-RW', 'en-ZA', 'en-NG', 'en-GH'];
+
+/** Where the group operates. The currency is shown, not editable: it is fixed once money is recorded. */
+function RegionPanel() {
+  const groupId = useGroupId();
+  const { data: g } = useGroup();
+  const [tz, setTz] = useState('');
+  const [locale, setLocale] = useState('');
+  useEffect(() => {
+    if (g) {
+      setTz(g.timezone);
+      setLocale(g.locale);
+    }
+  }, [g]);
+  const zones = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone').filter((z) => z.startsWith('Africa/') || z === tz) : [tz];
+  const save = useAction(() => api(`groups/${groupId}`, { method: 'PATCH', body: { timezone: tz, locale } }), { success: 'Region settings saved', invalidate: [['group', groupId]] });
+  if (!g) return null;
+  return (
+    <Panel title="Region & currency" actions={<Button size="sm" onClick={() => save.mutate(undefined)} loading={save.isPending} disabled={tz === g.timezone && locale === g.locale}>Save</Button>}>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Country" htmlFor="rg-country"><Input id="rg-country" value={g.countryCode} disabled /></Field>
+        <Field label="Currency" htmlFor="rg-cur" hint="Every amount in this group is in this currency. It cannot change once money is recorded, and amounts are never converted."><Input id="rg-cur" value={g.currency} disabled /></Field>
+        <Field label="Time zone" htmlFor="rg-tz"><Select id="rg-tz" value={tz} onChange={(e) => setTz(e.target.value)}>{zones.map((z) => <option key={z} value={z}>{z.replace('_', ' ')}</option>)}</Select></Field>
+        <Field label="Group language" htmlFor="rg-loc" hint="Saved for the group. App text follows each person’s own language; SMS and e-mail are in English for now."><Select id="rg-loc" value={locale} onChange={(e) => setLocale(e.target.value)}>{[...new Set([locale, ...LOCALE_CHOICES])].map((l) => <option key={l} value={l}>{l}</option>)}</Select></Field>
+      </div>
+    </Panel>
   );
 }

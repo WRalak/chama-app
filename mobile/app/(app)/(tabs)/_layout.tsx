@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { t } from '@chamahub/shared';
+import { useAuth } from '@/lib/auth';
 import { colors, font } from '@/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -8,6 +10,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 const icon = (name: IconName, active: IconName) => ({ focused, size }: { focused: boolean; size: number }) => <Ionicons name={focused ? active : name} color={focused ? colors.rose : colors.muted} size={size} />;
 
 export default function TabsLayout() {
+  const locale = useAuth().user?.locale;
   return (
     <Tabs
       screenOptions={{
@@ -21,11 +24,11 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.background },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false, tabBarIcon: icon('home-outline', 'home') }} />
-      <Tabs.Screen name="chamas" options={{ title: 'My Chamas', tabBarIcon: icon('people-outline', 'people') }} />
-      <Tabs.Screen name="finances" options={{ title: 'Finances', tabBarIcon: icon('wallet-outline', 'wallet') }} />
-      <Tabs.Screen name="activity" options={{ title: 'Activity', tabBarIcon: icon('pulse-outline', 'pulse') }} />
-      <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarIcon: icon('person-circle-outline', 'person-circle') }} />
+      <Tabs.Screen name="index" options={{ title: t(locale, 'tab.home'), headerShown: false, tabBarIcon: icon('home-outline', 'home') }} />
+      <Tabs.Screen name="chamas" options={{ title: t(locale, 'tab.chamas'), tabBarIcon: icon('people-outline', 'people') }} />
+      <Tabs.Screen name="finances" options={{ title: t(locale, 'tab.finances'), tabBarIcon: icon('wallet-outline', 'wallet') }} />
+      <Tabs.Screen name="activity" options={{ title: t(locale, 'tab.activity'), tabBarIcon: icon('pulse-outline', 'pulse') }} />
+      <Tabs.Screen name="profile" options={{ title: t(locale, 'tab.profile'), tabBarIcon: icon('person-circle-outline', 'person-circle') }} />
     </Tabs>
   );
 }

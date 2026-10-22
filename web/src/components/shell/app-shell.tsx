@@ -46,8 +46,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
-import { LABELS, Permission, PlatformPermission } from '@chamahub/shared';
-import { cn } from '@/lib/utils';
+import { LABELS, MessageKey, Permission, PlatformPermission, t } from '@chamahub/shared';
+import { cn, setDisplayCurrency } from '@/lib/utils';
 import { useCan, useGroup, useGroupId, useMe, useMyGroups, usePlatformCan } from '@/lib/session';
 import { EmptyState, LoadingRows } from '@/components/ui/states';
 import { Brand } from './brand';
@@ -104,6 +104,7 @@ const GROUP_SECTIONS: NavSection[] = [
       { href: 'settings', label: 'Group settings', icon: Settings, permission: Permission.GROUP_CONFIGURE },
       { href: 'roles', label: 'Roles & permissions', icon: KeyRound, permission: Permission.PERMISSIONS_CONFIGURE },
       { href: 'notifications', label: 'Notifications', icon: Bell },
+      { href: 'billing', label: 'Plan & billing', icon: CreditCard },
     ],
   },
 ];
@@ -118,12 +119,42 @@ const PLATFORM_NAV: (Omit<NavItem, 'permission'> & { permission: PlatformPermiss
   { href: '/platform/users', label: 'Accounts', icon: Users, permission: PlatformPermission.PLATFORM_SUPPORT },
   { href: '/platform/staff', label: 'Platform staff', icon: UserCog, permission: PlatformPermission.PLATFORM_MANAGE_ADMINS },
   { href: '/platform/settings', label: 'Platform settings', icon: SlidersHorizontal, permission: PlatformPermission.PLATFORM_CONFIGURE },
-  { href: '/platform/subscriptions', label: 'Subscriptions', icon: CreditCard, permission: PlatformPermission.PLATFORM_VIEW_STATS },
+  { href: '/platform/revenue', label: 'Revenue', icon: BarChart3, permission: PlatformPermission.PLATFORM_VIEW_REVENUE },
+  { href: '/platform/billing', label: 'Billing & subscriptions', icon: CreditCard, permission: PlatformPermission.PLATFORM_VIEW_BILLING },
+  { href: '/platform/plans', label: 'Plans & pricing', icon: Receipt, permission: PlatformPermission.PLATFORM_VIEW_BILLING },
+  { href: '/platform/regions', label: 'Regions & providers', icon: Landmark, permission: PlatformPermission.PLATFORM_VIEW_BILLING },
+  { href: '/platform/finance', label: 'Costs & exchange rates', icon: Wallet, permission: PlatformPermission.PLATFORM_VIEW_REVENUE },
   { href: '/platform/security', label: 'Security events', icon: BookOpenCheck, permission: PlatformPermission.PLATFORM_VIEW_SECURITY },
   { href: '/platform/support', label: 'Support', icon: LifeBuoy, permission: PlatformPermission.PLATFORM_SUPPORT },
 ];
 
+/** Navigation labels that have a translation; anything else shows as written. */
+const NAV_KEYS: Record<string, MessageKey> = {
+  'My home': 'nav.home',
+  'My finances': 'nav.finances',
+  Groups: 'nav.groups',
+  Notifications: 'nav.notifications',
+  Profile: 'nav.profile',
+  Overview: 'nav.overview',
+  'My account': 'nav.myAccount',
+  'My contributions': 'nav.myContributions',
+  'My loans': 'nav.myLoans',
+  'Group statements': 'nav.statements',
+  Members: 'nav.members',
+  Contributions: 'nav.contributions',
+  Reconciliation: 'nav.reconciliation',
+  Payouts: 'nav.payouts',
+  Loans: 'nav.loans',
+  Expenses: 'nav.expenses',
+  Reports: 'nav.reports',
+  'Audit Logs': 'nav.audit',
+  Settings: 'nav.settings',
+  'Plan & billing': 'nav.billing',
+};
+
 function NavLink({ href, label, icon: Icon, active, onClick, sub }: { href: string; label: string; icon: NavItem['icon']; active: boolean; onClick?: () => void; sub?: boolean }) {
+  const { data: me } = useMe();
+  label = NAV_KEYS[label] ? t(me?.locale, NAV_KEYS[label]) : label;
   return (
     <Link
       href={href}
@@ -181,6 +212,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const can = useCan();
   const platformCan = usePlatformCan();
   const { data: groups } = useMyGroups();
+  const { data: me } = useMe();
   const platformItems = PLATFORM_NAV.filter((i) => platformCan(i.permission));
   return (
     <nav className="flex h-full flex-col gap-4 overflow-y-auto bg-plum px-3 py-4" aria-label="Main">
@@ -212,7 +244,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       {platformItems.length > 0 && (
         <div className="space-y-0.5">
-          <p className="px-2.5 pb-1 text-2xs font-semibold uppercase tracking-wider text-white/55">Platform administration</p>
+          <p className="px-2.5 pb-1 text-2xs font-semibold uppercase tracking-wider text-white/55">{t(me?.locale, 'nav.platform')}</p>
           {platformItems.map((i) => (
             <NavLink key={i.href} href={i.href} label={i.label} icon={i.icon} active={i.href === '/platform' ? pathname === '/platform' : pathname.startsWith(i.href)} onClick={onNavigate} />
           ))}
@@ -281,6 +313,8 @@ function RouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const can = useCan();
   const { data: group, error } = useGroup();
+  // Set before children render so every amount on a group page uses the group's currency.
+  setDisplayCurrency(groupId && group ? group.currency : 'KES');
   if (!groupId) return <>{children}</>;
   if (error) return <EmptyState title="This Chama is not available" description="You may not be a member, or your access has ended." />;
   if (!group) return <LoadingRows />;

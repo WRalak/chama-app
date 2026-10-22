@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import {
@@ -26,7 +26,9 @@ import { DEFAULT_SETTINGS, readLoanPolicy, readSettings } from '../finance/polic
 import { LedgerService } from '../ledger/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PlatformSettingsService } from '../platform/platform-settings.service';
-import { defaultLoanPolicy, addMonths } from '@chamahub/shared';
+import { defaultLoanPolicy, addMonths, LAUNCH_READY_CURRENCIES } from '@chamahub/shared';
+import { BillingService } from '../billing/billing.service';
+import { EntitlementService } from '../billing/entitlements.service';
 
 export function newInviteCode() {
   // 8 chars from an unambiguous alphabet (no 0/O/1/I).
@@ -44,10 +46,27 @@ export class GroupsService {
     private readonly ledger: LedgerService,
     private readonly notifications: NotificationsService,
     private readonly platform: PlatformSettingsService,
+    private readonly billing: BillingService,
+    private readonly entitlements: EntitlementService,
   ) {}
 
+  /** Where a group may operate, and its currency, time zone and language (defaults from the region). */
+  private async regional(input: { countryCode?: string; currency?: string; timezone?: string; locale?: string }, current?: { countryCode: string; currency: string; timezone: string; locale: string }) {
+    const countryCode = input.countryCode ?? current?.countryCode ?? 'KE';
+    const region = await this.prisma.region.findUnique({ where: { countryCode } });
+    if (!region || (!region.available && countryCode !== current?.countryCode)) throw new UnprocessableEntityException(`ChamaHub is not available in ${region?.name ?? countryCode} yet.`);
+    const currency = input.currency ?? (input.countryCode && input.countryCode !== current?.countryCode ? region.defaultCurrency : (current?.currency ?? region.defaultCurrency));
+    if (!LAUNCH_READY_CURRENCIES.includes(currency) && currency !== current?.currency) throw new UnprocessableEntityException(`Groups in ${currency} are not supported yet.`);
+    return {
+      countryCode,
+      currency,
+      timezone: input.timezone ?? (input.countryCode && input.countryCode !== current?.countryCode ? region.defaultTimezone : (current?.timezone ?? region.defaultTimezone)),
+      locale: input.locale ?? current?.locale ?? region.defaultLocale,
+    };
+  }
+
   async create(userId: string, input: CreateGroupInput, meta: RequestMeta) {
-    const plan = await this.prisma.plan.findFirst({ where: { active: true }, orderBy: { priceCents: 'asc' } });
+    const regional = await this.regional(input);
     const group = await this.prisma.$transaction(async (tx) => {
       const g = await tx.group.create({
         data: {
@@ -57,14 +76,15 @@ export class GroupsService {
           county: input.county ?? null,
           registrationNumber: input.registrationNumber ?? null,
           financialYearStartMonth: input.financialYearStartMonth,
+          ...regional,
           inviteCode: newInviteCode(),
           settings: DEFAULT_SETTINGS,
           loanPolicy: { ...defaultLoanPolicy, enabled: input.type !== 'MERRY_GO_ROUND' },
           createdById: userId,
           memberships: { create: { userId, role: 'CHAIRPERSON' } },
-          ...(plan ? { subscription: { create: { planId: plan.id, status: 'TRIALING', trialEndsAt: new Date(Date.now() + (await this.platform.get()).trialDays * 86_400_000) } } } : {}),
         },
       });
+      await this.billing.startTrial(tx, g.id);
       await this.audit.log({ groupId: g.id, actorUserId: userId, action: 'group.created', entityType: 'Group', entityId: g.id, after: input, meta }, tx);
       return g;
     });
@@ -130,6 +150,7 @@ export class GroupsService {
     const mine = membership.id ? await this.prisma.membership.findUnique({ where: { id: membership.id }, select: { specialRoles: true } }) : null;
     if (!g) throw new NotFoundException('Group not found');
     const canInvite = membership.permissions.includes('members.invite');
+    const access = await this.entitlements.access(groupId);
     return {
       id: g.id,
       name: g.name,
@@ -138,6 +159,11 @@ export class GroupsService {
       county: g.county,
       registrationNumber: g.registrationNumber,
       financialYearStartMonth: g.financialYearStartMonth,
+      countryCode: g.countryCode,
+      currency: g.currency,
+      timezone: g.timezone,
+      locale: g.locale,
+      plan: { code: access.plan.code, name: access.plan.name, source: access.source, features: access.plan.entitlements.features, maxMembers: access.plan.entitlements.limits.maxMembers },
       inviteCode: canInvite ? g.inviteCode : null,
       settings: readSettings(g.settings),
       loanPolicy: readLoanPolicy(g.loanPolicy),
@@ -158,6 +184,12 @@ export class GroupsService {
       if (!signatories) throw new UnprocessableEntityException('Assign at least one Joint Signatory before requiring their approval.');
     }
     const loanPolicy = input.loanPolicy ? { ...readLoanPolicy(before.loanPolicy), ...input.loanPolicy } : undefined;
+    const touchesRegion = input.countryCode !== undefined || input.currency !== undefined || input.timezone !== undefined || input.locale !== undefined;
+    const regional = touchesRegion ? await this.regional(input, before) : undefined;
+    if (regional && regional.currency !== before.currency) {
+      const used = (await this.prisma.payment.count({ where: { groupId } })) + (await this.prisma.journalEntry.count({ where: { groupId } }));
+      if (used) throw new ConflictException(`The group's currency is ${before.currency} and cannot change now that it has money records. Amounts are never converted silently.`);
+    }
     const after = await this.prisma.$transaction(async (tx) => {
       const g = await tx.group.update({
         where: { id: groupId },
@@ -168,6 +200,7 @@ export class GroupsService {
           county: input.county,
           registrationNumber: input.registrationNumber,
           financialYearStartMonth: input.financialYearStartMonth,
+          ...(regional ?? {}),
           settings,
           loanPolicy,
         },
@@ -179,8 +212,8 @@ export class GroupsService {
           action: 'group.updated',
           entityType: 'Group',
           entityId: groupId,
-          before: { name: before.name, type: before.type, settings: before.settings, loanPolicy: before.loanPolicy },
-          after: { name: g.name, type: g.type, settings: g.settings, loanPolicy: g.loanPolicy },
+          before: { name: before.name, type: before.type, settings: before.settings, loanPolicy: before.loanPolicy, countryCode: before.countryCode, currency: before.currency, timezone: before.timezone, locale: before.locale },
+          after: { name: g.name, type: g.type, settings: g.settings, loanPolicy: g.loanPolicy, countryCode: g.countryCode, currency: g.currency, timezone: g.timezone, locale: g.locale },
           meta,
         },
         tx,

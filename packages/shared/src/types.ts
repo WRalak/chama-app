@@ -60,6 +60,8 @@ export interface AuthUser {
   email: string | null;
   phoneVerified: boolean;
   platformRole: PlatformRole;
+  /** App language: en, sw, … */
+  locale: string;
   createdAt: string;
 }
 
@@ -116,6 +118,13 @@ export interface GroupDetail {
   county: string | null;
   registrationNumber: string | null;
   financialYearStartMonth: number;
+  /** Where the group operates; every amount in the group is in `currency`. */
+  countryCode: string;
+  currency: string;
+  timezone: string;
+  locale: string;
+  /** What the group's ChamaHub plan allows right now (the API enforces it). */
+  plan: { code: string; name: string; source: import('./billing').AccessSource; features: import('./billing').Feature[]; maxMembers: number };
   inviteCode: string | null;
   settings: GroupSettingsInput;
   loanPolicy: LoanPolicyInput;
@@ -690,8 +699,8 @@ export interface PlatformOverview {
   activeGroups: number;
   totalUsers: number;
   newUsers30d: number;
+  /** Subscription rows by status. Revenue is in Platform › Revenue (finance role). */
   subscriptions: Record<string, number>;
-  monthlyRecurringRevenueCents: number;
   failedJobs24h: number;
   openSupportRequests: number;
   health: { database: 'ok' | 'down'; integrations: { name: string; configured: boolean; status: string }[] };
@@ -1045,4 +1054,165 @@ export interface HandoverRow {
   acknowledgedAt: string | null;
   acknowledgementNote: string | null;
   can: { acknowledge: boolean };
+}
+
+/* ---------- subscriptions & billing ---------- */
+
+export interface PlanOffer {
+  code: string;
+  name: string;
+  description: string | null;
+  tier: number;
+  features: import('./billing').Feature[];
+  maxMembers: number;
+  /** Prices for the group's country and currency. Empty = not sold there. */
+  prices: { interval: import('./billing').BillingInterval; currency: string; amountMinor: number }[];
+}
+
+export interface BillingPaymentRow {
+  id: string;
+  reference: string;
+  planCode: string;
+  planName: string;
+  interval: import('./billing').BillingInterval;
+  purpose: 'NEW' | 'UPGRADE' | 'RENEWAL';
+  provider: string;
+  livemode: boolean;
+  currency: string;
+  priceMinor: number;
+  creditMinor: number;
+  amountMinor: number;
+  refundedMinor: number;
+  feeMinor: number | null;
+  status: import('./billing').BillingPaymentStatus;
+  failureReason: string | null;
+  receiptNumber: string | null;
+  payerHint: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
+export interface SubscriptionSummary {
+  groupId: string;
+  groupName: string;
+  countryCode: string;
+  currency: string;
+  /** What the group can use right now. */
+  access: { planCode: string; planName: string; source: import('./billing').AccessSource; until: string | null; features: import('./billing').Feature[]; maxMembers: number };
+  subscription: {
+    planCode: string;
+    planName: string;
+    status: import('./billing').SubscriptionStatusCode;
+    interval: import('./billing').BillingInterval | null;
+    currency: string | null;
+    amountMinor: number | null;
+    trialEndsAt: string | null;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+    graceEndsAt: string | null;
+    cancelAtPeriodEnd: boolean;
+    scheduledPlanCode: string | null;
+    scheduledInterval: import('./billing').BillingInterval | null;
+  } | null;
+  promotions: { id: string; planCode: string; planName: string; reason: string; startsAt: string; endsAt: string; revokedAt: string | null }[];
+  usage: { members: number; pendingInvitations: number };
+  /** Only for callers with billing.manage. */
+  canManage: boolean;
+  providers: { code: string; name: string; methods: string[]; livemode: boolean }[];
+  payments: BillingPaymentRow[];
+}
+
+export interface CheckoutResult {
+  payment: BillingPaymentRow;
+  action: { type: 'STK_PROMPT' | 'REDIRECT' | 'INSTRUCTIONS' | 'SANDBOX' | 'NONE'; message: string; url?: string; instructions?: string[] };
+}
+
+export interface BillingReceipt {
+  receiptNumber: string;
+  reference: string;
+  issuedAt: string;
+  seller: { name: string; address: string | null; email: string | null; taxId: string | null };
+  groupName: string;
+  description: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  currency: string;
+  priceMinor: number;
+  creditMinor: number;
+  amountMinor: number;
+  refundedMinor: number;
+  provider: string;
+  providerReceipt: string | null;
+  livemode: boolean;
+  status: import('./billing').BillingPaymentStatus;
+}
+
+export interface MoneyByCurrency {
+  currency: string;
+  amountMinor: number;
+}
+
+export interface ConsolidatedAmount {
+  /** Converted into the reporting currency with the rates listed in `conversions`. */
+  amountMinor: number;
+  /** false when some source currencies had no rate and were left out (listed in `missingRates`). */
+  complete: boolean;
+}
+
+export interface RevenueReport {
+  period: { from: string; to: string };
+  livemode: boolean;
+  reportingCurrency: string;
+  generatedAt: string;
+  cash: {
+    /** Money confirmed received from verified payments in the period, by currency. */
+    gross: MoneyByCurrency[];
+    refunds: MoneyByCurrency[];
+    fees: MoneyByCurrency[];
+    net: MoneyByCurrency[];
+    paymentsCount: number;
+  };
+  pending: { count: number; amount: MoneyByCurrency[] };
+  failed: { count: number; renewalFailures: number };
+  disputed: { count: number; amount: MoneyByCurrency[] };
+  recurring: {
+    /** Contracted monthly-equivalent price of paying subscriptions today; not cash. */
+    mrr: MoneyByCurrency[];
+    arr: MoneyByCurrency[];
+    arppg: MoneyByCurrency[];
+    byPlan: { planCode: string; planName: string; groups: number; mrr: MoneyByCurrency[] }[];
+    byCountry: { countryCode: string; groups: number; mrr: MoneyByCurrency[] }[];
+  };
+  groups: { total: number; paying: number; trialing: number; promotional: number; inGrace: number; free: number; newPaying: number };
+  renewals: { dueNext30Days: number; succeededInPeriod: number; failedInPeriod: number };
+  churn: { payingAtStart: number; churned: number; churnRate: number | null; retentionRate: number | null };
+  costs: { byCategory: { category: string; amount: MoneyByCurrency[]; measured: boolean }[]; cacPerNewPayingGroup: MoneyByCurrency[] };
+  consolidated: {
+    cashNet: ConsolidatedAmount;
+    mrr: ConsolidatedAmount;
+    arr: ConsolidatedAmount;
+    costs: ConsolidatedAmount;
+    /** Net cash − recorded costs. An estimate: costs are only what has been recorded. */
+    estimatedOperatingProfit: ConsolidatedAmount;
+    conversions: { from: string; to: string; rate: string; asOf: string; source: string }[];
+    missingRates: string[];
+  };
+  notes: string[];
+}
+
+export interface ProviderHealthRow {
+  code: string;
+  name: string;
+  configured: boolean;
+  environment: 'test' | 'live';
+  note: string;
+  availability: { countryCode: string; currency: string; methods: string[]; recurring: boolean; refunds: boolean; enabled: boolean }[];
+  lastWebhookAt: string | null;
+  lastSuccessAt: string | null;
+  pending: number;
+  succeeded7d: number;
+  failed7d: number;
+  rejectedWebhooks7d: number;
 }

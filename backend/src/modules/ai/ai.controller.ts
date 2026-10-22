@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { aiChatSchema, AiChatInput, Permission } from '@chamahub/shared';
+import { aiChatSchema, AiChatInput, Permission, Feature } from '@chamahub/shared';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
-import { CurrentMembership, ReqMeta, RequirePermission } from '../../common/decorators';
+import { CurrentMembership, ReqMeta, RequirePermission, RequireFeature } from '../../common/decorators';
 import { MembershipContext, RequestMeta } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { AiService } from './ai.service';
@@ -26,6 +26,7 @@ export class AiController {
   @RequirePermission(Permission.GROUP_VIEW)
   @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @HttpCode(200)
+  @RequireFeature(Feature.AI_ASSISTANT)
   @Post('chat')
   chat(@Param('groupId') groupId: string, @Body(new ZodPipe(aiChatSchema)) body: AiChatInput, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.ai.chat(groupId, body, m, meta);

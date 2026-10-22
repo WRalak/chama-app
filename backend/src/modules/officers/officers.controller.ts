@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { acknowledgeHandoverSchema, createHandoverSchema, Permission, sendRemindersSchema } from '@chamahub/shared';
+import { acknowledgeHandoverSchema, createHandoverSchema, Permission, sendRemindersSchema, Feature } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentMembership, ReqMeta, RequirePermission } from '../../common/decorators';
+import { CurrentMembership, ReqMeta, RequirePermission, RequireFeature } from '../../common/decorators';
 import { MembershipContext, RequestMeta } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { OfficersService } from './officers.service';
@@ -32,6 +32,7 @@ export class OfficersController {
 
   @RequirePermission(Permission.CONTRIBUTIONS_VIEW_ALL)
   @HttpCode(200)
+  @RequireFeature(Feature.CONTRIBUTION_REMINDERS)
   @Post('reminders/contributions')
   remind(@Param('groupId') groupId: string, @Body(new ZodPipe(sendRemindersSchema)) body: z.infer<typeof sendRemindersSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.officers.sendContributionReminders(groupId, body.memberIds, m, meta);
