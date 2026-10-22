@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApiError } from '@/lib/api';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { Loading } from '@/components/ui';
-import { MaintenanceBanner, OfflineBanner } from '@/components/offline-banner';
+import { TopBanners } from '@/components/offline-banner';
 import { routeForNotification } from '@/lib/links';
 import { listenForNotificationTaps } from '@/lib/push';
 import { colors } from '@/theme';
@@ -40,8 +40,7 @@ function Gate() {
   }
   return (
     <>
-      <OfflineBanner />
-      <MaintenanceBanner />
+      <TopBanners />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }} />
     </>
   );
@@ -62,7 +61,7 @@ export default function RootLayout() {
         },
       }),
   );
-  if (SATOSHI_AVAILABLE && !fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  if (SATOSHI_AVAILABLE && !fontsLoaded && !fontError) return <View style={{ flex: 1, backgroundColor: colors.background }}><StatusBar style="dark" /></View>;
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={client}>
