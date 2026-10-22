@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -vE 'deprecated|pris.ly|^$|update available|│|└|┌')"
+    ]
+  }
+}
