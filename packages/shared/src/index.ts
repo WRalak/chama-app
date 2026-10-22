@@ -9,3 +9,4 @@ export * from './finance/rotation';
 export * from './schemas';
 export * from './types';
 export * from './statements';
+export * from './legal';

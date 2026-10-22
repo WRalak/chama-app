@@ -26,11 +26,15 @@
 - `GET /health` for liveness and database status.
 - Platform overview shows failed jobs and notification deliveries in the last 24 h, integration configuration, and security events (failed logins, refresh-token reuse, support access).
 - Every response carries `x-request-id`, which is also stored on audit events.
+- Set `ERROR_WEBHOOK_URL` to be alerted on every server error (5xx). The alert carries the route, error type and request id, never request or financial data.
 
 ## Known gaps before production
 
+Work through [`LAUNCH.md`](LAUNCH.md) (the pre-launch checklist, item by item) as well.
+
+
 - Real-device testing on low-end Android hardware and with screen readers (TalkBack and VoiceOver) has not been done yet.
-- Push notifications, OCR imports and automatic subscription billing are not implemented.
+- OCR imports and automatic subscription billing are not implemented. (Push notifications are implemented but untested against a production Expo/FCM setup.)
 - The SMS, WhatsApp, email and M-Pesa providers are unverified against live accounts (see the README).
 - Background jobs run in-process; move them to a locked queue before scaling the API horizontally.
 - An independent security review and penetration test are recommended before handling real funds.

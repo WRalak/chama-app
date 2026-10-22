@@ -2,7 +2,7 @@ import { Body, Controller, Get, Header, HttpCode, Param, Post } from '@nestjs/co
 import { ImportKind } from '@prisma/client';
 import { createImportSchema, IMPORT_KINDS, Permission } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentMembership, ReqMeta, RequirePermission } from '../../common/decorators';
+import { CurrentMembership, ReqMeta, RequireAnyPermission, RequirePermission } from '../../common/decorators';
 import { MembershipContext, RequestMeta } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { IMPORT_TEMPLATES, ImportsService } from './imports.service';
@@ -26,7 +26,8 @@ export class ImportsController {
     return this.imports.template(kind);
   }
 
-  @RequirePermission(Permission.IMPORTS_MANAGE)
+  // Approvers review batches before committing them, so they can list and open them too.
+  @RequireAnyPermission(Permission.IMPORTS_MANAGE, Permission.IMPORTS_APPROVE)
   @Get()
   list(@Param('groupId') groupId: string) {
     return this.imports.list(groupId);
@@ -38,7 +39,7 @@ export class ImportsController {
     return this.imports.create(groupId, body, m, meta);
   }
 
-  @RequirePermission(Permission.IMPORTS_MANAGE)
+  @RequireAnyPermission(Permission.IMPORTS_MANAGE, Permission.IMPORTS_APPROVE)
   @Get(':id')
   detail(@Param('groupId') groupId: string, @Param('id') id: string) {
     return this.imports.detail(groupId, id);

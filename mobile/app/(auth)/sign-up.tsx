@@ -37,6 +37,11 @@ export default function SignUp() {
       <Controller control={control} name="confirm" render={({ field }) => <Field label="Confirm password" secureTextEntry value={field.value} onChangeText={field.onChange} error={e.confirm?.message} />} />
       {error && <Notice tone="red" icon="alert-circle-outline">{error}</Notice>}
       <Button title="Create account" onPress={submit} loading={formState.isSubmitting} />
+      <T variant="small" style={{ textAlign: 'center', marginTop: space.md }}>
+        By creating an account you agree to the{' '}
+        <Link href="/legal/terms" style={withFont({ color: colors.berry, fontWeight: '600' })}>Terms of Use</Link> and{' '}
+        <Link href="/legal/privacy" style={withFont({ color: colors.berry, fontWeight: '600' })}>Privacy Policy</Link>.
+      </T>
       <View style={{ marginTop: space.lg, alignItems: 'center' }}>
         <T variant="small">
           Already registered?{' '}

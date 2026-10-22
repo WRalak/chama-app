@@ -174,6 +174,9 @@ function Help() {
         <Field label="How can we help?" htmlFor="h-body"><Textarea id="h-body" rows={5} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
         <Button type="submit" loading={send.isPending} disabled={subject.trim().length < 3 || body.trim().length < 10}>Send</Button>
       </form>
+      <p className="mt-4 text-xs text-muted">
+        Read our <a href="/privacy" target="_blank" className="text-berry hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="text-berry hover:underline">Terms of Use</a>.
+      </p>
     </Panel>
   );
 }

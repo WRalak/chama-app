@@ -57,6 +57,11 @@ export default function SignUpPage() {
           <Button type="submit" className="w-full" loading={formState.isSubmitting}>
             Create account
           </Button>
+          <p className="text-center text-xs text-muted">
+            By creating an account you agree to the{' '}
+            <Link href="/terms" className="text-berry hover:underline">Terms of Use</Link> and{' '}
+            <Link href="/privacy" className="text-berry hover:underline">Privacy Policy</Link>.
+          </p>
         </form>
         <p className="mt-4 text-center text-sm text-muted">
           Already have an account?{' '}

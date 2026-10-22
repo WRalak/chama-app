@@ -79,6 +79,9 @@ export default function LoginPage() {
           </Suspense>
         </div>
         <p className="mt-4 text-center text-xs text-muted">Use the same phone number and password as the ChamaHub mobile app.</p>
+        <p className="mt-2 text-center text-xs text-muted">
+          <Link href="/privacy" className="hover:text-berry hover:underline">Privacy</Link> · <Link href="/terms" className="hover:text-berry hover:underline">Terms</Link>
+        </p>
       </div>
     </main>
   );

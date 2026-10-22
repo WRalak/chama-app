@@ -2,6 +2,7 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 import { MoneyError } from '@chamahub/shared';
+import { env } from '../config/env';
 import { AppRequest } from './request';
 
 /** Converts every error into the shared ApiErrorBody shape without leaking internals. */
@@ -51,6 +52,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error(exception instanceof Error ? (exception.stack ?? exception.message) : String(exception));
     }
 
+    if (status >= 500) this.report(exception, req, status);
+
     res.status(status).json({
       statusCode: status,
       error: HttpStatus[status] ?? 'Error',
@@ -58,5 +61,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       details,
       requestId: req.requestId,
     });
+  }
+
+  /**
+   * Fire-and-forget alert for server errors. Sends only what is needed to find the log line:
+   * no request body, query string, headers, user or financial data.
+   */
+  private report(exception: unknown, req: AppRequest, status: number) {
+    const url = env().ERROR_WEBHOOK_URL;
+    if (!url) return;
+    const code = exception instanceof Prisma.PrismaClientKnownRequestError ? exception.code : undefined;
+    const kind = exception instanceof Error ? exception.constructor.name : typeof exception;
+    const report = { service: 'chamahub-api', environment: env().NODE_ENV, status, kind, code, method: req.method, path: (req.originalUrl ?? req.url ?? '').split('?')[0], requestId: req.requestId, at: new Date().toISOString() };
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: `ChamaHub API ${status} ${kind}${code ? ` ${code}` : ''} on ${report.method} ${report.path} (request ${report.requestId})`, ...report }), signal: AbortSignal.timeout(3000) }).catch((e) => this.logger.warn(`Error webhook failed: ${e instanceof Error ? e.message : e}`));
   }
 }

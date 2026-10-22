@@ -31,7 +31,9 @@ export default function Profile() {
       </Section>
       <Section title="More">
         <Row icon="receipt-outline" title="My payment history" onPress={() => router.push('/(app)/payments')} />
-        <Row icon="help-circle-outline" title="Help and support" onPress={() => router.push('/(app)/settings/help')} last />
+        <Row icon="help-circle-outline" title="Help and support" onPress={() => router.push('/(app)/settings/help')} />
+        <Row icon="document-text-outline" title="Privacy Policy" onPress={() => router.push('/legal/privacy')} />
+        <Row icon="reader-outline" title="Terms of Use" onPress={() => router.push('/legal/terms')} last />
       </Section>
       <Button title="Sign out" variant="secondary" onPress={() => Alert.alert('Sign out?', 'You will need your password to sign in again.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign out', style: 'destructive', onPress: signOut }])} />
       <T variant="small" style={{ textAlign: 'center', marginTop: space.lg }}>ChamaHub · Every Chama. Every Contribution. One Place.</T>

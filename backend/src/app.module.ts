@@ -78,7 +78,7 @@ const featureModules = [
       global: true,
       useFactory: () => ({ secret: env().JWT_ACCESS_SECRET, signOptions: { expiresIn: env().ACCESS_TOKEN_TTL_SECONDS } }),
     }),
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 300 }], skipIf: () => process.env.DISABLE_THROTTLE === 'true' }),
+    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 300 }], skipIf: () => process.env.DISABLE_THROTTLE === 'true' && process.env.NODE_ENV !== 'production' }),
     ScheduleModule.forRoot(),
     ...featureModules,
   ],

@@ -15,6 +15,8 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(30),
   CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:8081'),
   DEV_LOG_OTP: bool,
+  /** Optional: receives a small JSON report (no request data) for every 5xx, e.g. a Slack/Teams/alerting webhook. */
+  ERROR_WEBHOOK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   AT_USERNAME: z.string().optional(),
   AT_API_KEY: z.string().optional(),
   AT_SENDER_ID: z.string().optional(),
@@ -55,6 +57,9 @@ export function env(): Env {
   }
   if (parsed.data.NODE_ENV === 'production' && parsed.data.DEV_LOG_OTP) {
     throw new Error('DEV_LOG_OTP must not be enabled in production');
+  }
+  if (parsed.data.NODE_ENV === 'production' && process.env.DISABLE_THROTTLE === 'true') {
+    throw new Error('DISABLE_THROTTLE must not be set in production');
   }
   cached = parsed.data;
   return cached;

@@ -9,6 +9,10 @@ export const REQUIRED_PERMISSION = 'requiredPermission';
 /** Requires the caller's membership in `:groupId` to grant ALL listed permissions. */
 export const RequirePermission = (...permissions: Permission[]) => SetMetadata(REQUIRED_PERMISSION, permissions);
 
+export const ANY_PERMISSION = 'anyPermission';
+/** Requires the caller's membership in `:groupId` to grant AT LEAST ONE of the listed permissions (e.g. preparer or approver). */
+export const RequireAnyPermission = (...permissions: Permission[]) => SetMetadata(ANY_PERMISSION, permissions);
+
 export const REQUIRED_PLATFORM_PERMISSION = 'requiredPlatformPermission';
 export const RequirePlatform = (permission: PlatformPermission) => SetMetadata(REQUIRED_PLATFORM_PERMISSION, permission);
 

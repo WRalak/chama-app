@@ -218,6 +218,9 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           ))}
         </div>
       )}
+      <p className="mt-auto px-2.5 pt-2 text-2xs text-white/55">
+        <Link href="/privacy" className="hover:text-white hover:underline">Privacy</Link> · <Link href="/terms" className="hover:text-white hover:underline">Terms</Link>
+      </p>
     </nav>
   );
 }

@@ -21,7 +21,7 @@ import {
 } from '@chamahub/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from './audit.service';
-import { ALLOW_UNVERIFIED, IS_PUBLIC, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
+import { ALLOW_UNVERIFIED, ANY_PERMISSION, IS_PUBLIC, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
 import { AppRequest, metaFrom } from './request';
 
 export interface AccessTokenPayload {
@@ -103,10 +103,11 @@ export class GroupAccessGuard implements CanActivate {
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const targets = [ctx.getHandler(), ctx.getClass()];
     const required = this.reflector.getAllAndOverride<Permission[]>(REQUIRED_PERMISSION, targets);
+    const anyOf = this.reflector.getAllAndOverride<Permission[]>(ANY_PERMISSION, targets);
     const req = ctx.switchToHttp().getRequest<AppRequest>();
     const groupId = typeof req.params?.groupId === 'string' ? req.params.groupId : undefined;
     if (!groupId) {
-      if (required?.length) throw new InternalServerErrorException('Permission check on a route without :groupId');
+      if (required?.length || anyOf?.length) throw new InternalServerErrorException('Permission check on a route without :groupId');
       return true;
     }
     if (!req.user) return true; // public route; nothing group-scoped is exposed
@@ -142,6 +143,9 @@ export class GroupAccessGuard implements CanActivate {
       if (missing.length) {
         throw new ForbiddenException('Your role in this group does not allow this action.');
       }
+    }
+    if (anyOf?.length && !anyOf.some((p) => req.membership!.permissions.includes(p))) {
+      throw new ForbiddenException('Your role in this group does not allow this action.');
     }
     return true;
   }

@@ -132,4 +132,4 @@ Nothing below is presented to users as working unless it is configured.
 | Statement import (M-Pesa, Paybill/Till, bank) | **Working, from files the officer downloads.** No account access, scraping or SMS reading. PDF statements are not read yet. |
 | OCR of photographed notebooks | Planned. Extracted figures will always go through the import review queue, never straight into the books. |
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and financial rules, and [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for deployment, backups and the production checklist.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the design and financial rules, [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for deployment and backups, and [`docs/LAUNCH.md`](docs/LAUNCH.md) for the pre-launch checklist (security, legal, SEO, what to set before going live).

@@ -22,6 +22,8 @@ function Gate() {
   useEffect(() => {
     if (status === 'loading') return;
     const inAuth = segments[0] === '(auth)';
+    // The legal pages and the not-found screen are readable whatever the sign-in state.
+    if ((segments[0] as string) === 'legal' || (segments[0] as string) === '+not-found') return;
     if (status === 'signedOut' && !inAuth) router.replace('/(auth)/welcome'); // welcome forwards to sign-in after the first time
     else if (status === 'unverified' && (segments as string[])[1] !== 'verify') router.replace('/(auth)/verify');
     else if (status === 'signedIn' && inAuth) router.replace('/(app)/(tabs)');

@@ -170,4 +170,12 @@ describe('Roles: platform vs Chama, multi-group, configurable within safeguards'
     await as(app, superAdmin).get(`/v1/groups/${A.groupId}/contributions/ledger`).expect(404);
     await as(app, supportAgent).post('/v1/platform/support-access', { groupId: A.groupId, purpose: 'Investigate reported issue', hours: 24 }).expect(403); // over the 4h policy
   });
+
+  it('lets import approvers open batches they must review, without letting them upload', async () => {
+    const g = (p: string) => `/v1/groups/${A.groupId}/${p}`;
+    await as(app, chairA).get(g('imports')).expect(200); // approves imports, does not prepare them
+    await as(app, mary).get(g('imports')).expect(200); // treasurer prepares imports
+    await as(app, member).get(g('imports')).expect(403);
+    await as(app, chairA).post(g('imports'), { kind: 'MEMBERS', fileName: 'm.csv', csv: 'name,phone\n' }).expect(403);
+  });
 });
