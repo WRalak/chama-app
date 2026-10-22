@@ -32,6 +32,8 @@ npm run dev:admin          # http://localhost:3000
 npm run dev:mobile         # Expo: press w for the browser, or scan the QR code with Expo Go
 ```
 
+**Web sign-in.** Open http://localhost:3000 and sign in with the same phone number and password as the mobile app (every demo account below works). *Create an account* signs up a new user. The phone must be verified before anything else loads; in development the 6-digit code is printed in the API terminal (`DEV ONLY — OTP for …`). Members land on **My home** (their own contributions, dues, payouts and loans across all their Chamas); officers land on their group's Overview and can open My home from the sidebar.
+
 The mobile app finds the API on the computer running the Expo dev server, so a phone on the same Wi-Fi needs no configuration (allow Node through the Windows firewall when asked). Set `EXPO_PUBLIC_API_URL` only for a deployed API.
 
 **Demo data only** (from `backend/prisma/seed.ts`; it refuses to run with `NODE_ENV=production`):

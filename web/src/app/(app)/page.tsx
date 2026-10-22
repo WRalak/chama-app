@@ -6,15 +6,16 @@ import { platformRoleHas } from '@chamahub/shared';
 import { LoadingRows } from '@/components/ui/states';
 import { useMe, useMyGroups } from '@/lib/session';
 
-/** Sends officers to their first group they manage, platform staff to the platform overview. */
+/** Sends officers to the first group they manage, platform staff to the platform overview, and members to their own home. */
 export default function Home() {
   const router = useRouter();
   const { data: me } = useMe();
   const { data: groups } = useMyGroups();
   useEffect(() => {
     if (!me || !groups) return;
-    const managed = groups.find((g) => g.role !== 'MEMBER') ?? groups[0];
+    const managed = groups.find((g) => g.role !== 'MEMBER' || g.specialRoles.length > 0);
     if (managed) router.replace(`/g/${managed.groupId}/overview`);
+    else if (groups.length) router.replace('/home');
     else if (platformRoleHas(me.platformRole, 'platform.view_stats')) router.replace('/platform');
     else if (platformRoleHas(me.platformRole, 'platform.support')) router.replace('/platform/support');
     else router.replace('/chamas');

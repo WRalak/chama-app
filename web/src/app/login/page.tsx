@@ -25,7 +25,10 @@ function LoginForm() {
     const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(values) });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return setError(body.message ?? 'Sign-in failed');
-    if (!body.user.phoneVerified) return setError('Verify your phone number in the ChamaHub mobile app before using the dashboard.');
+    if (!body.user.phoneVerified) {
+      router.replace('/verify');
+      return;
+    }
     router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
     router.refresh();
   });
@@ -51,6 +54,12 @@ function LoginForm() {
           Forgot your password?
         </Link>
       </p>
+      <p className="text-center text-sm text-muted">
+        New to ChamaHub?{' '}
+        <Link href="/sign-up" className="text-berry hover:underline">
+          Create an account
+        </Link>
+      </p>
     </form>
   );
 }
@@ -62,14 +71,14 @@ export default function LoginPage() {
         <div className="mb-6 flex flex-col items-center text-center">
           <BrandMark className="h-10 w-10" />
           <h1 className="mt-3 text-lg font-semibold text-plum">Sign in to ChamaHub</h1>
-          <p className="text-sm text-muted">Administration for Chama officers and platform staff</p>
+          <p className="text-sm text-muted">For members, officers and platform staff</p>
         </div>
         <div className="rounded-lg border border-line bg-white p-5">
           <Suspense>
             <LoginForm />
           </Suspense>
         </div>
-        <p className="mt-4 text-center text-xs text-muted">Members: use the ChamaHub app on your phone.</p>
+        <p className="mt-4 text-center text-xs text-muted">Use the same phone number and password as the ChamaHub mobile app.</p>
       </div>
     </main>
   );

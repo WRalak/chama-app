@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   Gavel,
   HandCoins,
+  Home,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -39,9 +40,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
 import { LABELS, Permission, PlatformPermission } from '@chamahub/shared';
 import { cn } from '@/lib/utils';
 import { useCan, useGroup, useGroupId, useMe, useMyGroups, usePlatformCan } from '@/lib/session';
@@ -176,6 +177,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       {(groups?.length ?? 0) > 0 && <GroupSwitcher />}
       <div className="space-y-0.5">
+        <NavLink href="/home" label="My home" icon={Home} active={pathname === '/home'} onClick={onNavigate} />
         <NavLink href="/chamas" label="Groups" icon={ClipboardList} active={pathname === '/chamas'} onClick={onNavigate} />
         {groupId &&
           GROUP_SECTIONS.map((sec) => {
@@ -264,6 +266,13 @@ function MaintenanceNotice() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const groupId = useGroupId();
+  const router = useRouter();
+  const me = useMe();
+  // A signed-in account whose phone is not verified yet: the API refuses everything until it is.
+  const unverified = me.data?.phoneVerified === false || (me.error instanceof ApiError && me.error.status === 403 && (me.error.details as { code?: string } | undefined)?.code === 'PHONE_NOT_VERIFIED');
+  useEffect(() => {
+    if (unverified) router.replace('/verify');
+  }, [unverified, router]);
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 lg:block">
