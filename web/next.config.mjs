@@ -1,3 +1,6 @@
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const production = process.env.NODE_ENV === 'production';
 
 // The browser only talks to this site: API calls go through the same-origin proxy, fonts are self-hosted.
@@ -15,11 +18,19 @@ const csp = [
   "object-src 'none'",
 ].join('; ');
 
+const sharedSrc = resolve(dirname(fileURLToPath(import.meta.url)), '../packages/shared/src/index.ts');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@chamahub/shared'],
+  // Compile the shared package from source, so the web app never runs a stale packages/shared/dist
+  // (which only the API and its tests need). Fixes "t is not a function" after pulling new code.
+  webpack(config) {
+    config.resolve.alias = { ...config.resolve.alias, '@chamahub/shared$': sharedSrc };
+    return config;
+  },
   async headers() {
     return [
       {
