@@ -1,5 +1,7 @@
 import { Global, Injectable, Module, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
+import { existsSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 export type Tx = Prisma.TransactionClient;
 
@@ -7,6 +9,32 @@ export type Tx = Prisma.TransactionClient;
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     await this.$connect();
+    await this.assertMigrated();
+  }
+
+  /**
+   * Refuses to start against a database that is missing migrations shipped with this code, with
+   * the command to fix it, instead of failing later with "table does not exist". It never applies
+   * migrations itself.
+   */
+  private async assertMigrated() {
+    const dir = [join(process.cwd(), 'prisma', 'migrations'), join(__dirname, '..', '..', 'prisma', 'migrations'), join(__dirname, '..', '..', '..', 'prisma', 'migrations')].find((d) => existsSync(d));
+    if (!dir) return; // migrations not shipped next to this build; the deployment applies them
+    const expected = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    let applied: string[] = [];
+    try {
+      applied = (await this.$queryRaw<{ migration_name: string }[]>`SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`).map((r) => r.migration_name);
+    } catch {
+      applied = [];
+    }
+    const missing = expected.filter((m) => !applied.includes(m));
+    if (missing.length) {
+      throw new Error(
+        `The database is missing ${missing.length} migration(s): ${missing.join(', ')}.\n` +
+          'Apply them, then start the API again:\n  cd backend\n  npx prisma migrate deploy\n' +
+          '(Back up a production database first.)',
+      );
+    }
   }
 
   async onModuleDestroy() {
