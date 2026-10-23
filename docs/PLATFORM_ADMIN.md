@@ -33,7 +33,16 @@ PLATFORM_BOOTSTRAP_EMAIL=owner@yourcompany.com PLATFORM_BOOTSTRAP_NAME="Jane Own
 - Running it again before the owner has set up (same e-mail) replaces the link. **Once an owner has set up, the command refuses**, and the refusal is audited. More owners are invited from the portal by an existing owner.
 - Remove the `PLATFORM_BOOTSTRAP_*` variables afterwards.
 
-For local development only, `npm run db:seed` with `SEED_PLATFORM_PASSWORD=<your choice, 12+ characters>` also creates demo staff (`owner@`, `admin@`, `helper@`, `analyst@`, `finance@staff.chamahub.test`). The seed refuses to run in production and never uses a built-in password.
+**Local development: admins straight into the database.** `npm run platform:dev-admin -- --confirm` (in `backend`) creates an active staff account with a password you supply. It refuses to run with `NODE_ENV=production`, applies the same password rules, stores only the scrypt hash and writes an audit entry. Two-step setup is still required at first sign-in.
+
+```powershell
+$env:DEV_ADMIN_EMAIL="you@example.com"; $env:DEV_ADMIN_NAME="Your Name"
+$env:DEV_ADMIN_PASSWORD="<12+ characters, a letter and a number>"; $env:DEV_ADMIN_ROLE="OWNER"   # or PLATFORM_ADMIN, SUPPORT_HELPER, ANALYST, FINANCE
+npm run platform:dev-admin -- --confirm                    # add --reset-password to change an existing account's password
+Remove-Item Env:DEV_ADMIN_PASSWORD
+```
+
+Also for local development only, `npm run db:seed` with `SEED_PLATFORM_PASSWORD=<your choice, 12+ characters>` also creates demo staff (`owner@`, `admin@`, `helper@`, `analyst@`, `finance@staff.chamahub.test`). The seed refuses to run in production and never uses a built-in password.
 
 ## Roles and permissions
 
