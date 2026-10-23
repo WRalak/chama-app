@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { RECOVERY_CODE_PATTERN } from '@chamahub/shared';
 import { AuthCard, FormError } from '@/components/platform/auth-card';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
@@ -59,12 +60,12 @@ function LoginForm() {
           </Field>
         </>
       ) : (
-        <Field label="6-digit code from your authenticator app" htmlFor="code">
-          <Input id="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))} autoFocus />
+        <Field label="6-digit code from your authenticator app" htmlFor="code" hint="Lost your phone? Enter one of your recovery codes (like K7QXM-2RTPA) instead.">
+          <Input id="code" autoComplete="one-time-code" autoCapitalize="characters" maxLength={11} value={code} onChange={(e) => setCode(e.target.value.trim())} autoFocus />
         </Field>
       )}
       <FormError message={error} />
-      <Button type="submit" className="w-full" loading={busy} disabled={mfaToken ? code.length !== 6 : !email || !password}>
+      <Button type="submit" className="w-full" loading={busy} disabled={mfaToken ? !(/^\d{6}$/.test(code) || RECOVERY_CODE_PATTERN.test(code)) : !email || !password}>
         {mfaToken ? 'Verify and sign in' : 'Sign in'}
       </Button>
       {mfaToken ? (

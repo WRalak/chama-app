@@ -24,6 +24,10 @@ export const PLATFORM_API = 'platformApi';
  */
 export const PlatformApi = () => SetMetadata(PLATFORM_API, true);
 
+export const ALLOW_BEFORE_MFA = 'allowBeforeMfa';
+/** Staff routes usable before two-step sign-in is set up (enrolment, profile, sign-out). */
+export const AllowBeforeMfa = () => SetMetadata(ALLOW_BEFORE_MFA, true);
+
 export const REQUIRED_PLATFORM_PERMISSION = 'requiredPlatformPermission';
 /** Staff-only route; the caller's database-backed permissions must include ALL of these. */
 export const RequirePlatform = (...permissions: PlatformPermission[]) => applyDecorators(PlatformApi(), SetMetadata(REQUIRED_PLATFORM_PERMISSION, permissions));

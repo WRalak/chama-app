@@ -11,7 +11,10 @@ The portal at `/platform` is where ChamaHub staff run the service: users, groups
 - E-mail and password. Passwords are hashed with **scrypt** (N=32768, r=8, p=1, 16-byte salt). Minimum 12 characters with a letter and a number. Hashes are never returned by any endpoint.
 - **One generic error** for every failed sign-in: unknown e-mail, wrong password, locked, suspended and expired accounts all get the same message. The audit log records the real reason.
 - **Brute force:** each route is rate-limited per IP (sign-in: 5/min). After 5 wrong passwords or codes the account locks for 15 minutes.
-- **Two-step sign-in (TOTP)** is optional per person (Security Settings). The secret is encrypted at rest (AES-256-GCM). It is recommended for every owner and administrator.
+- **Two-step sign-in (TOTP) is required for all staff** (`PLATFORM_REQUIRE_MFA`, on unless set to `false`). After the password, a new staff member can only reach Security Settings until they add an authenticator app; every other API route answers `403 MFA_SETUP_REQUIRED`. It cannot be switched off while required. The secret is encrypted at rest (AES-256-GCM).
+- **Each code works once.** The last accepted time step is stored and a code from the same or an earlier step is refused, so an intercepted code cannot be replayed.
+- **Recovery codes:** turning two-step on shows ten single-use codes (`XXXXX-XXXXX`) once, to download or copy. Any of them can replace the 6-digit code at sign-in; each use is audited, and Security Settings shows how many are left and can issue a new set (with a current code). Only SHA-256 hashes are stored.
+- **Lost phone:** an administrator who may manage the account uses **Reset two-step sign-in** on the person's Helpers page (reason required, audited). That removes the old setup and recovery codes and signs them out; they set it up again at the next sign-in. Confirm who you are talking to before resetting.
 - **Sessions:** 10-minute access tokens, rotating refresh tokens, a 30-minute idle timeout and a 12-hour maximum (all configurable). The account, session and permissions are re-read from the database **on every request**, so suspension, revocation, role changes and end dates apply immediately.
 - **Password reset:** a single-use link (SHA-256 stored, 30 minutes) to the account's e-mail. The answer is the same whether or not the e-mail exists. A reset signs out every session.
 
@@ -110,8 +113,8 @@ Reading the audit log is itself recorded. Staff actions that affect a group are 
 
 | Area | Endpoints |
 | --- | --- |
-| Auth | `POST platform/auth/login`, `login/mfa`, `refresh`, `logout`, `forgot-password`, `reset-password`, `accept-invitation`, `change-password`, `mfa/setup`, `mfa/enable`, `mfa/disable`; `GET platform/auth/me`, `invitation?token=`, `sessions`; `DELETE platform/auth/sessions/:id` |
-| Staff | `GET/POST platform/staff`; `GET/PATCH platform/staff/:id`; `PUT platform/staff/:id/access`; `POST platform/staff/:id/{suspend,reactivate,deactivate,revoke-sessions,resend-invite,password-reset}`; `GET platform/staff/:id/activity` |
+| Auth | `POST platform/auth/login`, `login/mfa` (6-digit code or recovery code), `refresh`, `logout`, `forgot-password`, `reset-password`, `accept-invitation`, `change-password`, `mfa/setup`, `mfa/enable` (returns recovery codes once), `mfa/recovery-codes`, `mfa/disable`; `GET platform/auth/me`, `invitation?token=`, `sessions`; `DELETE platform/auth/sessions/:id` |
+| Staff | `GET/POST platform/staff`; `GET/PATCH platform/staff/:id`; `PUT platform/staff/:id/access`; `POST platform/staff/:id/{suspend,reactivate,deactivate,revoke-sessions,resend-invite,password-reset,reset-mfa}`; `GET platform/staff/:id/activity` |
 | Roles | `GET/PUT platform/roles`; `DELETE platform/roles/:code` |
 | Support (staff) | `GET platform/support/cases`, `cases/:id`, `assignees`; `POST cases/:id/{reply,notes,status,escalate,assign,priority}` |
 | Support (members) | `GET/POST me/support-cases`; `GET me/support-cases/:id`; `POST me/support-cases/:id/{messages,close}` |
@@ -131,6 +134,7 @@ Reading the audit log is itself recorded. Staff actions that affect a group are 
 | `PLATFORM_INVITE_TTL_HOURS` | 72 | Invitation link lifetime. |
 | `PLATFORM_RESET_TTL_MINUTES` | 30 | Reset link lifetime. |
 | `PLATFORM_PORTAL_URL` | `http://localhost:3000` | Public web origin used in links. |
+| `PLATFORM_REQUIRE_MFA` | `true` | Staff must set up two-step sign-in. Set `false` only for local experiments. |
 | `EMAIL_WEBHOOK_URL` | — | E-mail relay for invitations and resets. |
 | `PLATFORM_BOOTSTRAP_EMAIL`, `PLATFORM_BOOTSTRAP_NAME` | — | One-time owner bootstrap only. |
 
@@ -147,6 +151,5 @@ Migration `20261028000000_platform_portal`:
 
 - Rate limits are per API instance (in-memory). Several API instances need a shared store (for example Redis) for limits to be global.
 - No e-mail provider is bundled; set up a relay for `EMAIL_WEBHOOK_URL` and test delivery before inviting staff.
-- TOTP codes can be reused within their 30–90 second window; there are no recovery codes yet (an owner can reset someone's MFA only by database intervention).
-- Requiring MFA for all staff is a policy setting still to be added (today it is per person).
+- Passkeys (WebAuthn) are not supported yet; authenticator-app codes can still be phished by a convincing fake login page.
 - No IP allow-listing for the portal; consider putting `/platform` behind your VPN or edge access rules.

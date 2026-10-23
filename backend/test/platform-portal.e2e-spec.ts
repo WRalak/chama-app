@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { resetEnvCache } from '../src/config/env';
 import { StaffContext } from '../src/common/request';
 import { testStaffMailbox, StaffMailerService } from '../src/modules/platform-auth/staff-mailer.service';
 import { bootstrapOwner } from '../src/modules/platform-auth/staff-bootstrap';
@@ -122,20 +123,94 @@ describe('Platform administration portal', () => {
       await api(app).post('/v1/platform/auth/refresh').send({ refreshToken: member.refreshToken }).expect(401);
     });
 
-    it('supports optional two-step sign-in (TOTP)', async () => {
+    it('two-step sign-in: codes work once, recovery codes work once, and the secret is encrypted', async () => {
       const s = await createStaff(app, prisma, 'Mfa Musa', ['ANALYST']);
       const { secret } = (await as(app, s).post('/v1/platform/auth/mfa/setup').expect(200)).body;
+      const step = Math.floor(Date.now() / 30_000);
       await as(app, s).post('/v1/platform/auth/mfa/enable', { code: '000000' }).expect(400);
-      await as(app, s).post('/v1/platform/auth/mfa/enable', { code: totpAt(secret, Math.floor(Date.now() / 30_000)) }).expect(200);
-      const first = (await login(app, s.email, STAFF_PASSWORD).expect(200)).body;
-      expect(first).toMatchObject({ mfaRequired: true });
-      expect(first.tokens).toBeUndefined();
-      await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: first.mfaToken, code: '123456' }).expect(401);
-      const done = await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: first.mfaToken, code: totpAt(secret, Math.floor(Date.now() / 30_000)) }).expect(200);
+      const enabled = (await as(app, s).post('/v1/platform/auth/mfa/enable', { code: totpAt(secret, step) }).expect(200)).body;
+      expect(enabled.recoveryCodes).toHaveLength(10);
+      enabled.recoveryCodes.forEach((c: string) => secrets.push(c));
+      expect((await as(app, s).get('/v1/platform/auth/me').expect(200)).body.recoveryCodesLeft).toBe(10);
+      // Only hashes are stored.
+      const stored = await prisma.platformRecoveryCode.findMany({ where: { accountId: s.id } });
+      expect(stored.map((r) => r.codeHash)).not.toContain(enabled.recoveryCodes[0]);
+
+      const signIn = async () => {
+        const first = (await login(app, s.email, STAFF_PASSWORD).expect(200)).body;
+        expect(first).toMatchObject({ mfaRequired: true });
+        expect(first.tokens).toBeUndefined();
+        return first.mfaToken as string;
+      };
+      let t = await signIn();
+      await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: t, code: '123456' }).expect(401);
+      // The code that turned two-step on cannot be replayed to sign in…
+      await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: t, code: totpAt(secret, step) }).expect(401);
+      // …the next one works, once.
+      const done = await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: t, code: totpAt(secret, step + 1) }).expect(200);
       expect(done.body.tokens.accessToken).toBeTruthy();
-      // The secret is encrypted at rest.
+      t = await signIn();
+      await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: t, code: totpAt(secret, step + 1) }).expect(401);
+
+      // Recovery codes: case and dash do not matter; each works once.
+      const code = enabled.recoveryCodes[3] as string;
+      await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: t, code: code.replace('-', '').toLowerCase() }).expect(200);
+      t = await signIn();
+      await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: t, code }).expect(401);
+      expect(await prisma.platformAuditLog.count({ where: { actorAccountId: s.id, action: 'platform.mfa_recovery_code_used' } })).toBe(1);
+      expect((await as(app, s).get('/v1/platform/auth/me').expect(200)).body.recoveryCodesLeft).toBe(9);
+
+      // New codes replace the old ones (needs a fresh authenticator code).
+      await prisma.platformAccount.update({ where: { id: s.id }, data: { lockedUntil: null, failedLoginCount: 0 } });
+      const fresh = (await as(app, s).post('/v1/platform/auth/mfa/recovery-codes', { code: totpAt(secret, step - 1) }).expect(403)).body; // older than the last used step
+      expect(fresh.recoveryCodes).toBeUndefined();
+      const regen = (await as(app, s).post('/v1/platform/auth/mfa/recovery-codes', { code: totpAt(secret, Math.max(step + 2, Math.floor(Date.now() / 30_000) + 1)) })).body;
+      if (regen.recoveryCodes) {
+        regen.recoveryCodes.forEach((c: string) => secrets.push(c));
+        t = await signIn();
+        await api(app).post('/v1/platform/auth/login/mfa').send({ mfaToken: t, code: enabled.recoveryCodes[5] }).expect(401);
+      }
+
       const row = await prisma.platformAccount.findUniqueOrThrow({ where: { id: s.id } });
       expect(row.mfaSecret).not.toContain(secret);
+    });
+
+    it('requires two-step sign-in for staff when the policy is on, and lets an administrator reset it', async () => {
+      process.env.PLATFORM_REQUIRE_MFA = 'true';
+      resetEnvCache();
+      try {
+        const s = await createStaff(app, prisma, 'Policy Pat', ['ANALYST']);
+        // Signed in, but nothing works until two-step is set up.
+        const blocked = await as(app, s).get('/v1/platform/dashboard').expect(403);
+        expect(blocked.body.details?.code ?? blocked.body.code).toBe('MFA_SETUP_REQUIRED');
+        const me = (await as(app, s).get('/v1/platform/auth/me').expect(200)).body;
+        expect(me).toMatchObject({ mfaRequired: true, mfaEnabled: false });
+        const { secret } = (await as(app, s).post('/v1/platform/auth/mfa/setup').expect(200)).body;
+        const step = Math.floor(Date.now() / 30_000);
+        await as(app, s).post('/v1/platform/auth/mfa/enable', { code: totpAt(secret, step) }).expect(200);
+        await as(app, s).get('/v1/platform/dashboard').expect(200);
+        // It cannot be switched off while required.
+        await as(app, s).post('/v1/platform/auth/mfa/disable', { password: STAFF_PASSWORD, code: totpAt(secret, step + 1) }).expect(403);
+
+        // Lost phone: an administrator resets it; the person is signed out and must set it up again.
+        // The policy applies to owners too: this owner must enrol before resetting anyone.
+        const boss = await createStaff(app, prisma, 'Policy Owner', ['OWNER']);
+        await as(app, boss).post(`/v1/platform/staff/${s.id}/reset-mfa`, { reason: 'Lost phone' }).expect(403);
+        const bossSecret = (await as(app, boss).post('/v1/platform/auth/mfa/setup').expect(200)).body.secret;
+        await as(app, boss).post('/v1/platform/auth/mfa/enable', { code: totpAt(bossSecret, step) }).expect(200);
+        await as(app, helper).post(`/v1/platform/staff/${s.id}/reset-mfa`, { reason: 'Lost phone' }).expect(403);
+        await as(app, boss).post(`/v1/platform/staff/${boss.id}/reset-mfa`, { reason: 'Myself' }).expect(403);
+        await as(app, boss).post(`/v1/platform/staff/${s.id}/reset-mfa`, { reason: 'Lost phone, identity checked by video call' }).expect(200);
+        await as(app, s).get('/v1/platform/auth/me').expect(401);
+        expect(await prisma.platformRecoveryCode.count({ where: { accountId: s.id } })).toBe(0);
+        const again = (await login(app, s.email, STAFF_PASSWORD).expect(200)).body;
+        expect(again.mfaRequired).toBe(false); // no second step yet…
+        await as(app, { token: again.tokens.accessToken }).get('/v1/platform/dashboard').expect(403); // …so only enrolment works
+        expect(await prisma.platformAuditLog.count({ where: { action: 'platform.staff_mfa_reset', targetId: s.id } })).toBe(1);
+      } finally {
+        process.env.PLATFORM_REQUIRE_MFA = 'false';
+        resetEnvCache();
+      }
     });
 
     it('resets a forgotten password with a single-use, expiring link and ends existing sessions', async () => {
@@ -260,7 +335,7 @@ describe('Platform administration portal', () => {
       // Remove every other owner the suite created, so `owner` is the only active one.
       const others = await prisma.platformAccount.findMany({ where: { id: { not: ownerId }, roles: { some: { role: { code: 'OWNER' } } } } });
       await prisma.platformAccount.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { status: 'DEACTIVATED' } });
-      const someoneElse: StaffContext = { accountId: 'another-owner', sessionId: 's', fullName: 'Another Owner', email: 'a@x', roleCodes: ['OWNER'], permissions: (await as(app, owner).get('/v1/platform/auth/me')).body.permissions, isOwner: true };
+      const someoneElse: StaffContext = { accountId: 'another-owner', sessionId: 's', fullName: 'Another Owner', email: 'a@x', roleCodes: ['OWNER'], permissions: (await as(app, owner).get('/v1/platform/auth/me')).body.permissions, isOwner: true, mfaPending: false };
       await expect(staff.setStatus(someoneElse, ownerId, 'SUSPENDED', 'Testing last owner', {})).rejects.toThrow(/last active owner/);
       await expect(staff.setAccess(someoneElse, ownerId, { roleCodes: ['ANALYST'], extraPermissions: [], reason: 'Testing last owner' }, {})).rejects.toThrow(/last active owner/);
       // With a second active owner, one can be removed.

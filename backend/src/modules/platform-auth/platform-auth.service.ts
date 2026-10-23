@@ -1,12 +1,12 @@
 import { BadRequestException, ForbiddenException, Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { PlatformAccount } from '@prisma/client';
-import type { PlatformMe } from '@chamahub/shared';
+import { PlatformAccount, Prisma } from '@prisma/client';
+import { RECOVERY_CODE_PATTERN, type PlatformMe } from '@chamahub/shared';
 import { env } from '../../config/env';
 import { RequestMeta, StaffContext } from '../../common/request';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlatformAuditService } from './platform-audit.service';
-import { decryptSecret, encryptSecret, hashStaffPassword, newToken, newTotpSecret, platformTokenSecret, sha256, verifyStaffPassword, verifyTotp } from './staff-crypto';
+import { decryptSecret, encryptSecret, hashRecoveryCode, hashStaffPassword, matchTotpStep, newRecoveryCodes, newToken, newTotpSecret, platformTokenSecret, sha256, verifyStaffPassword } from './staff-crypto';
 import { StaffMailerService } from './staff-mailer.service';
 import { ensureSystemRoles, resolveStaff } from './staff-roles';
 
@@ -84,10 +84,12 @@ export class PlatformAuthService implements OnModuleInit {
       await this.audit.log({ actorAccountId: account?.id ?? null, action: 'platform.login', outcome: 'FAILURE', reason: 'mfa_unavailable', meta });
       throw new UnauthorizedException(SIGN_IN_FAILED);
     }
-    if (!verifyTotp(decryptSecret(account.mfaSecret), code)) {
+    const isRecovery = RECOVERY_CODE_PATTERN.test(code);
+    const ok = isRecovery ? await this.useRecoveryCode(account.id, code, meta) : await this.acceptTotp(account, code);
+    if (!ok) {
       await this.recordFailure(account);
-      await this.audit.log({ actorAccountId: account.id, action: 'platform.login', outcome: 'FAILURE', reason: 'bad_mfa_code', meta });
-      throw new UnauthorizedException('That code is not right. Check your authenticator app and try again.');
+      await this.audit.log({ actorAccountId: account.id, action: 'platform.login', outcome: 'FAILURE', reason: isRecovery ? 'bad_recovery_code' : 'bad_or_reused_mfa_code', meta });
+      throw new UnauthorizedException(isRecovery ? 'That recovery code is not valid or was already used.' : 'That code is not right or was already used. Wait for the next code and try again.');
     }
     return this.completeLogin(account, meta);
   }
@@ -100,6 +102,34 @@ export class PlatformAuthService implements OnModuleInit {
       data: { failedLoginCount: lock ? 0 : failed, lockedUntil: lock ? new Date(Date.now() + LOCK_MINUTES * 60_000) : account.lockedUntil },
     });
     if (lock) await this.audit.log({ actorAccountId: account.id, action: 'platform.account_locked', targetType: 'PlatformAccount', targetId: account.id, reason: `${MAX_FAILED} failed sign-in attempts` });
+  }
+
+  /**
+   * Accepts a TOTP code once: the matched time step must be newer than the last accepted one,
+   * claimed atomically so two simultaneous requests cannot both use the same code.
+   */
+  private async acceptTotp(account: Pick<PlatformAccount, 'id' | 'mfaSecret'>, code: string, tx: Prisma.TransactionClient = this.prisma): Promise<boolean> {
+    if (!account.mfaSecret) return false;
+    const step = matchTotpStep(decryptSecret(account.mfaSecret), code);
+    if (step === null) return false;
+    const claimed = await tx.platformAccount.updateMany({ where: { id: account.id, OR: [{ mfaLastStep: null }, { mfaLastStep: { lt: step } }] }, data: { mfaLastStep: step } });
+    return claimed.count === 1;
+  }
+
+  /** A recovery code works once. */
+  private async useRecoveryCode(accountId: string, code: string, meta: RequestMeta): Promise<boolean> {
+    const used = await this.prisma.platformRecoveryCode.updateMany({ where: { accountId, codeHash: hashRecoveryCode(code), usedAt: null }, data: { usedAt: new Date() } });
+    if (used.count !== 1) return false;
+    const left = await this.prisma.platformRecoveryCode.count({ where: { accountId, usedAt: null } });
+    await this.audit.log({ actorAccountId: accountId, action: 'platform.mfa_recovery_code_used', targetType: 'PlatformAccount', targetId: accountId, after: { remaining: left }, meta });
+    return true;
+  }
+
+  private async issueRecoveryCodes(accountId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+    const codes = newRecoveryCodes();
+    await tx.platformRecoveryCode.deleteMany({ where: { accountId } });
+    await tx.platformRecoveryCode.createMany({ data: codes.map((c) => ({ accountId, codeHash: hashRecoveryCode(c) })) });
+    return codes;
   }
 
   private async completeLogin(account: PlatformAccount, meta: RequestMeta): Promise<StaffLoginResult> {
@@ -171,7 +201,7 @@ export class PlatformAuthService implements OnModuleInit {
       await this.prisma.platformSession.update({ where: { id: session.id }, data: { lastUsedAt: new Date() } });
     }
     const r = await resolveStaff(this.prisma, session.accountId);
-    return { accountId: session.accountId, sessionId: session.id, fullName: session.account.fullName, email: session.account.email, roleCodes: r.roles.map((x) => x.code), permissions: r.permissions, isOwner: r.isOwner };
+    return { accountId: session.accountId, sessionId: session.id, fullName: session.account.fullName, email: session.account.email, roleCodes: r.roles.map((x) => x.code), permissions: r.permissions, isOwner: r.isOwner, mfaPending: env().PLATFORM_REQUIRE_MFA && !session.account.mfaEnabled };
   }
 
   async logout(staff: StaffContext, meta: RequestMeta) {
@@ -183,7 +213,8 @@ export class PlatformAuthService implements OnModuleInit {
   async me(accountId: string): Promise<PlatformMe> {
     const a = await this.prisma.platformAccount.findUniqueOrThrow({ where: { id: accountId } });
     const r = await resolveStaff(this.prisma, accountId);
-    return { id: a.id, fullName: a.fullName, email: a.email, team: a.team, roles: r.roles, permissions: r.permissions, mfaEnabled: a.mfaEnabled, lastLoginAt: a.lastLoginAt?.toISOString() ?? null };
+    const recoveryCodesLeft = a.mfaEnabled ? await this.prisma.platformRecoveryCode.count({ where: { accountId, usedAt: null } }) : 0;
+    return { id: a.id, fullName: a.fullName, email: a.email, team: a.team, roles: r.roles, permissions: r.permissions, mfaEnabled: a.mfaEnabled, mfaRequired: env().PLATFORM_REQUIRE_MFA, recoveryCodesLeft, lastLoginAt: a.lastLoginAt?.toISOString() ?? null };
   }
 
   /* ---------------- invitations ---------------- */
@@ -288,26 +319,51 @@ export class PlatformAuthService implements OnModuleInit {
     return { secret, otpauthUrl: `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent('ChamaHub Staff')}&algorithm=SHA1&digits=6&period=30` };
   }
 
-  async mfaEnable(staff: StaffContext, code: string, meta: RequestMeta) {
+  /** Turns two-step on and returns ten recovery codes, shown once. */
+  async mfaEnable(staff: StaffContext, code: string, meta: RequestMeta): Promise<{ ok: true; recoveryCodes: string[] }> {
     const account = await this.prisma.platformAccount.findUniqueOrThrow({ where: { id: staff.accountId } });
-    if (account.mfaEnabled) return { ok: true };
-    if (!account.mfaSecret || !verifyTotp(decryptSecret(account.mfaSecret), code)) throw new BadRequestException('That code is not right. Check the time on your phone and try again.');
-    await this.prisma.platformAccount.update({ where: { id: staff.accountId }, data: { mfaEnabled: true } });
-    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_enabled', targetType: 'PlatformAccount', targetId: staff.accountId, meta });
-    return { ok: true };
+    if (account.mfaEnabled) throw new BadRequestException('Two-step sign-in is already on.');
+    const codes = await this.prisma.$transaction(async (tx) => {
+      if (!(await this.acceptTotp(account, code, tx))) throw new BadRequestException('That code is not right. Check the time on your phone and try again.');
+      await tx.platformAccount.update({ where: { id: staff.accountId }, data: { mfaEnabled: true } });
+      const c = await this.issueRecoveryCodes(staff.accountId, tx);
+      await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_enabled', targetType: 'PlatformAccount', targetId: staff.accountId, meta }, tx);
+      return c;
+    });
+    return { ok: true, recoveryCodes: codes };
+  }
+
+  /** New recovery codes (the old ones stop working). Needs a current authenticator code. */
+  async regenerateRecoveryCodes(staff: StaffContext, code: string, meta: RequestMeta): Promise<{ recoveryCodes: string[] }> {
+    const account = await this.prisma.platformAccount.findUniqueOrThrow({ where: { id: staff.accountId } });
+    if (!account.mfaEnabled) throw new BadRequestException('Turn on two-step sign-in first.');
+    const codes = await this.prisma.$transaction(async (tx) => {
+      if (!(await this.acceptTotp(account, code, tx))) throw new ForbiddenException('That code is not right or was already used.');
+      const c = await this.issueRecoveryCodes(staff.accountId, tx);
+      await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_recovery_codes_regenerated', targetType: 'PlatformAccount', targetId: staff.accountId, meta }, tx);
+      return c;
+    });
+    return { recoveryCodes: codes };
   }
 
   async mfaDisable(staff: StaffContext, password: string, code: string, meta: RequestMeta) {
+    if (env().PLATFORM_REQUIRE_MFA) throw new ForbiddenException('Two-step sign-in is required for all staff. If you changed phones, ask an administrator to reset it so you can set it up again.');
     const account = await this.prisma.platformAccount.findUniqueOrThrow({ where: { id: staff.accountId } });
     if (!account.mfaEnabled || !account.mfaSecret) return { ok: true };
-    const ok = (await verifyStaffPassword(password, account.passwordHash)) && verifyTotp(decryptSecret(account.mfaSecret), code);
+    const ok = (await verifyStaffPassword(password, account.passwordHash)) && (await this.acceptTotp(account, code));
     if (!ok) {
       await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_disabled', outcome: 'FAILURE', meta });
       throw new ForbiddenException('Your password or code is not right.');
     }
-    await this.prisma.platformAccount.update({ where: { id: staff.accountId }, data: { mfaEnabled: false, mfaSecret: null } });
+    await this.clearMfa(staff.accountId);
     await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_disabled', targetType: 'PlatformAccount', targetId: staff.accountId, meta });
     return { ok: true };
+  }
+
+  /** Removes two-step sign-in (own choice, or an administrator's reset after a lost phone). */
+  async clearMfa(accountId: string, tx: Prisma.TransactionClient = this.prisma) {
+    await tx.platformAccount.update({ where: { id: accountId }, data: { mfaEnabled: false, mfaSecret: null, mfaLastStep: null } });
+    await tx.platformRecoveryCode.deleteMany({ where: { accountId } });
   }
 
   /* ---------------- own sessions ---------------- */

@@ -18,7 +18,12 @@ export const staffPasswordSchema = z
   .regex(/\d/, 'Include at least one number');
 
 export const platformLoginSchema = z.object({ email: staffEmailSchema, password: z.string().min(1).max(200) });
-export const platformMfaLoginSchema = z.object({ mfaToken: z.string().min(20).max(2000), code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code') });
+/** A recovery code: ten letters/digits shown as XXXXX-XXXXX (case and dash do not matter). */
+export const RECOVERY_CODE_PATTERN = /^[A-Z2-7]{5}-?[A-Z2-7]{5}$/i;
+export const platformMfaLoginSchema = z.object({
+  mfaToken: z.string().min(20).max(2000),
+  code: z.string().trim().refine((v) => /^\d{6}$/.test(v) || RECOVERY_CODE_PATTERN.test(v), 'Enter the 6-digit code or a recovery code'),
+});
 export const platformForgotSchema = z.object({ email: staffEmailSchema });
 export const platformTokenPasswordSchema = z.object({ token: z.string().min(32).max(200), password: staffPasswordSchema });
 export const platformChangePasswordSchema = z.object({ currentPassword: z.string().min(1).max(200), newPassword: staffPasswordSchema });
@@ -69,6 +74,10 @@ export interface PlatformMe {
   roles: { code: string; name: string }[];
   permissions: PlatformPermission[];
   mfaEnabled: boolean;
+  /** Two-step sign-in is required for staff; until it is on, only enrolment works. */
+  mfaRequired: boolean;
+  /** Unused recovery codes left (0 when two-step is off). */
+  recoveryCodesLeft: number;
   lastLoginAt: string | null;
 }
 

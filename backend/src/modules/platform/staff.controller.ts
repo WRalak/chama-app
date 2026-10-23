@@ -93,6 +93,13 @@ export class StaffController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
   @HttpCode(200)
+  @Post(':id/reset-mfa')
+  resetMfa(@Param('id') id: string, @Body(new ZodPipe(staffReasonSchema)) body: z.infer<typeof staffReasonSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
+    return this.staff.resetMfa(me, id, body.reason, meta);
+  }
+
+  @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
+  @HttpCode(200)
   @Post(':id/password-reset')
   passwordReset(@Param('id') id: string, @Body(new ZodPipe(staffReasonSchema)) body: z.infer<typeof staffReasonSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.sendPasswordReset(me, id, body.reason, meta);

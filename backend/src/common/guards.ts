@@ -11,7 +11,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Feature, GroupRole, Permission, PlatformPermission, resolvePermissions, RolePolicy, SpecialRole } from '@chamahub/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { ALLOW_UNVERIFIED, ANY_PERMISSION, ANY_PLATFORM_PERMISSION, IS_PUBLIC, PLATFORM_API, REQUIRED_FEATURE, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
+import { ALLOW_BEFORE_MFA, ALLOW_UNVERIFIED, ANY_PERMISSION, ANY_PLATFORM_PERMISSION, IS_PUBLIC, PLATFORM_API, REQUIRED_FEATURE, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
 import { EntitlementService } from '../modules/billing/entitlements.service';
 import { PlatformAuthService } from '../modules/platform-auth/platform-auth.service';
 import { PlatformAuditService } from '../modules/platform-auth/platform-audit.service';
@@ -40,6 +40,9 @@ export class JwtAuthGuard implements CanActivate {
     // Staff and members are different identities signed with different keys: neither token works on the other's routes.
     if (this.reflector.getAllAndOverride<boolean>(PLATFORM_API, targets)) {
       req.staff = await this.staffAuth.authenticate(header.slice(7));
+      if (req.staff.mfaPending && !this.reflector.getAllAndOverride<boolean>(ALLOW_BEFORE_MFA, targets)) {
+        throw new ForbiddenException({ message: 'Turn on two-step sign-in to continue (Security Settings).', details: { code: 'MFA_SETUP_REQUIRED' } });
+      }
       return true;
     }
     let payload: AccessTokenPayload;

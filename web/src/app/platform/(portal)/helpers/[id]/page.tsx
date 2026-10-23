@@ -38,6 +38,7 @@ export default function HelperDetailPage() {
     invalidate: inv,
     onSuccess: (r) => setLink(r.inviteUrl ? { url: r.inviteUrl, what: 'invitation' } : null),
   });
+  const resetMfa = useAction((reason: string) => api(`platform/staff/${id}/reset-mfa`, { body: { reason } }), { success: 'Two-step sign-in reset; they were signed out and must set it up again', invalidate: inv });
   const reset = useAction((reason: string) => api<{ delivery: { sent: boolean; error?: string }; resetUrl?: string }>(`platform/staff/${id}/password-reset`, { body: { reason } }), {
     success: (r) => (r.delivery.sent ? 'Reset link e-mailed to them' : 'Reset link created; e-mail not sent'),
     onSuccess: (r) => setLink(r.resetUrl ? { url: r.resetUrl, what: 'password reset' } : null),
@@ -80,6 +81,9 @@ export default function HelperDetailPage() {
               {s.status === 'INVITED' && <Button variant="secondary" loading={resend.isPending} onClick={() => resend.mutate(undefined)}>Resend invitation</Button>}
               {s.status === 'ACTIVE' && (
                 <ConfirmAction trigger={(open) => <Button variant="secondary" onClick={open}>Send password reset</Button>} title="Send a password reset?" description="They get a single-use link by e-mail and choose a new password themselves. You never see it." confirmLabel="Send reset link" busy={reset.isPending} onConfirm={(r) => reset.mutateAsync(r)} />
+              )}
+              {s.mfaEnabled && (
+                <ConfirmAction trigger={(open) => <Button variant="secondary" onClick={open}>Reset two-step sign-in</Button>} title="Reset their two-step sign-in?" description="For a lost or replaced phone. Confirm who you are talking to first (for example by video call): anyone who gets this reset can take over the account with the password. They are signed out and must set it up again." confirmLabel="Reset" busy={resetMfa.isPending} onConfirm={(r) => resetMfa.mutateAsync(r)} />
               )}
               <ConfirmAction trigger={(open) => <Button variant="secondary" onClick={open}>Sign out everywhere</Button>} title="End all their sessions?" description="Every device they are signed in on is signed out at once." confirmLabel="End sessions" busy={revoke.isPending} onConfirm={(r) => revoke.mutateAsync(r)} />
               {s.status === 'SUSPENDED' ? (

@@ -99,12 +99,36 @@ export function totpAt(secret: string, step: number): string {
   return code.toString().padStart(6, '0');
 }
 
-/** Accepts the current code and one step either side (clock drift). */
-export function verifyTotp(secret: string, code: string, now = Date.now()): boolean {
-  if (!/^\d{6}$/.test(code)) return false;
+/**
+ * Accepts the current code and one step either side (clock drift) and returns the time step it
+ * matched, so the caller can refuse a step that was already used (replay). Null when wrong.
+ */
+export function matchTotpStep(secret: string, code: string, now = Date.now()): number | null {
+  if (!/^\d{6}$/.test(code)) return null;
   const step = Math.floor(now / 30_000);
-  return [-1, 0, 1].some((d) => timingSafeEqual(Buffer.from(totpAt(secret, step + d)), Buffer.from(code)));
+  let found: number | null = null;
+  for (const d of [-1, 0, 1]) if (timingSafeEqual(Buffer.from(totpAt(secret, step + d)), Buffer.from(code))) found = step + d;
+  return found;
 }
+
+export function verifyTotp(secret: string, code: string, now = Date.now()): boolean {
+  return matchTotpStep(secret, code, now) !== null;
+}
+
+/* ---------------- recovery codes ---------------- */
+
+export const RECOVERY_CODE_COUNT = 10;
+
+/** Ten single-use codes like K7QXM-2RTPA (50 bits each). Shown once; only hashes are stored. */
+export function newRecoveryCodes(): string[] {
+  return Array.from({ length: RECOVERY_CODE_COUNT }, () => {
+    const raw = base32Encode(randomBytes(7)).slice(0, 10);
+    return `${raw.slice(0, 5)}-${raw.slice(5)}`;
+  });
+}
+
+export const normalizeRecoveryCode = (code: string) => code.replace(/[\s-]/g, '').toUpperCase();
+export const hashRecoveryCode = (code: string) => sha256(`recovery:${normalizeRecoveryCode(code)}`);
 
 /* ---------------- TOTP secrets at rest (AES-256-GCM) ---------------- */
 

@@ -27,6 +27,8 @@ const envSchema = z.object({
   PLATFORM_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(24 * 60).default(30),
   /** Where invitation and reset links point (the web app's origin). */
   PLATFORM_PORTAL_URL: z.string().url().default('http://localhost:3000'),
+  /** Staff must turn on two-step sign-in before using the portal. On unless explicitly set to false. */
+  PLATFORM_REQUIRE_MFA: z.string().optional().transform((v) => !(v === 'false' || v === '0')),
   /** Optional: receives a small JSON report (no request data) for every 5xx, e.g. a Slack/Teams/alerting webhook. */
   // ---- Subscription billing (ChamaHub's own fees; separate from groups' M-Pesa) ----
   /** Public base URL providers call back, e.g. https://api.example.co.ke/v1/billing/webhooks */

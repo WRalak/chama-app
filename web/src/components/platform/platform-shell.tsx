@@ -119,6 +119,12 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
     }
   }, []);
   useEffect(() => setMobileOpen(false), [pathname]);
+  // Two-step sign-in is required and not set up yet: the API refuses everything else, so go straight to setup.
+  const mfaPending = !!me.data && me.data.mfaRequired && !me.data.mfaEnabled;
+  const router = useRouter();
+  useEffect(() => {
+    if (mfaPending && pathname !== '/platform/account-security') router.replace('/platform/account-security');
+  }, [mfaPending, pathname, router]);
 
   const toggle = () => {
     setCollapsed((c) => {
@@ -136,7 +142,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
     if (me.error instanceof ApiError && me.error.status === 401) return null; // api() is sending the browser to /platform/login
     return <div className="min-h-screen bg-canvas p-8"><ErrorState error={me.error} onRetry={() => me.refetch()} /></div>;
   }
-  const sections = allowedNav(me.data!.permissions);
+  const sections = mfaPending ? allowedNav([]).filter((s) => s.label === 'Account') : allowedNav(me.data!.permissions);
   // A section outside the caller's role gets a plain explanation instead of an API error. (The API refuses it either way.)
   const section = PORTAL_NAV.flatMap((s) => s.items).filter((i) => pathname === i.href || (!i.exact && pathname.startsWith(`${i.href}/`))).sort((a, b) => b.href.length - a.href.length)[0];
   const blocked = !!section?.any && !section.any.some((p) => me.data!.permissions.includes(p));
@@ -217,14 +223,14 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
           <button className="rounded-lg p-2 text-plum hover:bg-blush/60 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
             <Menu className="h-5 w-5" />
           </button>
-          <GlobalSearch />
+          {!mfaPending && <GlobalSearch />}
           <div className="ml-auto flex items-center gap-1">
-            <Notifications />
+            {!mfaPending && <Notifications />}
             <ProfileMenu name={me.data!.fullName} email={me.data!.email} roles={me.data!.roles.map((r) => r.name)} />
           </div>
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 lg:px-8">
-          {blocked ? <EmptyState title={`${section!.label} is not part of your role`} description="Ask an administrator if you need this access. Use the menu for the sections you can open." /> : children}
+          {mfaPending && pathname !== '/platform/account-security' ? <LoadingRows rows={3} /> : blocked ? <EmptyState title={`${section!.label} is not part of your role`} description="Ask an administrator if you need this access. Use the menu for the sections you can open." /> : children}
         </main>
       </div>
     </div>

@@ -16,6 +16,8 @@ export interface StaffContext {
   roleCodes: string[];
   permissions: readonly PlatformPermission[];
   isOwner: boolean;
+  /** Two-step sign-in is required but not yet set up: only enrolment routes work. */
+  mfaPending: boolean;
 }
 
 export interface MembershipContext {

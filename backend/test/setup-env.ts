@@ -14,3 +14,5 @@ process.env.ANTHROPIC_API_KEY = '';
 process.env.PAYSTACK_SECRET_KEY = 'sk_test_chamahub_dummy_key';
 process.env.BILLING_WEBHOOK_TOKEN = 'test-billing-webhook-token-0123456789';
 process.env.BILLING_MPESA_CONSUMER_KEY = '';
+// Most suites test other things; the platform suite turns two-step enforcement on where it tests it.
+process.env.PLATFORM_REQUIRE_MFA = 'false';

@@ -204,6 +204,21 @@ export class StaffService {
     return { revoked: r.count };
   }
 
+  /**
+   * For a lost or replaced phone: removes the person's two-step setup and signs them out. They
+   * must set it up again (and get new recovery codes) at their next sign-in.
+   */
+  async resetMfa(actor: StaffContext, id: string, reason: string, meta: RequestMeta) {
+    const target = await this.assertCanManage(actor, id);
+    if (!target.mfaEnabled) throw new BadRequestException('Two-step sign-in is not on for this account.');
+    await this.prisma.$transaction(async (tx) => {
+      await this.auth.clearMfa(id, tx);
+      await tx.platformSession.updateMany({ where: { accountId: id, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: 'mfa_reset' } });
+      await this.audit.log({ actorAccountId: actor.accountId, action: 'platform.staff_mfa_reset', targetType: 'PlatformAccount', targetId: id, reason, meta }, tx);
+    });
+    return this.get(id);
+  }
+
   /** Starts a reset for someone else. The admin never sees or sets the password; the link goes to the account's e-mail. */
   async sendPasswordReset(actor: StaffContext, id: string, reason: string, meta: RequestMeta) {
     const target = await this.assertCanManage(actor, id);

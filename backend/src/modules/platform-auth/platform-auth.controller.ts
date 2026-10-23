@@ -11,7 +11,7 @@ import {
   refreshSchema,
 } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentStaff, PlatformApi, Public, ReqMeta } from '../../common/decorators';
+import { AllowBeforeMfa, CurrentStaff, PlatformApi, Public, ReqMeta } from '../../common/decorators';
 import { RequestMeta, StaffContext } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { PlatformAuthService } from './platform-auth.service';
@@ -49,11 +49,13 @@ export class PlatformAuthController {
   }
 
   @HttpCode(200)
+  @AllowBeforeMfa()
   @Post('logout')
   logout(@CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.auth.logout(staff, meta);
   }
 
+  @AllowBeforeMfa()
   @Get('me')
   me(@CurrentStaff() staff: StaffContext) {
     return this.auth.me(staff.accountId);
@@ -92,12 +94,14 @@ export class PlatformAuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(200)
+  @AllowBeforeMfa()
   @Post('change-password')
   changePassword(@Body(new ZodPipe(platformChangePasswordSchema)) body: z.infer<typeof platformChangePasswordSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.auth.changePassword(staff, body.currentPassword, body.newPassword, meta);
   }
 
   @HttpCode(200)
+  @AllowBeforeMfa()
   @Post('mfa/setup')
   mfaSetup(@CurrentStaff() staff: StaffContext) {
     return this.auth.mfaSetup(staff);
@@ -105,6 +109,7 @@ export class PlatformAuthController {
 
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(200)
+  @AllowBeforeMfa()
   @Post('mfa/enable')
   mfaEnable(@Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.auth.mfaEnable(staff, body.code, meta);
@@ -117,11 +122,20 @@ export class PlatformAuthController {
     return this.auth.mfaDisable(staff, body.password, body.code, meta);
   }
 
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('mfa/recovery-codes')
+  regenerate(@Body(new ZodPipe(mfaCodeSchema)) body: z.infer<typeof mfaCodeSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    return this.auth.regenerateRecoveryCodes(staff, body.code, meta);
+  }
+
+  @AllowBeforeMfa()
   @Get('sessions')
   sessions(@CurrentStaff() staff: StaffContext) {
     return this.auth.sessions(staff);
   }
 
+  @AllowBeforeMfa()
   @Delete('sessions/:id')
   revoke(@Param('id') id: string, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.auth.revokeOwnSession(staff, id, meta);

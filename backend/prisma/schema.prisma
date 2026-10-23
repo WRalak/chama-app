@@ -2135,6 +2135,8 @@ model PlatformAccount {
   /// TOTP secret, encrypted (AES-256-GCM) with a key derived from the platform token secret.
   mfaSecret         String?
   mfaEnabled        Boolean               @default(false)
+  /// Last accepted TOTP time step: a code is never accepted twice.
+  mfaLastStep       Int?
   failedLoginCount  Int                   @default(0)
   lockedUntil       DateTime?
   lastLoginAt       DateTime?
@@ -2150,6 +2152,7 @@ model PlatformAccount {
   sessions       PlatformSession[]
   invitations    PlatformInvitation[]
   passwordResets PlatformPasswordReset[]
+  recoveryCodes  PlatformRecoveryCode[]
   assignedCases  SupportCase[]
   supportGrants  SupportAccessGrant[]
 
@@ -2238,6 +2241,21 @@ model PlatformPasswordReset {
 
   @@index([accountId])
   @@map("platform_password_resets")
+}
+
+/// Single-use two-step recovery codes; only their SHA-256 is stored.
+model PlatformRecoveryCode {
+  id        String    @id @default(cuid())
+  accountId String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  account PlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, codeHash])
+  @@index([accountId, usedAt])
+  @@map("platform_recovery_codes")
 }
 
 model PlatformSession {
