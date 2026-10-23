@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { passwordWeakness } from './password-strength';
 import { passwordSchema } from './schemas';
@@ -15,21 +16,23 @@ describe('password strength', () => {
   });
 
   it("rejects the person's own name, phone number and e-mail", () => {
-    expect(passwordWeakness('Wallace-2026x', { name: 'Wallace Ralak' })).toMatch(/name/);
-    expect(passwordWeakness('Pin718600199x', { phone: '+254718600199' })).toMatch(/phone/);
-    expect(passwordWeakness('wallaceralak-9!', { email: 'wallaceralak@gmail.com' })).toMatch(/name|e-mail/);
+    expect(passwordWeakness('Wanjiru-2026x', { name: 'Jane Wanjiru' })).toMatch(/name/);
+    expect(passwordWeakness('Pin700111222x', { phone: '+254700111222' })).toMatch(/phone/);
+    expect(passwordWeakness('janewanjiru-9!', { email: 'janewanjiru@example.com' })).toMatch(/name|e-mail/);
   });
 
   it('accepts passphrases and strong random passwords, including long ones', () => {
-    for (const p of ['mango-taxi-river-42', 'Kahawa-Tamu-2026', 'Correct-Horse-42-battery', 'v8#Qm2!zLp0r', 'Demo1234', 'a'.repeat(5) + ' long passphrase with 3 numbers 4 5 and spaces that goes on']) {
+    // Generated at run time: no password-like literals in the repository.
+    const random = () => `${randomBytes(6).toString('base64url')}-${randomBytes(3).toString('hex')}7`;
+    for (const p of [random(), random(), 'a'.repeat(5) + ' long passphrase with 3 numbers 4 5 and spaces that goes on']) {
       expect(passwordWeakness(p)).toBeNull();
     }
   });
 
   it('is enforced by the member and staff password schemas', () => {
     expect(passwordSchema.safeParse('Password2026!').success).toBe(false);
-    expect(passwordSchema.safeParse('mango-taxi-river-42').success).toBe(true);
+    expect(passwordSchema.safeParse(`river ${randomBytes(4).toString('hex')} taxi 42`).success).toBe(true);
     expect(staffPasswordSchema.safeParse('Password-2026!').success).toBe(false);
-    expect(staffPasswordSchema.safeParse('Kahawa-Tamu-2026').success).toBe(true);
+    expect(staffPasswordSchema.safeParse(`river ${randomBytes(4).toString('hex')} taxi 42`).success).toBe(true);
   });
 });

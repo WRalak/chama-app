@@ -7,9 +7,9 @@ import { testStaffMailbox, StaffMailerService } from '../src/modules/platform-au
 import { bootstrapOwner } from '../src/modules/platform-auth/staff-bootstrap';
 import { totpAt } from '../src/modules/platform-auth/staff-crypto';
 import { StaffService } from '../src/modules/platform/staff.service';
-import { api, as, createGroupWith, createStaff, createTestApp, registerUser, resetDatabase, STAFF_PASSWORD, StaffUser, TestUser } from './helpers';
+import { api, as, createGroupWith, createStaff, createTestApp, registerUser, resetDatabase, testPassword, STAFF_PASSWORD, StaffUser, TestUser } from './helpers';
 
-const GOOD_PASSWORD = 'Correct-Horse-42-battery';
+const GOOD_PASSWORD = testPassword();
 const tokenFrom = (text: string) => /token=([A-Za-z0-9_-]+)/.exec(text)?.[1] ?? '';
 const lastMailTo = (email: string) => [...testStaffMailbox].reverse().find((m) => m.to === email);
 const login = (app: INestApplication, email: string, password: string) => api(app).post('/v1/platform/auth/login').send({ email, password });
@@ -225,7 +225,7 @@ describe('Platform administration portal', () => {
       await as(app, s).put(`/v1/platform/staff/${helper.id}/access`, { roleCodes: ['OWNER'], reason: 'Hijacked session' }).expect(403);
       await as(app, s).post('/v1/platform/billing/payments/x/refund', { amountMinor: 1, reason: 'Hijacked session' }).expect(403);
       // Wrong password does not help (and counts towards the lock).
-      await as(app, s).post('/v1/platform/auth/reauth', { password: 'not-the-password-9' }).expect(403);
+      await as(app, s).post('/v1/platform/auth/reauth', { password: testPassword() }).expect(403);
       await as(app, s).post('/v1/platform/auth/reauth', { password: STAFF_PASSWORD }).expect(200);
       await as(app, s).patch('/v1/platform/settings', { maxSupportAccessHours: 7 }).expect(200);
       expect(await prisma.platformAuditLog.count({ where: { actorAccountId: s.id, action: 'platform.reauth', outcome: 'FAILURE' } })).toBe(1);
@@ -266,7 +266,7 @@ describe('Platform administration portal', () => {
       const t2 = tokenFrom(lastMailTo(s.email)!.text);
       secrets.push(t2);
       await prisma.platformPasswordReset.updateMany({ where: { accountId: s.id, usedAt: null }, data: { expiresAt: new Date(Date.now() - 1000) } });
-      await api(app).post('/v1/platform/auth/reset-password').send({ token: t2, password: 'Another-Good-Pass-9' }).expect(400);
+      await api(app).post('/v1/platform/auth/reset-password').send({ token: t2, password: testPassword() }).expect(400);
     });
   });
 

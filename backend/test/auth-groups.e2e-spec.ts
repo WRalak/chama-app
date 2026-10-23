@@ -1,7 +1,9 @@
 import { INestApplication } from '@nestjs/common';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { api, as, createGroupWith, createTestApp, registerUser, resetDatabase, uniquePhone } from './helpers';
+import { api, as, createGroupWith, createTestApp, MEMBER_PASSWORD, registerUser, resetDatabase, testPassword, uniquePhone } from './helpers';
 import { testOtpOutbox } from '../src/modules/auth/otp.service';
+
+const NEW_PASSWORD = testPassword();
 
 describe('Auth, groups and group-scoped authorization', () => {
   let app: INestApplication;
@@ -26,19 +28,19 @@ describe('Auth, groups and group-scoped authorization', () => {
 
   it('refuses common passwords and passwords built from the person’s own details', async () => {
     const phone = uniquePhone();
-    const common = await api(app).post('/v1/auth/register').send({ fullName: 'Pass Word', phone, password: 'Password2026!' }).expect(400);
+    const common = await api(app).post('/v1/auth/register').send({ fullName: 'Pass Word', phone, password: `Password${new Date().getFullYear()}!` }).expect(400);
     expect(JSON.stringify(common.body)).toMatch(/too common/);
     const digits = phone.replace(/\D/g, '').slice(-9);
     const own = await api(app).post('/v1/auth/register').send({ fullName: 'Own Number', phone, password: `Pin${digits}x` }).expect(422);
     expect(own.body.message).toMatch(/phone number/);
-    await api(app).post('/v1/auth/register').send({ fullName: 'Good Choice', phone, password: 'mango-taxi-river-42' }).expect(201);
+    await api(app).post('/v1/auth/register').send({ fullName: 'Good Choice', phone, password: testPassword() }).expect(201);
   });
 
   it('rejects duplicate phone and wrong password; locks after repeated failures', async () => {
     const u = await registerUser(app, 'Otieno Ouma');
-    await api(app).post('/v1/auth/register').send({ fullName: 'X Y Z', phone: u.phone, password: 'Kahawa-Tamu-2026' }).expect(409);
+    await api(app).post('/v1/auth/register').send({ fullName: 'X Y Z', phone: u.phone, password: MEMBER_PASSWORD }).expect(409);
     for (let i = 0; i < 5; i++) await api(app).post('/v1/auth/login').send({ phone: u.phone, password: 'wrong' }).expect(401);
-    await api(app).post('/v1/auth/login').send({ phone: u.phone, password: 'Kahawa-Tamu-2026' }).expect(403);
+    await api(app).post('/v1/auth/login').send({ phone: u.phone, password: MEMBER_PASSWORD }).expect(403);
   });
 
   it('rotates refresh tokens and detects reuse', async () => {
@@ -54,9 +56,9 @@ describe('Auth, groups and group-scoped authorization', () => {
     const u = await registerUser(app, 'Kiprono Kirui');
     await api(app).post('/v1/auth/otp/request').send({ phone: u.phone, purpose: 'RESET_PASSWORD' }).expect(200);
     const code = testOtpOutbox.get(`${u.phone}:RESET_PASSWORD`);
-    await api(app).post('/v1/auth/password/reset').send({ phone: u.phone, code, newPassword: 'Mango-River-77' }).expect(200);
+    await api(app).post('/v1/auth/password/reset').send({ phone: u.phone, code, newPassword: NEW_PASSWORD }).expect(200);
     await as(app, u).get('/v1/me').expect(401);
-    await api(app).post('/v1/auth/login').send({ phone: u.phone, password: 'Mango-River-77' }).expect(200);
+    await api(app).post('/v1/auth/login').send({ phone: u.phone, password: NEW_PASSWORD }).expect(200);
     // The account holder is told, without any code or link in the message.
     const notices = await prisma.notification.findMany({ where: { userId: u.id, type: 'SECURITY' } });
     expect(notices.map((n) => n.title)).toContain('Your password was reset');

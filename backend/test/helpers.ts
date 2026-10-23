@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { randomBytes } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/setup-app';
@@ -52,7 +53,15 @@ export interface StaffUser {
   refreshToken: string;
 }
 
-export const STAFF_PASSWORD = 'Staff-Test-Passw0rd';
+/**
+ * A fresh password for throwaway test accounts, made at run time so no password is stored in the
+ * repository (secret scanners rightly flag literal ones). Passes the member and staff policies.
+ */
+export const testPassword = () => `Tq-${randomBytes(9).toString('hex')}-7x`;
+
+/** Every account made by registerUser in this run uses this password. */
+export const MEMBER_PASSWORD = testPassword();
+export const STAFF_PASSWORD = testPassword();
 let staffCounter = 0;
 
 /**
@@ -80,7 +89,7 @@ export const api = (app: INestApplication) => request(app.getHttpServer());
 
 export async function registerUser(app: INestApplication, fullName = 'Test User', opts: { verify?: boolean } = {}): Promise<TestUser> {
   const phone = uniquePhone();
-  const res = await api(app).post('/v1/auth/register').send({ fullName, phone, password: 'Kahawa-Tamu-2026' }).expect(201);
+  const res = await api(app).post('/v1/auth/register').send({ fullName, phone, password: MEMBER_PASSWORD }).expect(201);
   const user: TestUser = { id: res.body.user.id, phone: res.body.user.phone, token: res.body.tokens.accessToken, refreshToken: res.body.tokens.refreshToken, fullName };
   if (opts.verify !== false) {
     const code = testOtpOutbox.get(`${user.phone}:VERIFY_PHONE`);
