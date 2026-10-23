@@ -213,6 +213,34 @@ describe('Platform administration portal', () => {
       }
     });
 
+    it('requires recent re-authentication for sensitive actions, so a stolen session alone is not enough', async () => {
+      const s = await createStaff(app, prisma, 'Step Up Sam', ['OWNER']);
+      // Fresh sign-in counts.
+      await as(app, s).patch('/v1/platform/settings', { maxSupportAccessHours: 6 }).expect(200);
+      // Ten minutes later (simulated), the same session can still read but not change sensitive things.
+      await prisma.platformSession.updateMany({ where: { accountId: s.id }, data: { reauthAt: new Date(Date.now() - 11 * 60_000) } });
+      await as(app, s).get('/v1/platform/settings').expect(200);
+      const stale = await as(app, s).patch('/v1/platform/settings', { maxSupportAccessHours: 7 }).expect(403);
+      expect(stale.body.details?.code ?? stale.body.code).toBe('REAUTH_REQUIRED');
+      await as(app, s).put(`/v1/platform/staff/${helper.id}/access`, { roleCodes: ['OWNER'], reason: 'Hijacked session' }).expect(403);
+      await as(app, s).post('/v1/platform/billing/payments/x/refund', { amountMinor: 1, reason: 'Hijacked session' }).expect(403);
+      // Wrong password does not help (and counts towards the lock).
+      await as(app, s).post('/v1/platform/auth/reauth', { password: 'not-the-password-9' }).expect(403);
+      await as(app, s).post('/v1/platform/auth/reauth', { password: STAFF_PASSWORD }).expect(200);
+      await as(app, s).patch('/v1/platform/settings', { maxSupportAccessHours: 7 }).expect(200);
+      expect(await prisma.platformAuditLog.count({ where: { actorAccountId: s.id, action: 'platform.reauth', outcome: 'FAILURE' } })).toBe(1);
+
+      // With two-step on, the password alone is not enough to re-authenticate.
+      const { secret } = (await as(app, s).post('/v1/platform/auth/mfa/setup').expect(200)).body;
+      const step = Math.floor(Date.now() / 30_000);
+      await as(app, s).post('/v1/platform/auth/mfa/enable', { code: totpAt(secret, step) }).expect(200);
+      await prisma.platformSession.updateMany({ where: { accountId: s.id }, data: { reauthAt: new Date(Date.now() - 11 * 60_000) } });
+      await as(app, s).post('/v1/platform/auth/reauth', { password: STAFF_PASSWORD }).expect(403);
+      await as(app, s).post('/v1/platform/auth/reauth', { password: STAFF_PASSWORD, code: totpAt(secret, step) }).expect(403); // already used
+      await as(app, s).post('/v1/platform/auth/reauth', { password: STAFF_PASSWORD, code: totpAt(secret, step + 1) }).expect(200);
+      await as(app, s).patch('/v1/platform/settings', { maxSupportAccessHours: 8 }).expect(200);
+    });
+
     it('resets a forgotten password with a single-use, expiring link and ends existing sessions', async () => {
       const s = await createStaff(app, prisma, 'Reset Rose', ['ANALYST']);
       const unknown = await api(app).post('/v1/platform/auth/forgot-password').send({ email: 'ghost@example.com' }).expect(200);
@@ -228,6 +256,10 @@ describe('Platform administration portal', () => {
       await as(app, s).get('/v1/platform/auth/me').expect(401);
       await login(app, s.email, STAFF_PASSWORD).expect(401);
       await login(app, s.email, GOOD_PASSWORD).expect(200);
+      // The owner of the account is told, and the notice carries no link or token.
+      const notice = [...testStaffMailbox].reverse().find((mail) => mail.to === s.email && mail.subject.includes('security notice'));
+      expect(notice?.text).toMatch(/password for your staff account was reset/);
+      expect(notice?.text).not.toMatch(/token=|https?:/);
 
       // Expired links do not work.
       await api(app).post('/v1/platform/auth/forgot-password').send({ email: s.email }).expect(200);
@@ -335,7 +367,7 @@ describe('Platform administration portal', () => {
       // Remove every other owner the suite created, so `owner` is the only active one.
       const others = await prisma.platformAccount.findMany({ where: { id: { not: ownerId }, roles: { some: { role: { code: 'OWNER' } } } } });
       await prisma.platformAccount.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { status: 'DEACTIVATED' } });
-      const someoneElse: StaffContext = { accountId: 'another-owner', sessionId: 's', fullName: 'Another Owner', email: 'a@x', roleCodes: ['OWNER'], permissions: (await as(app, owner).get('/v1/platform/auth/me')).body.permissions, isOwner: true, mfaPending: false };
+      const someoneElse: StaffContext = { accountId: 'another-owner', sessionId: 's', fullName: 'Another Owner', email: 'a@x', roleCodes: ['OWNER'], permissions: (await as(app, owner).get('/v1/platform/auth/me')).body.permissions, isOwner: true, mfaPending: false, reauthAt: new Date() };
       await expect(staff.setStatus(someoneElse, ownerId, 'SUSPENDED', 'Testing last owner', {})).rejects.toThrow(/last active owner/);
       await expect(staff.setAccess(someoneElse, ownerId, { roleCodes: ['ANALYST'], extraPermissions: [], reason: 'Testing last owner' }, {})).rejects.toThrow(/last active owner/);
       // With a second active owner, one can be removed.

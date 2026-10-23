@@ -18,6 +18,8 @@ export interface StaffContext {
   isOwner: boolean;
   /** Two-step sign-in is required but not yet set up: only enrolment routes work. */
   mfaPending: boolean;
+  /** When the person last proved who they are in this session. */
+  reauthAt: Date;
 }
 
 export interface MembershipContext {

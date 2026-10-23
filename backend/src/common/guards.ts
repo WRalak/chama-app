@@ -11,11 +11,12 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Feature, GroupRole, Permission, PlatformPermission, resolvePermissions, RolePolicy, SpecialRole } from '@chamahub/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { ALLOW_BEFORE_MFA, ALLOW_UNVERIFIED, ANY_PERMISSION, ANY_PLATFORM_PERMISSION, IS_PUBLIC, PLATFORM_API, REQUIRED_FEATURE, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
+import { ALLOW_BEFORE_MFA, ALLOW_UNVERIFIED, ANY_PERMISSION, ANY_PLATFORM_PERMISSION, IS_PUBLIC, PLATFORM_API, RECENT_AUTH, REQUIRED_FEATURE, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
 import { EntitlementService } from '../modules/billing/entitlements.service';
 import { PlatformAuthService } from '../modules/platform-auth/platform-auth.service';
 import { PlatformAuditService } from '../modules/platform-auth/platform-audit.service';
 import { AppRequest, metaFrom } from './request';
+import { env } from '../config/env';
 
 export interface AccessTokenPayload {
   sub: string;
@@ -154,7 +155,7 @@ export class PlatformGuard implements CanActivate {
     const targets = [ctx.getHandler(), ctx.getClass()];
     const all = this.reflector.getAllAndOverride<PlatformPermission[]>(REQUIRED_PLATFORM_PERMISSION, targets);
     const any = this.reflector.getAllAndOverride<PlatformPermission[]>(ANY_PLATFORM_PERMISSION, targets);
-    if (!all?.length && !any?.length) return true;
+    if (!all?.length && !any?.length && !this.reflector.getAllAndOverride<boolean>(RECENT_AUTH, targets)) return true;
     const req = ctx.switchToHttp().getRequest<AppRequest>();
     const staff = req.staff;
     const allowed = !!staff && (!all?.length || all.every((p) => staff.permissions.includes(p))) && (!any?.length || any.some((p) => staff.permissions.includes(p)));
@@ -163,6 +164,9 @@ export class PlatformGuard implements CanActivate {
         await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.permission_denied', outcome: 'DENIED', targetType: 'Route', targetId: `${req.method} ${req.route?.path ?? req.path}`.slice(0, 200), reason: [...(all ?? []), ...(any ?? [])].join(','), meta: metaFrom(req) });
       }
       throw new ForbiddenException('You do not have permission to do this.');
+    }
+    if (staff && this.reflector.getAllAndOverride<boolean>(RECENT_AUTH, targets) && Date.now() - staff.reauthAt.getTime() > env().PLATFORM_REAUTH_MINUTES * 60_000) {
+      throw new ForbiddenException({ message: 'Confirm it is you to continue: enter your password (and authenticator code).', details: { code: 'REAUTH_REQUIRED' } });
     }
     return true;
   }

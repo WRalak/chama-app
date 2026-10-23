@@ -4,6 +4,7 @@
  */
 import { z } from 'zod';
 import { ALL_PLATFORM_PERMISSIONS, type PlatformPermission } from './permissions';
+import { passwordWeakness } from './password-strength';
 
 /* ---------------- staff accounts ---------------- */
 
@@ -15,7 +16,11 @@ export const staffPasswordSchema = z
   .min(12, 'Use at least 12 characters')
   .max(200)
   .regex(/[A-Za-z]/, 'Include at least one letter')
-  .regex(/\d/, 'Include at least one number');
+  .regex(/\d/, 'Include at least one number')
+  .superRefine((v, ctx) => {
+    const why = passwordWeakness(v);
+    if (why) ctx.addIssue({ code: 'custom', message: why });
+  });
 
 export const platformLoginSchema = z.object({ email: staffEmailSchema, password: z.string().min(1).max(200) });
 /** A recovery code: ten letters/digits shown as XXXXX-XXXXX (case and dash do not matter). */
@@ -27,6 +32,8 @@ export const platformMfaLoginSchema = z.object({
 export const platformForgotSchema = z.object({ email: staffEmailSchema });
 export const platformTokenPasswordSchema = z.object({ token: z.string().min(32).max(200), password: staffPasswordSchema });
 export const platformChangePasswordSchema = z.object({ currentPassword: z.string().min(1).max(200), newPassword: staffPasswordSchema });
+/** Step-up re-authentication before sensitive actions: password, plus the authenticator code when two-step is on. */
+export const platformReauthSchema = z.object({ password: z.string().min(1).max(200), code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code').optional() });
 export const mfaCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code') });
 export const mfaDisableSchema = z.object({ password: z.string().min(1).max(200), code: z.string().trim().regex(/^\d{6}$/) });
 

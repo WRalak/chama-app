@@ -1,14 +1,14 @@
-import { ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
-import type { AuthResponse, AuthUser, LoginInput, RegisterInput, SessionInfo } from '@chamahub/shared';
+import { passwordWeakness, type AuthResponse, type AuthUser, type LoginInput, type RegisterInput, type SessionInfo } from '@chamahub/shared';
 import { env } from '../../config/env';
 import { AuditService } from '../../common/audit.service';
 import { RequestMeta } from '../../common/request';
 import { PrismaService } from '../../prisma/prisma.service';
-import { DEFAULT_PREFERENCES } from '../notifications/notifications.service';
+import { DEFAULT_PREFERENCES, NotificationsService } from '../notifications/notifications.service';
 import { OtpService } from './otp.service';
 
 const MAX_FAILED_LOGINS = 5;
@@ -16,6 +16,12 @@ const LOCK_MINUTES = 15;
 const BCRYPT_ROUNDS = 11;
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+
+/** Rejects passwords built from the person's own name, phone number or e-mail (schemas already reject common ones). */
+export function assertNotPersonal(password: string, who: { name?: string | null; phone?: string | null; email?: string | null }) {
+  const why = passwordWeakness(password, who);
+  if (why) throw new UnprocessableEntityException(why);
+}
 
 export function toAuthUser(u: User): AuthUser {
   return {
@@ -36,9 +42,21 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly otp: OtpService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
+  /**
+   * Tells the account holder about a security event, in the app and by SMS. Never includes codes,
+   * passwords or links; it says what happened and what to do if it was not them.
+   */
+  private async securityNotice(userId: string, title: string, body: string, dedupeKey?: string) {
+    await this.notifications
+      .notify([userId], { type: 'SECURITY', title, body: `${body} If this was not you, reset your password now and sign out other devices in Profile › Security.`, dedupeKey })
+      .catch(() => undefined);
+  }
+
   async register(input: RegisterInput, meta: RequestMeta): Promise<AuthResponse> {
+    assertNotPersonal(input.password, { name: input.fullName, phone: input.phone, email: input.email });
     const existing = await this.prisma.user.findFirst({
       where: { OR: [{ phone: input.phone }, ...(input.email ? [{ email: input.email.toLowerCase() }] : [])] },
       select: { phone: true },
@@ -83,11 +101,24 @@ export class AuthService {
         },
       });
       await this.audit.log({ actorUserId: user.id, action: 'auth.login_failed', entityType: 'User', entityId: user.id, meta });
+      if (failed >= MAX_FAILED_LOGINS) await this.securityNotice(user.id, 'Sign-in paused for 15 minutes', 'Someone entered the wrong password for your ChamaHub account 5 times.');
       throw invalid;
     }
     await this.prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
     await this.audit.log({ actorUserId: user.id, action: 'auth.login', entityType: 'User', entityId: user.id, meta });
+    await this.noticeIfNewDevice(user.id, meta, input.deviceName);
     return { user: toAuthUser(user), tokens: await this.createSession(user, { ...meta }, input.deviceName) };
+  }
+
+  /** A sign-in from a device this account has not used in the last 180 days. Silent on the first ever sign-in. */
+  private async noticeIfNewDevice(userId: string, meta: RequestMeta, deviceName?: string) {
+    const since = new Date(Date.now() - 180 * 86_400_000);
+    const device = deviceName ?? meta.userAgent?.slice(0, 120) ?? null;
+    const [known, any] = await Promise.all([
+      this.prisma.session.count({ where: { userId, createdAt: { gte: since }, OR: [{ deviceName: device }, ...(meta.userAgent ? [{ userAgent: meta.userAgent }] : [])] } }),
+      this.prisma.session.count({ where: { userId } }),
+    ]);
+    if (any > 0 && known === 0) await this.securityNotice(userId, 'New sign-in to your account', `Your ChamaHub account was signed in on ${device ? `"${device.slice(0, 60)}"` : 'a new device'}.`);
   }
 
   private async createSession(user: User, meta: RequestMeta, deviceName?: string) {
@@ -119,6 +150,7 @@ export class AuthService {
       if (reused && !reused.revokedAt) {
         await this.prisma.session.update({ where: { id: reused.id }, data: { revokedAt: new Date(), revokedReason: 'refresh_token_reuse' } });
         await this.audit.log({ actorUserId: reused.userId, action: 'auth.refresh_reuse_detected', entityType: 'Session', entityId: reused.id, meta });
+        await this.securityNotice(reused.userId, 'We signed out one of your devices', 'An old sign-in token for your account was used again, which can mean it was copied. That device has been signed out.');
       }
       throw new UnauthorizedException('Your session has ended. Sign in again.');
     }
@@ -168,6 +200,7 @@ export class AuthService {
     await this.otp.consume(phone, 'RESET_PASSWORD', code);
     const user = await this.prisma.user.findUnique({ where: { phone } });
     if (!user) throw new UnauthorizedException('The code is invalid or has expired.');
+    assertNotPersonal(newPassword, { name: user.fullName, phone: user.phone, email: user.email });
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: user.id },
@@ -177,12 +210,14 @@ export class AuthService {
       this.prisma.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: 'password_reset' } }),
     ]);
     await this.audit.log({ actorUserId: user.id, action: 'auth.password_reset', entityType: 'User', entityId: user.id, meta });
+    await this.securityNotice(user.id, 'Your password was reset', 'The password for your ChamaHub account was reset with a code sent to your phone, and every device was signed out.');
     return { ok: true };
   }
 
   async changePassword(userId: string, sessionId: string, current: string, next: string, meta: RequestMeta) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!(await bcrypt.compare(current, user.passwordHash))) throw new UnauthorizedException('Current password is incorrect.');
+    assertNotPersonal(next, { name: user.fullName, phone: user.phone, email: user.email });
     await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(next, BCRYPT_ROUNDS) } }),
       this.prisma.session.updateMany({
@@ -191,6 +226,7 @@ export class AuthService {
       }),
     ]);
     await this.audit.log({ actorUserId: userId, action: 'auth.password_changed', entityType: 'User', entityId: userId, meta });
+    await this.securityNotice(userId, 'Your password was changed', 'The password for your ChamaHub account was changed, and your other devices were signed out.');
     return { ok: true };
   }
 

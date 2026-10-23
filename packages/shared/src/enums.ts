@@ -278,6 +278,7 @@ export const NotificationType = {
   DESTINATION_CHANGED: 'DESTINATION_CHANGED',
   BILLING: 'BILLING',
   SUPPORT: 'SUPPORT',
+  SECURITY: 'SECURITY',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 

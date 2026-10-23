@@ -7,6 +7,7 @@ import {
   platformForgotSchema,
   platformLoginSchema,
   platformMfaLoginSchema,
+  platformReauthSchema,
   platformTokenPasswordSchema,
   refreshSchema,
 } from '@chamahub/shared';
@@ -130,6 +131,13 @@ export class PlatformAuthController {
   }
 
   @AllowBeforeMfa()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @HttpCode(200)
+  @Post('reauth')
+  reauth(@Body(new ZodPipe(platformReauthSchema)) body: z.infer<typeof platformReauthSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    return this.auth.reauthenticate(staff, body.password, body.code, meta);
+  }
+
   @Get('sessions')
   sessions(@CurrentStaff() staff: StaffContext) {
     return this.auth.sessions(staff);

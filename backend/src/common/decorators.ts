@@ -28,6 +28,14 @@ export const ALLOW_BEFORE_MFA = 'allowBeforeMfa';
 /** Staff routes usable before two-step sign-in is set up (enrolment, profile, sign-out). */
 export const AllowBeforeMfa = () => SetMetadata(ALLOW_BEFORE_MFA, true);
 
+export const RECENT_AUTH = 'recentAuth';
+/**
+ * Sensitive staff action: the person must have signed in or re-authenticated (password, plus
+ * the authenticator code when two-step is on) within PLATFORM_REAUTH_MINUTES. A stolen session
+ * cookie alone is then not enough.
+ */
+export const RequireRecentAuth = () => SetMetadata(RECENT_AUTH, true);
+
 export const REQUIRED_PLATFORM_PERMISSION = 'requiredPlatformPermission';
 /** Staff-only route; the caller's database-backed permissions must include ALL of these. */
 export const RequirePlatform = (...permissions: PlatformPermission[]) => applyDecorators(PlatformApi(), SetMetadata(REQUIRED_PLATFORM_PERMISSION, permissions));

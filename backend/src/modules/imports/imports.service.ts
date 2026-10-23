@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException, UnprocessableEntityE
 import { ImportKind, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import Papa from 'papaparse';
+import { readXlsxGrid } from '../../common/spreadsheet';
 import { randomBytes } from 'node:crypto';
 import { GROUP_ROLES, ImportBatchDetail, ImportBatchRow, ImportRowResult, isIsoDate, normalizeKenyanPhone, parseKes } from '@chamahub/shared';
 import { AuditService } from '../../common/audit.service';
@@ -167,8 +168,10 @@ export class ImportsService {
     });
   }
 
-  async create(groupId: string, input: { kind: ImportKind; fileName: string; csv: string }, actor: MembershipContext, meta: RequestMeta) {
-    const rows = this.parse(input.csv);
+  async create(groupId: string, input: { kind: ImportKind; fileName: string; csv?: string; xlsxBase64?: string }, actor: MembershipContext, meta: RequestMeta) {
+    // Spreadsheets are read here (not in the browser), behind the zip-bomb and size checks, then treated like CSV.
+    const csv = input.csv ?? Papa.unparse(await readXlsxGrid(Buffer.from(input.xlsxBase64!, 'base64'), { maxRows: 5000, dateOnlyAtMidnight: true }));
+    const rows = this.parse(csv);
     if (!rows.length) throw new UnprocessableEntityException('The file has no data rows');
     const missing = IMPORT_TEMPLATES[input.kind].required.filter((c) => !(c in rows[0]));
     if (missing.length) throw new UnprocessableEntityException(`Missing column(s): ${missing.join(', ')}. Download the template for the expected format.`);

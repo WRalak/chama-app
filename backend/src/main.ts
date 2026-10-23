@@ -14,6 +14,11 @@ async function bootstrap() {
   app.use(json({ limit: '6mb', verify: (req, _res, buf) => ((req as typeof req & { rawBody?: Buffer }).rawBody = buf) }));
   configureApp(app);
   await app.listen(e.PORT);
+  // Slow-client limits: a connection that dribbles headers or a body cannot hold a worker open.
+  const server = app.getHttpServer() as import('node:http').Server;
+  server.headersTimeout = 20_000;
+  server.requestTimeout = 60_000;
+  server.keepAliveTimeout = 5_000;
   Logger.log(`ChamaHub API listening on :${e.PORT} (${e.NODE_ENV})`, 'Bootstrap');
 }
 

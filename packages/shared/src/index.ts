@@ -14,3 +14,4 @@ export * from './currency';
 export * from './billing';
 export * from './i18n';
 export * from './platform';
+export * from './password-strength';

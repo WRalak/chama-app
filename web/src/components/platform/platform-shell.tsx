@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { Avatar } from '@/components/ui/layout-parts';
 import { EmptyState, ErrorState, LoadingRows } from '@/components/ui/states';
 import { BrandMark } from '@/components/shell/brand';
+import { ReauthDialog } from './reauth-dialog';
 
 type Icon = React.ComponentType<{ className?: string }>;
 /** An item shows when the caller holds ANY of its permissions (none = every signed-in staff member). */
@@ -229,6 +230,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
             <ProfileMenu name={me.data!.fullName} email={me.data!.email} roles={me.data!.roles.map((r) => r.name)} />
           </div>
         </header>
+        <ReauthDialog />
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 lg:px-8">
           {mfaPending && pathname !== '/platform/account-security' ? <LoadingRows rows={3} /> : blocked ? <EmptyState title={`${section!.label} is not part of your role`} description="Ask an administrator if you need this access. Use the menu for the sections you can open." /> : children}
         </main>

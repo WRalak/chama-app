@@ -33,6 +33,18 @@ jobs:
         run: npm run test -w @chamahub/shared
       - name: Apply migrations
         run: npm exec -w @chamahub/api -- prisma migrate deploy
+      - name: Least-privilege database role (DDL, TRUNCATE and migration history refused)
+        run: |
+          APW="ci-$(openssl rand -hex 16)"
+          PGPASSWORD=chamahub psql -h localhost -U chamahub -d chamahub_test -v app_password="'$APW'" -f backend/scripts/db-roles.sql
+          export PGPASSWORD="$APW"
+          q() { psql -h localhost -U chamahub_app -d chamahub_test -tA -c "$1"; }
+          q 'SELECT count(*) FROM "_prisma_migrations"' | grep -qv '^0$'
+          if q 'CREATE TABLE ci_probe(id int)'; then echo 'allowed: CREATE TABLE ci_probe(id int)'; exit 1; fi
+          if q 'TRUNCATE "users"'; then echo 'allowed: TRUNCATE "users"'; exit 1; fi
+          if q 'DROP TABLE "users"'; then echo 'allowed: DROP TABLE "users"'; exit 1; fi
+          if q 'DELETE FROM "_prisma_migrations"'; then echo 'allowed: DELETE FROM "_prisma_migrations"'; exit 1; fi
+          test "$(q 'SELECT rolsuper FROM pg_roles WHERE rolname = current_user')" = f
       - name: Typecheck
         run: |
           npm run typecheck -w @chamahub/api

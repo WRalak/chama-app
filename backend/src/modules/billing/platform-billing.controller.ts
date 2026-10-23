@@ -19,7 +19,7 @@ import {
   revenueQuerySchema,
 } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentStaff, PlatformApi, ReqMeta, RequirePlatform } from '../../common/decorators';
+import { CurrentStaff, PlatformApi, ReqMeta, RequirePlatform, RequireRecentAuth } from '../../common/decorators';
 import { big, n } from '../../common/money';
 import { paginate, skipTake } from '../../common/pagination';
 import { RequestMeta, StaffContext } from '../../common/request';
@@ -108,6 +108,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_BILLING)
+  @RequireRecentAuth()
   @Post('billing/groups/:id/promotions')
   grant(@Param('id') groupId: string, @Body(new ZodPipe(promoGrantSchema)) body: z.infer<typeof promoGrantSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.audited(staff, meta, 'platform.promotion_granted', 'Group', groupId, body.reason, () => this.billing.grantPromotion(groupId, body, staff.accountId, meta), { plan: body.planCode, endsAt: body.endsAt });
@@ -115,6 +116,7 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_BILLING)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post('billing/groups/:id/promotions/:promoId/revoke')
   revoke(@Param('id') groupId: string, @Param('promoId') id: string, @Body(new ZodPipe(promoRevokeSchema)) body: z.infer<typeof promoRevokeSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.audited(staff, meta, 'platform.promotion_revoked', 'PromotionalGrant', id, body.reason, () => this.billing.revokePromotion(groupId, id, body.reason, staff.accountId, meta));
@@ -155,6 +157,7 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_FINANCE)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post('billing/payments/:id/confirm-manual')
   async confirmManual(@Param('id') id: string, @Body(new ZodPipe(z.object({ bankReference: z.string().trim().min(4).max(60) }))) body: { bankReference: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     await this.audited(staff, meta, 'platform.billing_manual_confirmed', 'BillingPayment', id, null, () => this.billing.confirmManual(id, body, staff.accountId, meta), { bankReference: body.bankReference });
@@ -162,6 +165,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_REFUND)
+  @RequireRecentAuth()
   @Post('billing/payments/:id/refund')
   refund(@Param('id') id: string, @Body(new ZodPipe(refundSchema)) body: z.infer<typeof refundSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.audited(staff, meta, 'platform.billing_refund', 'BillingPayment', id, body.reason, () => this.billing.refund(id, body, staff.accountId, meta), { amountMinor: body.amountMinor });
@@ -209,6 +213,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_CONFIGURE)
+  @RequireRecentAuth()
   @Put('billing/providers/availability')
   async availability(@Body(new ZodPipe(providerAvailabilitySchema)) body: z.infer<typeof providerAvailabilitySchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     if (!this.providers.get(body.provider)) throw new UnprocessableEntityException('Unknown provider');
@@ -258,6 +263,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_PLANS)
+  @RequireRecentAuth()
   @Put('plans/:code')
   async upsertPlan(@Param('code') code: string, @Body(new ZodPipe(planUpsertSchema)) body: z.infer<typeof planUpsertSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     if (body.code !== code.toUpperCase()) throw new UnprocessableEntityException('The plan code in the URL and body differ.');
@@ -271,6 +277,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_PLANS)
+  @RequireRecentAuth()
   @Put('plan-prices')
   async upsertPrice(@Body(new ZodPipe(planPriceSchema)) body: z.infer<typeof planPriceSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const plan = await this.prisma.plan.findUnique({ where: { code: body.planCode } });
@@ -295,6 +302,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_CONFIGURE)
+  @RequireRecentAuth()
   @Put('regions/:countryCode')
   async upsertRegion(@Param('countryCode') countryCode: string, @Body(new ZodPipe(regionSchema)) body: z.infer<typeof regionSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     if (body.countryCode !== countryCode.toUpperCase()) throw new UnprocessableEntityException('The country in the URL and body differ.');
@@ -327,6 +335,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_FINANCE)
+  @RequireRecentAuth()
   @Post('finance/exchange-rates')
   async addRate(@Body(new ZodPipe(exchangeRateSchema)) body: z.infer<typeof exchangeRateSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     try {
@@ -348,6 +357,7 @@ export class PlatformBillingController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_FINANCE)
+  @RequireRecentAuth()
   @Post('finance/costs')
   async addCost(@Body(new ZodPipe(operatingCostSchema)) body: z.infer<typeof operatingCostSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const c = await this.prisma.operatingCost.create({ data: { category: body.category, description: body.description, currency: body.currency, amountMinor: big(body.amountMinor), incurredOn: new Date(`${body.incurredOn}T00:00:00Z`), source: body.source ?? null, recordedById: staff.accountId } });

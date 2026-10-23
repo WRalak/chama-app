@@ -25,14 +25,17 @@ const KIND_LABEL: Record<ImportKind, string> = {
   OPENING_BALANCE: 'Opening balances',
 };
 
-/** Spreadsheets are converted to CSV in the browser; the server only ever receives CSV text. */
-async function fileToCsv(file: File): Promise<string> {
-  if (/\.(xlsx|xls)$/i.test(file.name)) {
-    const XLSX = await import('xlsx');
-    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-    return XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]], { dateNF: 'yyyy-mm-dd', rawNumbers: true } as never);
+/** CSV is sent as text; .xlsx files go to the server, which reads them behind size and zip-bomb checks. */
+async function filePayload(file: File): Promise<{ csv: string } | { xlsxBase64: string }> {
+  if (/\.xls$/i.test(file.name)) throw new Error('Old .xls files are not supported. Open the file in Excel or Google Sheets and save it as .xlsx or CSV.');
+  if (/\.xlsx$/i.test(file.name)) {
+    if (file.size > 5_000_000) throw new Error('This spreadsheet is larger than 5 MB. Split it or save it as CSV.');
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return { xlsxBase64: btoa(s) };
   }
-  return file.text();
+  return { csv: await file.text() };
 }
 
 function BatchDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
@@ -96,7 +99,7 @@ export default function ImportsPage() {
   const [kind, setKind] = useState<ImportKind>('MEMBERS');
   const [sel, setSel] = useState<string | null>(null);
   const list = useQuery({ queryKey: ['imports', groupId], queryFn: () => api<ImportBatchRow[]>(`groups/${groupId}/imports`) });
-  const upload = useAction(async (file: File) => api<ImportBatchDetail>(`groups/${groupId}/imports`, { body: { kind, fileName: file.name, csv: await fileToCsv(file) } }), {
+  const upload = useAction(async (file: File) => api<ImportBatchDetail>(`groups/${groupId}/imports`, { body: { kind, fileName: file.name, ...(await filePayload(file)) } }), {
     success: (r) => (r.errorCount ? `${r.errorCount} rows need fixing` : 'File checked — ready for review'),
     invalidate: [['imports', groupId]],
     onSuccess: (r) => setSel(r.id),
@@ -111,7 +114,7 @@ export default function ImportsPage() {
               <Select id="i-k" value={kind} onChange={(e) => setKind(e.target.value as ImportKind)}>{IMPORT_KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</Select>
             </Field>
             <a className="block text-sm text-berry hover:underline" href={fileUrl(`groups/${groupId}/imports/templates/${kind}.csv`)}>Download the {KIND_LABEL[kind].toLowerCase()} template</a>
-            <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
+            <input ref={fileRef} type="file" accept=".csv,.xlsx,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
             <Button className="w-full" onClick={() => fileRef.current?.click()} loading={upload.isPending}>Choose CSV or Excel file</Button>
             <ul className="list-disc space-y-1 pl-4 text-xs text-muted">
               <li>Import the member register first; other files match members by phone number.</li>

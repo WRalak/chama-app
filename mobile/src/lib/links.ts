@@ -1,5 +1,7 @@
 import type { NotificationType } from '@chamahub/shared';
 
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
 /**
  * Where a notification should take the member. Used for push taps, the
  * in-app notification list and chamahub:// links. Screens re-check
@@ -7,8 +9,10 @@ import type { NotificationType } from '@chamahub/shared';
  */
 export function routeForNotification(n: { type?: NotificationType | string; groupId?: string | null; data?: Record<string, unknown> | null }): string {
   const d = n.data ?? {};
-  const g = (n.groupId ?? (d.groupId as string | undefined)) || null;
-  const s = (k: string) => (typeof d[k] === 'string' ? (d[k] as string) : null);
+  // Push data comes from outside the app: only plain ids may be put into a route.
+  const safe = (v: unknown) => (typeof v === 'string' && SAFE_ID.test(v) ? v : null);
+  const g = safe(n.groupId ?? d.groupId);
+  const s = (k: string) => safe(d[k]);
   if (n.type === 'INVITATION') return '/(app)/invitations';
   if (!g) return '/(app)/notifications';
   const base = `/(app)/group/${g}`;

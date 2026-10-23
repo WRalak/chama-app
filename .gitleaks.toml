@@ -1,0 +1,12 @@
+# Secret scanning config (CI: .github/workflows/security.yml). Starts from gitleaks' default rules.
+[extend]
+useDefault = true
+
+# The e2e suites create throwaway accounts in the CI database with obvious test passwords
+# (e.g. STAFF_PASSWORD, GOOD_PASSWORD). Only the generic "looks like a key" rule is relaxed, and only
+# in backend/test; provider-specific rules (AWS, Stripe, Supabase JWTs, private keys...) still apply there.
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "e2e test passwords"
+paths = ['''^backend/test/''']

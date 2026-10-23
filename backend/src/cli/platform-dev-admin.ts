@@ -12,7 +12,7 @@
  * required at the first sign-in when PLATFORM_REQUIRE_MFA is on.
  */
 import { PrismaClient } from '@prisma/client';
-import { staffEmailSchema, staffPasswordSchema } from '@chamahub/shared';
+import { passwordWeakness, staffEmailSchema, staffPasswordSchema } from '@chamahub/shared';
 import { env } from '../config/env';
 import { hashStaffPassword } from '../modules/platform-auth/staff-crypto';
 import { ensureSystemRoles } from '../modules/platform-auth/staff-roles';
@@ -34,6 +34,8 @@ async function main() {
   if (!email.success) return fail('Set DEV_ADMIN_EMAIL to a valid e-mail address.');
   if (!password.success) return fail(`DEV_ADMIN_PASSWORD: ${password.error.issues.map((i) => i.message).join('; ')} (at least 12 characters, a letter and a number).`);
   if (fullName.length < 2) return fail('Set DEV_ADMIN_NAME to the person’s name.');
+  const personal = passwordWeakness(password.data, { name: fullName, email: email.data });
+  if (personal) return fail(`DEV_ADMIN_PASSWORD: ${personal}`);
 
   const prisma = new PrismaClient();
   try {

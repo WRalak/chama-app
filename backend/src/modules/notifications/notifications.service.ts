@@ -141,8 +141,12 @@ export class NotificationsService {
 
   /** Push carries the notification id, type and group so the app can open the right screen. */
   private async sendPush(tokens: string[], note: { id: string; type: string; title: string; body: string; groupId: string | null; data: Prisma.JsonValue }) {
-    const data = { ...((note.data as Record<string, unknown> | null) ?? {}), notificationId: note.id, type: note.type, groupId: note.groupId };
-    const r = await this.pushChannel.send(tokens, note.title, note.body, data);
+    // Push text shows on a locked screen and passes through Apple/Google: money, security and
+    // personal details stay in the app. Only record ids travel in the data.
+    const ids = Object.fromEntries(Object.entries((note.data as Record<string, unknown> | null) ?? {}).filter(([k, v]) => k.endsWith('Id') && typeof v === 'string'));
+    const data = { ...ids, notificationId: note.id, type: note.type, groupId: note.groupId };
+    const { title, body } = pushText(note);
+    const r = await this.pushChannel.send(tokens, title, body, data);
     if (r.deadTokens.length) await this.prisma.pushDevice.deleteMany({ where: { token: { in: r.deadTokens } } });
     return r;
   }
@@ -166,4 +170,14 @@ export class NotificationsService {
     });
     return rows.map((r) => r.userId);
   }
+}
+
+/** Notification kinds whose text may carry amounts, balances, account or security details. */
+const PRIVATE_PUSH = new Set(['CONTRIBUTION_DUE', 'CONTRIBUTION_OVERDUE', 'PAYMENT_CONFIRMED', 'LOAN_APPROVED', 'LOAN_REJECTED', 'REPAYMENT_DUE', 'PAYOUT_UPCOMING', 'PAYOUT_COMPLETED', 'PAYOUT_APPROVED', 'PAYOUT_SENT', 'PAYOUT_FAILED', 'STATEMENT_PUBLISHED', 'APPROVAL_REQUIRED', 'DESTINATION_CHANGED', 'BILLING', 'SECURITY', 'SUPPORT']);
+
+/** What a push notification says. Private kinds get generic text; the details are in the app. */
+export function pushText(note: { type: string; title: string; body: string }): { title: string; body: string } {
+  if (!PRIVATE_PUSH.has(note.type)) return { title: note.title, body: note.body };
+  if (note.type === 'SECURITY') return { title: 'ChamaHub security notice', body: 'There was a sign-in or account change. Open ChamaHub to review it.' };
+  return { title: 'ChamaHub', body: 'You have a new update in your group. Open ChamaHub to see the details.' };
 }

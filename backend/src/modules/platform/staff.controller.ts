@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { inviteStaffSchema, paginationSchema, PlatformPermission, platformRoleUpsertSchema, staffAccessSchema, staffReasonSchema, updateStaffSchema } from '@chamahub/shared';
 import { z } from 'zod';
-import { CurrentStaff, PlatformApi, ReqMeta, RequirePlatform } from '../../common/decorators';
+import { CurrentStaff, PlatformApi, ReqMeta, RequirePlatform, RequireRecentAuth } from '../../common/decorators';
 import { RequestMeta, StaffContext } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { StaffService } from './staff.service';
@@ -27,6 +27,7 @@ export class StaffController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
+  @RequireRecentAuth()
   @Post()
   invite(@Body(new ZodPipe(inviteStaffSchema)) body: z.infer<typeof inviteStaffSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.invite(me, body, meta);
@@ -45,12 +46,14 @@ export class StaffController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
+  @RequireRecentAuth()
   @Patch(':id')
   update(@Param('id') id: string, @Body(new ZodPipe(updateStaffSchema)) body: z.infer<typeof updateStaffSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.update(me, id, body, meta);
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
+  @RequireRecentAuth()
   @Put(':id/access')
   access(@Param('id') id: string, @Body(new ZodPipe(staffAccessSchema)) body: z.infer<typeof staffAccessSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.setAccess(me, id, body, meta);
@@ -58,6 +61,7 @@ export class StaffController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post(':id/suspend')
   suspend(@Param('id') id: string, @Body(new ZodPipe(staffReasonSchema)) body: z.infer<typeof staffReasonSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.setStatus(me, id, 'SUSPENDED', body.reason, meta);
@@ -65,6 +69,7 @@ export class StaffController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post(':id/reactivate')
   reactivate(@Param('id') id: string, @Body(new ZodPipe(staffReasonSchema)) body: z.infer<typeof staffReasonSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.setStatus(me, id, 'ACTIVE', body.reason, meta);
@@ -72,6 +77,7 @@ export class StaffController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post(':id/deactivate')
   deactivate(@Param('id') id: string, @Body(new ZodPipe(staffReasonSchema)) body: z.infer<typeof staffReasonSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.setStatus(me, id, 'DEACTIVATED', body.reason, meta);
@@ -86,6 +92,7 @@ export class StaffController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post(':id/resend-invite')
   resend(@Param('id') id: string, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.resendInvite(me, id, meta);
@@ -93,6 +100,7 @@ export class StaffController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post(':id/reset-mfa')
   resetMfa(@Param('id') id: string, @Body(new ZodPipe(staffReasonSchema)) body: z.infer<typeof staffReasonSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.resetMfa(me, id, body.reason, meta);
@@ -100,6 +108,7 @@ export class StaffController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_HELPERS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post(':id/password-reset')
   passwordReset(@Param('id') id: string, @Body(new ZodPipe(staffReasonSchema)) body: z.infer<typeof staffReasonSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.sendPasswordReset(me, id, body.reason, meta);
@@ -119,12 +128,14 @@ export class StaffRolesController {
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_ROLES)
+  @RequireRecentAuth()
   @Put()
   upsert(@Body(new ZodPipe(platformRoleUpsertSchema)) body: z.infer<typeof platformRoleUpsertSchema>, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.upsertRole(me, body, meta);
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_ROLES)
+  @RequireRecentAuth()
   @Delete(':code')
   remove(@Param('code') code: string, @CurrentStaff() me: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.staff.deleteRole(me, code, meta);

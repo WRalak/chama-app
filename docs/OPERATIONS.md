@@ -15,6 +15,23 @@
 - Set each group's `accountReferencePrefix` so paybill payments route to the right group's reconciliation queue.
 - Reconcile the first weeks of production payments manually against M-Pesa statements.
 
+## Database roles (least privilege)
+
+The API should not connect as the database owner. Once per database, after `prisma migrate deploy`, run this as the owner:
+
+```
+psql "$OWNER_DATABASE_URL" -v app_password="'<from your secret manager>'" -f backend/scripts/db-roles.sql
+```
+
+Then point the API's `DATABASE_URL` at `chamahub_app`. That role can read and write rows, but it cannot:
+
+- create, alter, drop or truncate tables;
+- change migration history.
+
+It also has a 30 s statement timeout.
+
+Keep the owner URL for the migration job only. **Re-run the script after every migration** so new tables get the app's row policy. Until then the app cannot see the new tables: it fails closed rather than open. CI checks the role on every push. Security docs are in `docs/security/`.
+
 ## Backups and recovery
 
 - Continuous WAL archiving plus daily base backups (managed Postgres PITR, or pgBackRest), kept for at least 35 days, with an encrypted off-site copy.

@@ -28,6 +28,8 @@ const envSchema = z.object({
   /** Where invitation and reset links point (the web app's origin). */
   PLATFORM_PORTAL_URL: z.string().url().default('http://localhost:3000'),
   /** Staff must turn on two-step sign-in before using the portal. On unless explicitly set to false. */
+  /** Sensitive staff actions need a sign-in or re-authentication within this many minutes. */
+  PLATFORM_REAUTH_MINUTES: z.coerce.number().int().min(1).max(120).default(10),
   PLATFORM_REQUIRE_MFA: z.string().optional().transform((v) => !(v === 'false' || v === '0')),
   /** Optional: receives a small JSON report (no request data) for every 5xx, e.g. a Slack/Teams/alerting webhook. */
   // ---- Subscription billing (ChamaHub's own fees; separate from groups' M-Pesa) ----
@@ -99,6 +101,10 @@ export function env(): Env {
   }
   if (parsed.data.NODE_ENV === 'production' && process.env.DISABLE_THROTTLE === 'true') {
     throw new Error('DISABLE_THROTTLE must not be set in production');
+  }
+  if (parsed.data.NODE_ENV === 'production') {
+    const bad = parsed.data.CORS_ORIGINS.split(',').map((o) => o.trim()).filter((o) => o && (o === '*' || !/^https:\/\/[^/*]+$/.test(o)));
+    if (bad.length) throw new Error(`CORS_ORIGINS in production must list exact https:// origins (no *, no http, no paths): ${bad.join(', ')}`);
   }
   cached = parsed.data;
   return cached;

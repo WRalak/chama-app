@@ -171,6 +171,7 @@ export class StaffService {
       if (losingOwner && (await activeOwnerCount(tx)) === 0) throw new ForbiddenException('This is the last active owner. Make someone else an owner first.');
       await this.audit.log({ actorAccountId: actor.accountId, action: 'platform.staff_access_changed', targetType: 'PlatformAccount', targetId: id, reason: input.reason, before: { roles: before.roles.map((r) => r.code), permissions: before.permissions }, after: { roles: input.roleCodes, extraPermissions: input.extraPermissions }, meta }, tx);
     });
+    await this.auth.securityEmail(id, `${actor.fullName} changed your staff roles to: ${roles.map((r) => r.name).join(', ')}.`);
     return this.get(id);
   }
 
@@ -216,6 +217,7 @@ export class StaffService {
       await tx.platformSession.updateMany({ where: { accountId: id, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: 'mfa_reset' } });
       await this.audit.log({ actorAccountId: actor.accountId, action: 'platform.staff_mfa_reset', targetType: 'PlatformAccount', targetId: id, reason, meta }, tx);
     });
+    await this.auth.securityEmail(id, `${actor.fullName} reset two-step sign-in on your staff account. You will set it up again at your next sign-in.`);
     return this.get(id);
   }
 

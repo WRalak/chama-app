@@ -1,6 +1,6 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma, StatementLine } from '@prisma/client';
-import ExcelJS from 'exceljs';
+import { readXlsxGrid } from '../../common/spreadsheet';
 import Papa from 'papaparse';
 import { createHash } from 'node:crypto';
 import {
@@ -36,22 +36,6 @@ const MAX_LINES = 5000;
 
 /** The Nairobi calendar date of a UTC timestamp. */
 const nairobiDate = (iso: string) => isoDate(new Date(new Date(iso).getTime() + 3 * 3600_000));
-
-function cellText(v: ExcelJS.CellValue): string {
-  if (v === null || v === undefined) return '';
-  if (v instanceof Date) {
-    // Excel stores wall-clock time without a zone; exceljs exposes it as UTC.
-    const p = (x: number) => String(x).padStart(2, '0');
-    return `${v.getUTCFullYear()}-${p(v.getUTCMonth() + 1)}-${p(v.getUTCDate())} ${p(v.getUTCHours())}:${p(v.getUTCMinutes())}:${p(v.getUTCSeconds())}`;
-  }
-  if (typeof v === 'object') {
-    if ('richText' in v) return v.richText.map((r) => r.text).join('');
-    if ('result' in v) return cellText(v.result as ExcelJS.CellValue);
-    if ('text' in v) return String(v.text);
-    if ('error' in v) return '';
-  }
-  return String(v);
-}
 
 interface Parsed {
   headers: string[];
@@ -89,20 +73,7 @@ export class StatementsService {
       grid = r.data.map((row) => row.map((c) => (c ?? '').toString().trim()));
     } else {
       raw = Buffer.from(input.xlsxBase64!, 'base64');
-      const wb = new ExcelJS.Workbook();
-      try {
-        await wb.xlsx.load(raw as unknown as ArrayBuffer);
-      } catch {
-        throw new UnprocessableEntityException('Could not read the spreadsheet. Save it as .xlsx or CSV and try again.');
-      }
-      const ws = wb.worksheets[0];
-      if (!ws) throw new UnprocessableEntityException('The spreadsheet has no sheets');
-      grid = [];
-      ws.eachRow({ includeEmpty: false }, (row) => {
-        const values: string[] = [];
-        for (let c = 1; c <= ws.columnCount; c++) values.push(cellText(row.getCell(c).value).trim());
-        grid.push(values);
-      });
+      grid = await readXlsxGrid(raw, { maxRows: MAX_LINES });
     }
     // Statements often start with a title block; the header is the first row that looks like one.
     let headerIdx = grid.slice(0, 30).findIndex((row) => {

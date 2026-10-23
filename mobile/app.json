@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "ke.chamahub.app",
+      "allowBackup": false,
       "softwareKeyboardLayoutMode": "pan",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO"

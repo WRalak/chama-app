@@ -5,6 +5,7 @@ import { RECOVERY_CODE_PATTERN, type PlatformMe } from '@chamahub/shared';
 import { env } from '../../config/env';
 import { RequestMeta, StaffContext } from '../../common/request';
 import { PrismaService } from '../../prisma/prisma.service';
+import { assertNotPersonal } from '../auth/auth.service';
 import { PlatformAuditService } from './platform-audit.service';
 import { decryptSecret, encryptSecret, hashRecoveryCode, hashStaffPassword, matchTotpStep, newRecoveryCodes, newToken, newTotpSecret, platformTokenSecret, sha256, verifyStaffPassword } from './staff-crypto';
 import { StaffMailerService } from './staff-mailer.service';
@@ -40,6 +41,17 @@ export class PlatformAuthService implements OnModuleInit {
     private readonly audit: PlatformAuditService,
     private readonly mailer: StaffMailerService,
   ) {}
+
+  /**
+   * E-mails the staff member about a security event on their account. Never contains links,
+   * tokens or codes, so a forwarded or intercepted notice cannot be used to get in.
+   */
+  async securityEmail(accountId: string, what: string) {
+    const a = await this.prisma.platformAccount.findUnique({ where: { id: accountId }, select: { email: true, fullName: true } });
+    if (!a) return;
+    const text = [`Hello ${a.fullName},`, '', `${what}`, `Time: ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`, '', 'If this was not you, contact a ChamaHub owner straight away so they can suspend the account and end its sessions. Do not reply with any password or code.'].join('\n');
+    await this.mailer.send(a.email, 'ChamaHub staff account security notice', text).catch(() => undefined);
+  }
 
   async onModuleInit() {
     await ensureSystemRoles(this.prisma);
@@ -101,7 +113,10 @@ export class PlatformAuthService implements OnModuleInit {
       where: { id: account.id },
       data: { failedLoginCount: lock ? 0 : failed, lockedUntil: lock ? new Date(Date.now() + LOCK_MINUTES * 60_000) : account.lockedUntil },
     });
-    if (lock) await this.audit.log({ actorAccountId: account.id, action: 'platform.account_locked', targetType: 'PlatformAccount', targetId: account.id, reason: `${MAX_FAILED} failed sign-in attempts` });
+    if (lock) {
+      await this.audit.log({ actorAccountId: account.id, action: 'platform.account_locked', targetType: 'PlatformAccount', targetId: account.id, reason: `${MAX_FAILED} failed sign-in attempts` });
+      await this.securityEmail(account.id, `Your staff account was locked for ${LOCK_MINUTES} minutes after ${MAX_FAILED} wrong passwords or codes.`);
+    }
   }
 
   /**
@@ -122,6 +137,7 @@ export class PlatformAuthService implements OnModuleInit {
     if (used.count !== 1) return false;
     const left = await this.prisma.platformRecoveryCode.count({ where: { accountId, usedAt: null } });
     await this.audit.log({ actorAccountId: accountId, action: 'platform.mfa_recovery_code_used', targetType: 'PlatformAccount', targetId: accountId, after: { remaining: left }, meta });
+    await this.securityEmail(accountId, `A recovery code was used to sign in to your staff account. ${left} unused code(s) are left.`);
     return true;
   }
 
@@ -133,6 +149,11 @@ export class PlatformAuthService implements OnModuleInit {
   }
 
   private async completeLogin(account: PlatformAccount, meta: RequestMeta): Promise<StaffLoginResult> {
+    const [known, any] = await Promise.all([
+      this.prisma.platformSession.count({ where: { accountId: account.id, createdAt: { gte: new Date(Date.now() - 180 * 86_400_000) }, ...(meta.userAgent ? { userAgent: meta.userAgent } : {}) } }),
+      this.prisma.platformSession.count({ where: { accountId: account.id } }),
+    ]);
+    if (any > 0 && known === 0) await this.securityEmail(account.id, `Your staff account was signed in from a new browser or device (${(meta.userAgent ?? 'unknown').slice(0, 80)}, IP ${meta.ipAddress ?? 'unknown'}).`);
     await this.prisma.platformAccount.update({ where: { id: account.id }, data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() } });
     const tokens = await this.createSession(account.id, meta);
     await this.audit.log({ actorAccountId: account.id, action: 'platform.login', meta });
@@ -201,7 +222,29 @@ export class PlatformAuthService implements OnModuleInit {
       await this.prisma.platformSession.update({ where: { id: session.id }, data: { lastUsedAt: new Date() } });
     }
     const r = await resolveStaff(this.prisma, session.accountId);
-    return { accountId: session.accountId, sessionId: session.id, fullName: session.account.fullName, email: session.account.email, roleCodes: r.roles.map((x) => x.code), permissions: r.permissions, isOwner: r.isOwner, mfaPending: env().PLATFORM_REQUIRE_MFA && !session.account.mfaEnabled };
+    return { accountId: session.accountId, sessionId: session.id, fullName: session.account.fullName, email: session.account.email, roleCodes: r.roles.map((x) => x.code), permissions: r.permissions, isOwner: r.isOwner, mfaPending: env().PLATFORM_REQUIRE_MFA && !session.account.mfaEnabled, reauthAt: session.reauthAt };
+  }
+
+  /**
+   * Step-up re-authentication for sensitive actions: the password, and the authenticator code when
+   * two-step is on (replay-safe). Failures count towards the account lock like sign-in failures.
+   */
+  async reauthenticate(staff: StaffContext, password: string, code: string | undefined, meta: RequestMeta) {
+    const account = await this.prisma.platformAccount.findUniqueOrThrow({ where: { id: staff.accountId } });
+    const locked = !!account.lockedUntil && account.lockedUntil > new Date();
+    let ok = !locked && (await verifyStaffPassword(password, account.passwordHash));
+    if (ok && account.mfaEnabled) ok = !!code && (await this.acceptTotp(account, code));
+    if (!ok) {
+      if (!locked) await this.recordFailure(account);
+      await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.reauth', outcome: 'FAILURE', reason: locked ? 'locked' : account.mfaEnabled && !code ? 'missing_mfa_code' : 'bad_credentials', meta });
+      throw new ForbiddenException(locked ? 'Too many attempts. Try again in 15 minutes.' : account.mfaEnabled ? 'Your password or code is not right.' : 'Your password is not right.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.platformSession.update({ where: { id: staff.sessionId }, data: { reauthAt: new Date() } }),
+      this.prisma.platformAccount.update({ where: { id: account.id }, data: { failedLoginCount: 0 } }),
+    ]);
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.reauth', meta });
+    return { ok: true, validForMinutes: env().PLATFORM_REAUTH_MINUTES };
   }
 
   async logout(staff: StaffContext, meta: RequestMeta) {
@@ -230,6 +273,8 @@ export class PlatformAuthService implements OnModuleInit {
 
   async acceptInvitation(token: string, password: string, meta: RequestMeta) {
     const hash = sha256(token);
+    const pending = await this.prisma.platformInvitation.findUnique({ where: { tokenHash: hash }, include: { account: { select: { fullName: true, email: true } } } });
+    if (pending) assertNotPersonal(password, { name: pending.account.fullName, email: pending.account.email });
     const passwordHash = await hashStaffPassword(password);
     const accountId = await this.prisma.$transaction(async (tx) => {
       // Single use: only one request can flip acceptedAt.
@@ -276,6 +321,8 @@ export class PlatformAuthService implements OnModuleInit {
 
   async resetPassword(token: string, password: string, meta: RequestMeta) {
     const hash = sha256(token);
+    const pending = await this.prisma.platformPasswordReset.findUnique({ where: { tokenHash: hash }, include: { account: { select: { fullName: true, email: true } } } });
+    if (pending) assertNotPersonal(password, { name: pending.account.fullName, email: pending.account.email });
     const passwordHash = await hashStaffPassword(password);
     const accountId = await this.prisma.$transaction(async (tx) => {
       const row = await tx.platformPasswordReset.findUnique({ where: { tokenHash: hash }, include: { account: true } });
@@ -286,6 +333,7 @@ export class PlatformAuthService implements OnModuleInit {
       await this.audit.log({ actorAccountId: row.accountId, action: 'platform.password_reset', targetType: 'PlatformAccount', targetId: row.accountId, meta }, tx);
       return row.accountId;
     });
+    if (accountId) await this.securityEmail(accountId, 'The password for your staff account was reset, and every session was signed out.');
     if (!accountId) {
       await this.audit.log({ actorLabel: 'unknown', action: 'platform.password_reset', outcome: 'FAILURE', reason: 'invalid_or_used_token', meta });
       throw new BadRequestException('This reset link is invalid or has expired. Ask for a new one.');
@@ -299,12 +347,14 @@ export class PlatformAuthService implements OnModuleInit {
       await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.password_changed', outcome: 'FAILURE', reason: 'wrong_current_password', meta });
       throw new ForbiddenException('Your current password is not right.');
     }
+    assertNotPersonal(next, { name: account.fullName, email: account.email });
     const passwordHash = await hashStaffPassword(next);
     await this.prisma.$transaction([
       this.prisma.platformAccount.update({ where: { id: staff.accountId }, data: { passwordHash, passwordChangedAt: new Date() } }),
       this.prisma.platformSession.updateMany({ where: { accountId: staff.accountId, revokedAt: null, id: { not: staff.sessionId } }, data: { revokedAt: new Date(), revokedReason: 'password_changed' } }),
     ]);
     await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.password_changed', meta });
+    await this.securityEmail(staff.accountId, 'The password for your staff account was changed, and your other sessions were signed out.');
     return { ok: true };
   }
 
@@ -330,6 +380,7 @@ export class PlatformAuthService implements OnModuleInit {
       await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_enabled', targetType: 'PlatformAccount', targetId: staff.accountId, meta }, tx);
       return c;
     });
+    await this.securityEmail(staff.accountId, 'Two-step sign-in was turned on for your staff account, and new recovery codes were created.');
     return { ok: true, recoveryCodes: codes };
   }
 
@@ -343,6 +394,7 @@ export class PlatformAuthService implements OnModuleInit {
       await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_recovery_codes_regenerated', targetType: 'PlatformAccount', targetId: staff.accountId, meta }, tx);
       return c;
     });
+    await this.securityEmail(staff.accountId, 'New recovery codes were created for your staff account. The old ones no longer work.');
     return { recoveryCodes: codes };
   }
 
@@ -357,6 +409,7 @@ export class PlatformAuthService implements OnModuleInit {
     }
     await this.clearMfa(staff.accountId);
     await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.mfa_disabled', targetType: 'PlatformAccount', targetId: staff.accountId, meta });
+    await this.securityEmail(staff.accountId, 'Two-step sign-in was turned off for your staff account.');
     return { ok: true };
   }
 

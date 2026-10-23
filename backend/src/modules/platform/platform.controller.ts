@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { maskPhone, paginationSchema, PlatformAuditRow, PlatformPermission, platformSettingsSchema, reasonSchema, supportAccessRequestSchema } from '@chamahub/shared';
 import { z } from 'zod';
 import { AuditService } from '../../common/audit.service';
-import { CurrentStaff, PlatformApi, Public, ReqMeta, RequireAnyPlatform, RequirePlatform } from '../../common/decorators';
+import { CurrentStaff, PlatformApi, Public, ReqMeta, RequireAnyPlatform, RequirePlatform, RequireRecentAuth } from '../../common/decorators';
 import { n } from '../../common/money';
 import { paginate, skipTake } from '../../common/pagination';
 import { RequestMeta, StaffContext } from '../../common/request';
@@ -163,6 +163,7 @@ export class PlatformController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_ACCOUNTS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post('users/:id/status')
   async userStatus(@Param('id') id: string, @Body(new ZodPipe(z.object({ disabled: z.boolean(), reason: reasonSchema }))) body: { disabled: boolean; reason: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const target = await this.prisma.user.findUnique({ where: { id }, select: { disabledAt: true } });
@@ -178,6 +179,7 @@ export class PlatformController {
   /** Sends a reset code to the user's own phone. Staff never see the code. */
   @RequirePlatform(PP.PLATFORM_MANAGE_ACCOUNTS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post('users/:id/send-reset-code')
   async sendResetCode(@Param('id') id: string, @Body(new ZodPipe(reasonBody)) body: { reason: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const target = await this.prisma.user.findUnique({ where: { id }, select: { phone: true, disabledAt: true } });
@@ -190,6 +192,7 @@ export class PlatformController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_ACCOUNTS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post('users/:id/unlock')
   async unlock(@Param('id') id: string, @Body(new ZodPipe(reasonBody)) body: { reason: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const r = await this.prisma.user.updateMany({ where: { id }, data: { lockedUntil: null, failedLoginCount: 0 } });
@@ -265,6 +268,7 @@ export class PlatformController {
   /** Stops a group from making changes (members can still read their records). Reversible and audited. */
   @RequirePlatform(PP.PLATFORM_MANAGE_GROUPS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post('groups/:id/suspend')
   suspendGroup(@Param('id') id: string, @Body(new ZodPipe(reasonBody)) body: { reason: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.setGroupStatus(id, 'SUSPENDED', body.reason, staff, meta);
@@ -272,6 +276,7 @@ export class PlatformController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_GROUPS)
   @HttpCode(200)
+  @RequireRecentAuth()
   @Post('groups/:id/reactivate')
   reactivateGroup(@Param('id') id: string, @Body(new ZodPipe(reasonBody)) body: { reason: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     return this.setGroupStatus(id, 'ACTIVE', body.reason, staff, meta);
@@ -412,6 +417,7 @@ export class PlatformController {
   }
 
   @RequirePlatform(PP.PLATFORM_CONFIGURE)
+  @RequireRecentAuth()
   @Patch('settings')
   async updateSettings(@Body(new ZodPipe(platformSettingsSchema.partial())) body: Partial<z.infer<typeof platformSettingsSchema>>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const before = await this.settings.get();

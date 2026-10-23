@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from '@chamahub/shared';
+import { requestReauth } from './reauth';
 
 export class ApiError extends Error {
   constructor(
@@ -25,7 +26,7 @@ const isStaffPath = (path: string) => path.replace(/^\//, '').startsWith('platfo
 const proxyBase = (path: string) => (isStaffPath(path) ? '/api/platform/proxy/' : '/api/proxy/');
 
 /** All browser calls go through a same-origin BFF proxy, which holds the tokens. */
-export async function api<T>(path: string, opts: { method?: string; body?: unknown; query?: Query } = {}): Promise<T> {
+export async function api<T>(path: string, opts: { method?: string; body?: unknown; query?: Query } = {}, retried = false): Promise<T> {
   const res = await fetch(`${proxyBase(path)}${path.replace(/^\//, '')}${qs(opts.query)}`, {
     method: opts.method ?? (opts.body ? 'POST' : 'GET'),
     headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
@@ -38,6 +39,10 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
   }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    // Sensitive staff action after the re-authentication window: confirm identity, then retry once.
+    if (res.status === 403 && !retried && isStaffPath(path) && (body?.details as { code?: string } | undefined)?.code === 'REAUTH_REQUIRED' && typeof window !== 'undefined') {
+      if (await requestReauth()) return api<T>(path, opts, true);
+    }
     throw new ApiError(res.status, body?.message ?? `Request failed (${res.status})`, body?.details);
   }
   if (res.status === 204) return undefined as T;

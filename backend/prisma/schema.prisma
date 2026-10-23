@@ -389,6 +389,7 @@ enum NotificationType {
   DESTINATION_CHANGED
   BILLING
   SUPPORT
+  SECURITY
 }
 
 enum NotificationChannel {
@@ -2270,6 +2271,8 @@ model PlatformSession {
   expiresAt        DateTime
   revokedAt        DateTime?
   revokedReason    String?
+  /// Last time the person proved who they are in this session (sign-in or re-authentication).
+  reauthAt         DateTime  @default(now())
 
   account PlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
 

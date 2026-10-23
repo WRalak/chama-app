@@ -1,3 +1,4 @@
+import { passwordWeakness } from '../password-strength';
 import { z } from 'zod';
 import {
   AttendanceStatus,
@@ -51,7 +52,11 @@ export const passwordSchema = z
   .min(8, 'Use at least 8 characters')
   .max(128)
   .regex(/[A-Za-z]/, 'Include at least one letter')
-  .regex(/\d/, 'Include at least one number');
+  .regex(/\d/, 'Include at least one number')
+  .superRefine((v, ctx) => {
+    const why = passwordWeakness(v);
+    if (why) ctx.addIssue({ code: 'custom', message: why });
+  });
 
 export const reasonSchema = z.string().trim().min(5, 'Give a reason (at least 5 characters)').max(500);
 
@@ -493,12 +498,16 @@ export const adjustmentSchema = z.object({
 
 /* ---------- imports ---------- */
 
-export const createImportSchema = z.object({
-  kind: z.enum(IMPORT_KINDS),
-  fileName: z.string().max(200),
-  /** Raw CSV text. Spreadsheets are converted to CSV on the client. */
-  csv: z.string().min(1).max(5_000_000),
-});
+export const createImportSchema = z
+  .object({
+    kind: z.enum(IMPORT_KINDS),
+    fileName: z.string().max(200),
+    /** Raw CSV text… */
+    csv: z.string().min(1).max(5_000_000).optional(),
+    /** …or an .xlsx file, read on the server with zip-bomb and size checks. */
+    xlsxBase64: z.string().min(1).max(7_000_000).optional(),
+  })
+  .refine((v) => !!v.csv !== !!v.xlsxBase64, { message: 'Send the file as CSV text or as an .xlsx file' });
 
 /* ---------- platform ---------- */
 

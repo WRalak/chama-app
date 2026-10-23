@@ -16,6 +16,8 @@ The portal at `/platform` is where ChamaHub staff run the service: users, groups
 - **Recovery codes:** turning two-step on shows ten single-use codes (`XXXXX-XXXXX`) once, to download or copy. Any of them can replace the 6-digit code at sign-in; each use is audited, and Security Settings shows how many are left and can issue a new set (with a current code). Only SHA-256 hashes are stored.
 - **Lost phone:** an administrator who may manage the account uses **Reset two-step sign-in** on the person's Helpers page (reason required, audited). That removes the old setup and recovery codes and signs them out; they set it up again at the next sign-in. Confirm who you are talking to before resetting.
 - **Sessions:** 10-minute access tokens, rotating refresh tokens, a 30-minute idle timeout and a 12-hour maximum (all configurable). The account, session and permissions are re-read from the database **on every request**, so suspension, revocation, role changes and end dates apply immediately.
+- **Confirm it's you (step-up):** 27 sensitive actions (staff and roles, user and group suspension, unlocks, reset codes, platform settings, plans, prices, promotions, refunds, manual payment confirmation, providers, regions, exchange rates, costs) need the password, plus the authenticator code once two-step is on, within the last `PLATFORM_REAUTH_MINUTES` (default 10). Otherwise the API answers `403 REAUTH_REQUIRED`, the portal asks for them, and the action is retried once. Failed attempts count towards the lockout; each confirmation is audited as `platform.reauth`.
+- **Security e-mails** go to the staff member when the account locks, a new device signs in, a recovery code is used, the password is reset or changed, two-step is turned on or off or reset, recovery codes are regenerated, or their roles change. They contain no links or codes.
 - **Password reset:** a single-use link (SHA-256 stored, 30 minutes) to the account's e-mail. The answer is the same whether or not the e-mail exists. A reset signs out every session.
 
 ## Bootstrap the owner
@@ -144,6 +146,7 @@ Reading the audit log is itself recorded. Staff actions that affect a group are 
 | `PLATFORM_RESET_TTL_MINUTES` | 30 | Reset link lifetime. |
 | `PLATFORM_PORTAL_URL` | `http://localhost:3000` | Public web origin used in links. |
 | `PLATFORM_REQUIRE_MFA` | `true` | Staff must set up two-step sign-in. Set `false` only for local experiments. |
+| `PLATFORM_REAUTH_MINUTES` | 10 | How long a step-up confirmation lasts for sensitive actions. Keep it at 15 or less. |
 | `EMAIL_WEBHOOK_URL` | — | E-mail relay for invitations and resets. |
 | `PLATFORM_BOOTSTRAP_EMAIL`, `PLATFORM_BOOTSTRAP_NAME` | — | One-time owner bootstrap only. |
 
