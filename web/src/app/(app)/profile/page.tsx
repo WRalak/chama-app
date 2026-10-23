@@ -10,6 +10,7 @@ import { PageHeader, Panel } from '@/components/ui/layout-parts';
 import { LoadingRows } from '@/components/ui/states';
 import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs';
 import { api, fileUrl } from '@/lib/api';
+import { HelpCenter } from '@/components/domain/help-center';
 import { useAction } from '@/lib/hooks';
 import { useMe } from '@/lib/session';
 import { date, dateTime } from '@/lib/utils';
@@ -173,20 +174,12 @@ function Privacy() {
 }
 
 function Help() {
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
-  const send = useAction(() => api('me/support', { body: { subject, body } }), { success: 'Thanks — our support team will get back to you.', onSuccess: () => { setSubject(''); setBody(''); } });
   return (
-    <Panel title="Contact ChamaHub support" className="max-w-xl">
-      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); send.mutate(undefined); }}>
-        <p className="text-sm text-muted">For questions about your Chama’s money, ask your treasurer or chairperson first. Never share your password, M-Pesa PIN or a verification code with anyone, including support.</p>
-        <Field label="Subject" htmlFor="h-sub"><Input id="h-sub" value={subject} onChange={(e) => setSubject(e.target.value)} /></Field>
-        <Field label="How can we help?" htmlFor="h-body"><Textarea id="h-body" rows={5} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
-        <Button type="submit" loading={send.isPending} disabled={subject.trim().length < 3 || body.trim().length < 10}>Send</Button>
-      </form>
-      <p className="mt-4 text-xs text-muted">
+    <div className="space-y-3">
+      <HelpCenter />
+      <p className="text-xs text-muted">
         Read our <a href="/privacy" target="_blank" className="text-berry hover:underline">Privacy Policy</a> and <a href="/terms" target="_blank" className="text-berry hover:underline">Terms of Use</a>.
       </p>
-    </Panel>
+    </div>
   );
 }

@@ -28,6 +28,7 @@ import { GroupAuditModule } from './modules/audit/audit.module';
 import { MeModule } from './modules/me/me.module';
 import { ImportsModule } from './modules/imports/imports.module';
 import { PlatformModule } from './modules/platform/platform.module';
+import { PlatformAuthModule } from './modules/platform-auth/platform-auth.module';
 import { DisputesModule } from './modules/disputes/disputes.module';
 import { MpesaModule } from './modules/mpesa/mpesa.module';
 import { JobsModule } from './modules/jobs/jobs.module';
@@ -71,6 +72,7 @@ const featureModules = [
   imports: [
     PrismaModule,
     AuditModule,
+    PlatformAuthModule,
     LedgerModule,
     FinanceModule,
     PlatformSettingsModule,

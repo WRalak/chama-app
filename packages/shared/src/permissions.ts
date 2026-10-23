@@ -1,4 +1,4 @@
-import { GroupRole, PlatformRole } from './enums';
+import { GroupRole } from './enums';
 
 /**
  * Chama-level permissions. They are always evaluated against the caller's
@@ -318,13 +318,33 @@ export function isOfficer(role: GroupRole): boolean {
  * audited support grant approved by the group's chairperson.
  */
 export const PlatformPermission = {
+  /** Dashboard and aggregate analytics. */
   PLATFORM_VIEW_STATS: 'platform.view_stats',
-  PLATFORM_MANAGE_PLANS: 'platform.manage_plans',
+  /** Account metadata of ChamaHub users (no group finances). */
+  PLATFORM_VIEW_USERS: 'platform.view_users',
+  /** Suspend/reactivate user accounts, start account recovery. */
   PLATFORM_MANAGE_ACCOUNTS: 'platform.manage_accounts',
-  PLATFORM_VIEW_SECURITY: 'platform.view_security',
+  /** Group metadata: name, country, size, plan, status (never contributions, loans or payouts). */
+  PLATFORM_VIEW_GROUPS: 'platform.view_groups',
+  /** Suspend/reactivate groups, record interventions. */
+  PLATFORM_MANAGE_GROUPS: 'platform.manage_groups',
+  /** Work on support cases assigned to you. */
   PLATFORM_SUPPORT: 'platform.support',
+  /** See every support case, assign and reassign. */
+  PLATFORM_SUPPORT_MANAGE: 'platform.support_manage',
+  /** Ask a group's chairperson for time-limited, read-only access to its records. */
+  PLATFORM_REQUEST_GROUP_ACCESS: 'platform.request_group_access',
+  /** Invite and manage staff accounts that hold no privileged permission. */
+  PLATFORM_MANAGE_HELPERS: 'platform.manage_helpers',
+  /** Invite and manage privileged staff (owners, administrators, finance). */
   PLATFORM_MANAGE_ADMINS: 'platform.manage_admins',
+  /** Create and change platform roles. */
+  PLATFORM_MANAGE_ROLES: 'platform.manage_roles',
+  PLATFORM_VIEW_SECURITY: 'platform.view_security',
+  PLATFORM_VIEW_AUDIT: 'platform.view_audit',
+  /** Platform settings, countries, integrations and feature availability. */
   PLATFORM_CONFIGURE: 'platform.configure',
+  PLATFORM_MANAGE_PLANS: 'platform.manage_plans',
   /** See groups' plans, subscription status and billing payments (never group finances). */
   PLATFORM_VIEW_BILLING: 'platform.view_billing',
   /** Promotional access, billing support cases, subscription corrections. */
@@ -333,21 +353,72 @@ export const PlatformPermission = {
   PLATFORM_REFUND: 'platform.refund',
   /** Revenue, recurring revenue, churn and profit reports. */
   PLATFORM_VIEW_REVENUE: 'platform.view_revenue',
-  /** Record operating costs and exchange rates used in reports. */
+  /** Record operating costs and exchange rates; confirm bank-transfer payments. */
   PLATFORM_MANAGE_FINANCE: 'platform.manage_finance',
 } as const;
 export type PlatformPermission = (typeof PlatformPermission)[keyof typeof PlatformPermission];
 
 const PP = PlatformPermission;
 
-export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly PlatformPermission[]> = {
-  USER: [],
-  SUPPORT: [PP.PLATFORM_SUPPORT, PP.PLATFORM_VIEW_BILLING],
-  PLATFORM_ADMIN: [PP.PLATFORM_VIEW_STATS, PP.PLATFORM_MANAGE_PLANS, PP.PLATFORM_MANAGE_ACCOUNTS, PP.PLATFORM_SUPPORT, PP.PLATFORM_VIEW_BILLING, PP.PLATFORM_MANAGE_BILLING],
-  FINANCE: [PP.PLATFORM_VIEW_BILLING, PP.PLATFORM_MANAGE_BILLING, PP.PLATFORM_REFUND, PP.PLATFORM_VIEW_REVENUE, PP.PLATFORM_MANAGE_FINANCE],
-  SUPER_ADMIN: Object.values(PP),
+export const ALL_PLATFORM_PERMISSIONS = Object.values(PP) as PlatformPermission[];
+
+/**
+ * Permissions that let someone change who has power or touch money. Only holders of
+ * platform.manage_admins may grant them, and nobody can grant a permission they do not hold.
+ */
+export const PRIVILEGED_PLATFORM_PERMISSIONS: readonly PlatformPermission[] = [
+  PP.PLATFORM_MANAGE_ADMINS,
+  // Whoever can manage helpers is an administrator: only manage_admins may create or change such accounts.
+  PP.PLATFORM_MANAGE_HELPERS,
+  PP.PLATFORM_MANAGE_ROLES,
+  PP.PLATFORM_CONFIGURE,
+  PP.PLATFORM_MANAGE_PLANS,
+  PP.PLATFORM_REFUND,
+  PP.PLATFORM_MANAGE_FINANCE,
+  PP.PLATFORM_VIEW_REVENUE,
+];
+
+export const PLATFORM_PERMISSION_INFO: Record<PlatformPermission, { label: string; area: 'Overview' | 'People' | 'Support' | 'Business' | 'Platform' | 'Security' }> = {
+  'platform.view_stats': { label: 'View dashboard and aggregate analytics', area: 'Overview' },
+  'platform.view_users': { label: 'View user account details', area: 'People' },
+  'platform.manage_accounts': { label: 'Suspend, reactivate and recover user accounts', area: 'People' },
+  'platform.view_groups': { label: 'View group details (no finances)', area: 'People' },
+  'platform.manage_groups': { label: 'Suspend groups and record interventions', area: 'People' },
+  'platform.manage_helpers': { label: 'Invite and manage support helpers', area: 'People' },
+  'platform.manage_admins': { label: 'Invite and manage administrators and owners', area: 'People' },
+  'platform.manage_roles': { label: 'Create and change platform roles', area: 'People' },
+  'platform.support': { label: 'Work on assigned support cases', area: 'Support' },
+  'platform.support_manage': { label: 'See and assign all support cases', area: 'Support' },
+  'platform.request_group_access': { label: 'Request time-limited read access to a group', area: 'Support' },
+  'platform.view_billing': { label: 'View subscriptions and billing payments', area: 'Business' },
+  'platform.manage_billing': { label: 'Promotions, billing cases and corrections', area: 'Business' },
+  'platform.manage_plans': { label: 'Change plans and prices', area: 'Business' },
+  'platform.refund': { label: 'Refund subscription payments', area: 'Business' },
+  'platform.view_revenue': { label: 'View revenue analytics', area: 'Business' },
+  'platform.manage_finance': { label: 'Record costs and exchange rates; confirm bank payments', area: 'Business' },
+  'platform.configure': { label: 'Platform settings, countries, integrations and features', area: 'Platform' },
+  'platform.view_security': { label: 'View security events', area: 'Security' },
+  'platform.view_audit': { label: 'View the audit log', area: 'Security' },
 };
 
-export function platformRoleHas(role: PlatformRole, permission: PlatformPermission): boolean {
-  return PLATFORM_ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
-}
+/**
+ * Built-in roles, created at API start-up when missing. Their permissions can be adjusted (except Owner),
+ * and custom roles can be added; the database is the source of truth at runtime.
+ */
+export const SYSTEM_PLATFORM_ROLES: { code: string; name: string; description: string; permissions: readonly PlatformPermission[] }[] = [
+  { code: 'OWNER', name: 'Platform owner', description: 'Full control of ChamaHub operations. At least one active owner must always exist.', permissions: Object.values(PP) },
+  {
+    code: 'PLATFORM_ADMIN',
+    name: 'Platform administrator',
+    description: 'Runs day-to-day operations: users, groups, support, helpers and billing support. No revenue, prices, refunds or settings unless granted.',
+    permissions: [PP.PLATFORM_VIEW_STATS, PP.PLATFORM_VIEW_USERS, PP.PLATFORM_MANAGE_ACCOUNTS, PP.PLATFORM_VIEW_GROUPS, PP.PLATFORM_MANAGE_GROUPS, PP.PLATFORM_SUPPORT, PP.PLATFORM_SUPPORT_MANAGE, PP.PLATFORM_REQUEST_GROUP_ACCESS, PP.PLATFORM_MANAGE_HELPERS, PP.PLATFORM_VIEW_BILLING, PP.PLATFORM_MANAGE_BILLING, PP.PLATFORM_VIEW_SECURITY],
+  },
+  {
+    code: 'SUPPORT_HELPER',
+    name: 'Support helper',
+    description: 'Helps users with their assigned support cases. Sees only what a case needs; cannot change prices, staff or group money.',
+    permissions: [PP.PLATFORM_SUPPORT, PP.PLATFORM_REQUEST_GROUP_ACCESS],
+  },
+  { code: 'ANALYST', name: 'Operations analyst', description: 'Read-only aggregate statistics and reports.', permissions: [PP.PLATFORM_VIEW_STATS] },
+  { code: 'FINANCE', name: 'Finance', description: 'Revenue, refunds, bank-payment confirmation, costs and exchange rates.', permissions: [PP.PLATFORM_VIEW_STATS, PP.PLATFORM_VIEW_BILLING, PP.PLATFORM_MANAGE_BILLING, PP.PLATFORM_REFUND, PP.PLATFORM_VIEW_REVENUE, PP.PLATFORM_MANAGE_FINANCE] },
+];

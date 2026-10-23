@@ -30,7 +30,7 @@ export function auditScope(m: MembershipContext): Prisma.AuditEventWhereInput {
 }
 
 export function toAuditRow(a: Prisma.AuditEventGetPayload<{ include: { actor: { select: { fullName: true } } } }>): AuditEventRow {
-  return { id: a.id, at: a.createdAt.toISOString(), actorName: a.actor?.fullName ?? null, action: a.action, entityType: a.entityType, entityId: a.entityId, before: a.before, after: a.after, reason: a.reason, reference: a.reference, ipAddress: a.ipAddress };
+  return { id: a.id, at: a.createdAt.toISOString(), actorName: a.actor?.fullName ?? (a.action.startsWith('platform.') || a.action === 'support.access' ? 'ChamaHub staff' : null), action: a.action, entityType: a.entityType, entityId: a.entityId, before: a.before, after: a.after, reason: a.reason, reference: a.reference, ipAddress: a.ipAddress };
 }
 
 @Controller('groups/:groupId')

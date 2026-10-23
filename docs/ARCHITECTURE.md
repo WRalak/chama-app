@@ -27,16 +27,15 @@ Business rules live in the API. The shared package gives both clients the same v
   - Proposals have a quorum and pass threshold. Each eligible member (holding `VOTES_CAST`) gets one ballot. Ballots are append-only, and the audit log records participation but not the choice. Expired votes close automatically.
   - Audit findings are raised by auditors and answered by the chairperson.
 - **Audit visibility is scoped.** Auditors and chairpersons see the full log. Treasurers and secretaries see their area (finance or administration). Everyone else sees only their own actions.
-- **Platform roles never imply group access.**
-  - `SUPPORT`: account help (send a reset code, unlock).
-  - `PLATFORM_ADMIN`: plans, accounts, stats.
-  - `SUPER_ADMIN`: also manages staff and platform settings (channel kill switches, trial length, support-access cap, maintenance notice).
-  - Reading a group needs a `SupportAccessGrant`. The grant states its purpose, is approved by that group's chairperson, is read-only and time-boxed, and every request under it is audited.
+- **Platform staff are a separate identity and never imply group access.**
+  - Staff are `PlatformAccount`s (e-mail + scrypt password, optional TOTP), not member accounts, with their own JWT key, sessions and audit log. A member token gets 401 on `/v1/platform/*`, and a staff token gets 401 on member routes.
+  - Permissions come from database roles (Owner, Platform administrator, Support helper, Operations analyst, Finance, custom) plus individual grants, and are re-read on every request. Nobody can grant what they lack; administrative and financial permissions need `platform.manage_admins`; the last active owner cannot be removed.
+  - Reading a group's records needs a `SupportAccessGrant` approved by that group's chairperson: read-only, time-limited, served by a dedicated endpoint, and recorded in both audit trails. See `docs/PLATFORM_ADMIN.md`.
 - **Auth.**
   - Phone + password (bcrypt). An SMS OTP verifies the phone before group features unlock.
   - Short-lived JWT access tokens are paired with rotating refresh tokens; reusing a refresh token revokes the session.
   - Accounts lock after repeated failures. Sessions are checked on every request.
-  - Admin web: tokens live in httpOnly cookies behind a BFF proxy.
+  - Web: tokens live in httpOnly cookies behind a BFF proxy (members: `/api/proxy`; staff: `/api/platform/*`, cookies scoped to that path).
 
 ## Financial model
 

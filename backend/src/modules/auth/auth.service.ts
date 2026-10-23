@@ -24,7 +24,6 @@ export function toAuthUser(u: User): AuthUser {
     phone: u.phone,
     email: u.email,
     phoneVerified: !!u.phoneVerifiedAt,
-    platformRole: u.platformRole,
     locale: u.locale,
     createdAt: u.createdAt.toISOString(),
   };
@@ -105,7 +104,7 @@ export class AuthService {
       },
     });
     return {
-      accessToken: await this.jwt.signAsync({ sub: user.id, sid: session.id, role: user.platformRole }),
+      accessToken: await this.jwt.signAsync({ sub: user.id, sid: session.id }),
       refreshToken,
       expiresIn: e.ACCESS_TOKEN_TTL_SECONDS,
     };
@@ -133,7 +132,7 @@ export class AuthService {
     });
     if (updated.count !== 1) throw new UnauthorizedException('Your session has ended. Sign in again.');
     return {
-      accessToken: await this.jwt.signAsync({ sub: session.userId, sid: session.id, role: session.user.platformRole }),
+      accessToken: await this.jwt.signAsync({ sub: session.userId, sid: session.id }),
       refreshToken: next,
       expiresIn: env().ACCESS_TOKEN_TTL_SECONDS,
     };

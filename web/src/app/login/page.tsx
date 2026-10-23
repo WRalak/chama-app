@@ -71,7 +71,7 @@ export default function LoginPage() {
         <div className="mb-6 flex flex-col items-center text-center">
           <BrandMark className="h-10 w-10" />
           <h1 className="mt-3 text-lg font-semibold text-plum">Sign in to ChamaHub</h1>
-          <p className="text-sm text-muted">For members, officers and platform staff</p>
+          <p className="text-sm text-muted">For members and officers</p>
         </div>
         <div className="rounded-lg border border-line bg-white p-5">
           <Suspense>

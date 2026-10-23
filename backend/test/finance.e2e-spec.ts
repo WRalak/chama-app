@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { addDays, todayInNairobi } from '@chamahub/shared';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { resetEnvCache } from '../src/config/env';
-import { api, as, createGroupWith, createTestApp, idem, registerUser, resetDatabase, TestUser } from './helpers';
+import { api, as, createGroupWith, createStaff, createTestApp, idem, registerUser, resetDatabase, TestUser } from './helpers';
 
 const today = todayInNairobi();
 
@@ -361,22 +361,29 @@ describe('Financial workflows', () => {
   });
 
   describe('platform administration', () => {
-    it('gives platform admins no implicit access to group finances; support grants are read-only and audited', async () => {
-      const admin = await registerUser(app, 'Platform Admin');
-      await prisma.user.update({ where: { id: admin.id }, data: { platformRole: 'SUPER_ADMIN' } });
-      const overview = await as(app, admin).get('/v1/platform/overview').expect(200);
-      expect(overview.body.totalGroups).toBeGreaterThanOrEqual(1);
-      await as(app, alice).get('/v1/platform/overview').expect(403);
-      await as(app, admin).get(`/v1/groups/${groupId}/contributions/ledger`).expect(404);
+    it('gives staff no implicit access to group finances; support grants are read-only, time-limited and audited', async () => {
+      const owner = await createStaff(app, prisma, 'Platform Owner', ['OWNER']);
+      const dash = await as(app, owner).get('/v1/platform/dashboard').expect(200);
+      expect(dash.body.totals.groups).toBeGreaterThanOrEqual(1);
+      await as(app, alice).get('/v1/platform/dashboard').expect(401);
+      await as(app, owner).get(`/v1/groups/${groupId}/contributions/ledger`).expect(401);
 
-      const req = await as(app, admin).post('/v1/platform/support-access', { groupId, purpose: 'Investigate reported duplicate payment', hours: 2 }).expect(201);
-      await as(app, admin).get(`/v1/groups/${groupId}/contributions/ledger`).expect(404);
+      const req = await as(app, owner).post('/v1/platform/support-access', { groupId, purpose: 'Investigate reported duplicate payment', hours: 2 }).expect(201);
+      await as(app, owner).get(`/v1/platform/support-access/${req.body.id}/records`).expect(404); // not approved yet
       await as(app, treasurer).post(`/v1/groups/${groupId}/support-access/${req.body.id}/decision`, { decision: 'APPROVE' }).expect(403);
       await as(app, chair).post(`/v1/groups/${groupId}/support-access/${req.body.id}/decision`, { decision: 'APPROVE' }).expect(200);
-      await as(app, admin).get(`/v1/groups/${groupId}/contributions/ledger`).expect(200);
-      await as(app, admin).post(`/v1/groups/${groupId}/schedules`, { name: 'x', amountCents: 100, frequency: 'MONTHLY', startDate: today }).expect(404);
-      const audited = await prisma.auditEvent.count({ where: { groupId, action: 'support.access' } });
-      expect(audited).toBeGreaterThan(0);
+      const records = (await as(app, owner).get(`/v1/platform/support-access/${req.body.id}/records`).expect(200)).body;
+      expect(records.readOnly).toBe(true);
+      expect(records.payments.length).toBeGreaterThan(0);
+      expect(JSON.stringify(records)).not.toMatch(/\+2547\d{8}/); // no member phone numbers
+      // Still no route into the group's own API.
+      await as(app, owner).post(`/v1/groups/${groupId}/schedules`, { name: 'x', amountCents: 100, frequency: 'MONTHLY', startDate: today }).expect(401);
+      expect(await prisma.auditEvent.count({ where: { groupId, action: 'support.access' } })).toBeGreaterThan(0);
+      expect(await prisma.platformAuditLog.count({ where: { actorAccountId: owner.id, action: 'platform.support_access_used', outcome: 'SUCCESS' } })).toBe(1);
+
+      // The chairperson can end it early; then the records are gone for staff.
+      await as(app, chair).post(`/v1/groups/${groupId}/support-access/${req.body.id}/revoke`).expect(200);
+      await as(app, owner).get(`/v1/platform/support-access/${req.body.id}/records`).expect(404);
     });
   });
 });

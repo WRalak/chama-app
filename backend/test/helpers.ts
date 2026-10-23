@@ -5,6 +5,8 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/setup-app';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { testOtpOutbox } from '../src/modules/auth/otp.service';
+import { hashStaffPassword } from '../src/modules/platform-auth/staff-crypto';
+import { ensureSystemRoles } from '../src/modules/platform-auth/staff-roles';
 
 export interface TestUser {
   id: string;
@@ -38,6 +40,40 @@ export async function resetDatabase(prisma: PrismaService) {
     prisma.$executeRawUnsafe(`SET LOCAL session_replication_role = replica`),
     prisma.$executeRawUnsafe(`TRUNCATE ${list} CASCADE`),
   ]);
+  await ensureSystemRoles(prisma);
+}
+
+export interface StaffUser {
+  id: string;
+  email: string;
+  fullName: string;
+  password: string;
+  token: string;
+  refreshToken: string;
+}
+
+export const STAFF_PASSWORD = 'Staff-Test-Passw0rd';
+let staffCounter = 0;
+
+/**
+ * Creates an active platform staff account directly (as if its invitation had been accepted) and
+ * signs it in through the real staff login.
+ */
+export async function createStaff(app: INestApplication, prisma: PrismaService, fullName: string, roleCodes: string[], extraPermissions: string[] = []): Promise<StaffUser> {
+  const email = `staff${++staffCounter}.${Date.now()}@staff.test`;
+  const roles = await prisma.platformStaffRole.findMany({ where: { code: { in: roleCodes } } });
+  const a = await prisma.platformAccount.create({
+    data: {
+      email,
+      fullName,
+      status: 'ACTIVE',
+      passwordHash: await hashStaffPassword(STAFF_PASSWORD),
+      roles: { create: roles.map((r) => ({ roleId: r.id })) },
+      permissions: { create: extraPermissions.map((permission) => ({ permission })) },
+    },
+  });
+  const res = await request(app.getHttpServer()).post('/v1/platform/auth/login').send({ email, password: STAFF_PASSWORD }).expect(200);
+  return { id: a.id, email, fullName, password: STAFF_PASSWORD, token: res.body.tokens.accessToken, refreshToken: res.body.tokens.refreshToken };
 }
 
 export const api = (app: INestApplication) => request(app.getHttpServer());
@@ -53,7 +89,7 @@ export async function registerUser(app: INestApplication, fullName = 'Test User'
   return user;
 }
 
-export function as(app: INestApplication, user: TestUser) {
+export function as(app: INestApplication, user: { token: string }) {
   const auth = (r: request.Test) => r.set('Authorization', `Bearer ${user.token}`);
   return {
     get: (url: string) => auth(api(app).get(url)),

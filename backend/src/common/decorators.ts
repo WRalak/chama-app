@@ -1,4 +1,4 @@
-import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
+import { applyDecorators, createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
 import type { Feature, Permission, PlatformPermission } from '@chamahub/shared';
 import { AppRequest, metaFrom } from './request';
 
@@ -17,8 +17,20 @@ export const REQUIRED_FEATURE = 'requiredFeature';
 /** The group's plan must include this feature (checked on the server; 402 otherwise). Never put this on read-only record routes. */
 export const RequireFeature = (feature: Feature) => SetMetadata(REQUIRED_FEATURE, feature);
 
+export const PLATFORM_API = 'platformApi';
+/**
+ * Marks a controller (or route) as part of the staff portal: it accepts only staff tokens, which a
+ * Chama member's sign-in can never produce.
+ */
+export const PlatformApi = () => SetMetadata(PLATFORM_API, true);
+
 export const REQUIRED_PLATFORM_PERMISSION = 'requiredPlatformPermission';
-export const RequirePlatform = (permission: PlatformPermission) => SetMetadata(REQUIRED_PLATFORM_PERMISSION, permission);
+/** Staff-only route; the caller's database-backed permissions must include ALL of these. */
+export const RequirePlatform = (...permissions: PlatformPermission[]) => applyDecorators(PlatformApi(), SetMetadata(REQUIRED_PLATFORM_PERMISSION, permissions));
+
+export const ANY_PLATFORM_PERMISSION = 'anyPlatformPermission';
+/** Staff-only route; the caller needs AT LEAST ONE of these permissions. */
+export const RequireAnyPlatform = (...permissions: PlatformPermission[]) => applyDecorators(PlatformApi(), SetMetadata(ANY_PLATFORM_PERMISSION, permissions));
 
 export const ALLOW_UNVERIFIED = 'allowUnverified';
 /** Routes usable before the phone number is verified (profile, OTP, logout). */
@@ -26,6 +38,10 @@ export const AllowUnverified = () => SetMetadata(ALLOW_UNVERIFIED, true);
 
 export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext) => {
   return ctx.switchToHttp().getRequest<AppRequest>().user!;
+});
+
+export const CurrentStaff = createParamDecorator((_: unknown, ctx: ExecutionContext) => {
+  return ctx.switchToHttp().getRequest<AppRequest>().staff!;
 });
 
 export const CurrentMembership = createParamDecorator((_: unknown, ctx: ExecutionContext) => {

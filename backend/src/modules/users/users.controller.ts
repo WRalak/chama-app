@@ -16,12 +16,14 @@ import { ZodPipe } from '../../common/zod.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { toAuthUser } from '../auth/auth.service';
 import { readPreferences } from '../notifications/notifications.service';
+import { SupportService } from '../platform/support.service';
 
 @Controller('me')
 export class UsersController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly support: SupportService,
   ) {}
 
   private async me(userId: string): Promise<MeResponse> {
@@ -106,9 +108,7 @@ export class UsersController {
   @Post('deletion-request')
   async requestDeletion(@CurrentUser() user: AuthContext, @Body(new ZodPipe(accountDeletionSchema)) body: z.infer<typeof accountDeletionSchema>, @ReqMeta() meta: RequestMeta) {
     await this.prisma.user.update({ where: { id: user.id }, data: { deletionRequestedAt: new Date(), deletionReason: body.reason ?? null } });
-    await this.prisma.supportTicket.create({
-      data: { userId: user.id, subject: 'Account deletion request', body: body.reason ?? 'No reason given' },
-    });
+    await this.support.open(user.id, { subject: 'Account deletion request', category: 'ACCOUNT_ACCESS', description: `I asked for my account to be deleted. Reason: ${body.reason ?? 'none given'}` }, meta);
     await this.audit.log({ actorUserId: user.id, action: 'user.deletion_requested', entityType: 'User', entityId: user.id, reason: body.reason, meta });
     return this.me(user.id);
   }
@@ -120,9 +120,10 @@ export class UsersController {
     return this.me(user.id);
   }
 
+  /** Kept for older app versions; new clients use /me/support-cases. */
   @Post('support')
-  async support(@CurrentUser() user: AuthContext, @Body(new ZodPipe(z.object({ subject: z.string().trim().min(3).max(200), body: z.string().trim().min(5).max(4000), groupId: z.string().optional() }))) body: { subject: string; body: string; groupId?: string }) {
-    const t = await this.prisma.supportTicket.create({ data: { userId: user.id, groupId: body.groupId ?? null, subject: body.subject, body: body.body } });
-    return { id: t.id, status: t.status };
+  async supportRequest(@CurrentUser() user: AuthContext, @Body(new ZodPipe(z.object({ subject: z.string().trim().min(3).max(200), body: z.string().trim().min(10).max(4000), groupId: z.string().optional() }))) body: { subject: string; body: string; groupId?: string }, @ReqMeta() meta: RequestMeta) {
+    const c = await this.support.open(user.id, { subject: body.subject, category: 'OTHER', description: body.body, groupId: body.groupId }, meta);
+    return { id: c.id, number: c.number, status: c.status };
   }
 }

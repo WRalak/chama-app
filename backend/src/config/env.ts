@@ -15,6 +15,18 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(30),
   CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:8081'),
   DEV_LOG_OTP: bool,
+  // ---- Platform administration portal (staff accounts; separate from member sign-in) ----
+  /** Signs staff tokens. If unset, a separate key is derived from JWT_ACCESS_SECRET, so member tokens never work on the portal. */
+  PLATFORM_JWT_SECRET: z.string().min(32, 'PLATFORM_JWT_SECRET must be at least 32 characters').optional().or(z.literal('').transform(() => undefined)),
+  PLATFORM_ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(600),
+  /** A staff session ends after this long without activity… */
+  PLATFORM_SESSION_IDLE_MINUTES: z.coerce.number().int().min(5).max(24 * 60).default(30),
+  /** …and always after this long. */
+  PLATFORM_SESSION_MAX_HOURS: z.coerce.number().int().min(1).max(7 * 24).default(12),
+  PLATFORM_INVITE_TTL_HOURS: z.coerce.number().int().min(1).max(14 * 24).default(72),
+  PLATFORM_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(24 * 60).default(30),
+  /** Where invitation and reset links point (the web app's origin). */
+  PLATFORM_PORTAL_URL: z.string().url().default('http://localhost:3000'),
   /** Optional: receives a small JSON report (no request data) for every 5xx, e.g. a Slack/Teams/alerting webhook. */
   // ---- Subscription billing (ChamaHub's own fees; separate from groups' M-Pesa) ----
   /** Public base URL providers call back, e.g. https://api.example.co.ke/v1/billing/webhooks */

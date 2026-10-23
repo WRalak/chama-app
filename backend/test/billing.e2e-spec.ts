@@ -7,7 +7,7 @@ import { PaystackProvider } from '../src/modules/billing/providers/paystack.prov
 import { MpesaBillingProvider } from '../src/modules/billing/providers/mpesa.provider';
 import { createHmac } from 'node:crypto';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { api, as, createGroupWith, createTestApp, idem, registerUser, resetDatabase, TestUser } from './helpers';
+import { api, as, createGroupWith, createStaff, createTestApp, idem, registerUser, resetDatabase, StaffUser, TestUser } from './helpers';
 
 const today = todayInNairobi();
 
@@ -23,7 +23,7 @@ describe('Subscriptions and billing', () => {
   let entitlements: EntitlementService;
   let sandbox: SandboxProvider;
   let chair: TestUser, treasurer: TestUser, member: TestUser, otherChair: TestUser;
-  let support: TestUser, platformAdmin: TestUser, finance: TestUser, superAdmin: TestUser;
+  let support: StaffUser, platformAdmin: StaffUser, finance: StaffUser, superAdmin: StaffUser;
   let A: string, B: string;
   let ids: Record<string, string>;
   const g = (groupId: string, p: string) => `/v1/groups/${groupId}/${p}`;
@@ -58,11 +58,10 @@ describe('Subscriptions and billing', () => {
     treasurer = await registerUser(app, 'Treasurer Otieno');
     member = await registerUser(app, 'Member Akinyi');
     otherChair = await registerUser(app, 'Other Chair');
-    support = await registerUser(app, 'Support Sam');
-    platformAdmin = await registerUser(app, 'Platform Pat');
-    finance = await registerUser(app, 'Finance Faith');
-    superAdmin = await registerUser(app, 'Super Sue');
-    for (const [u, role] of [[support, 'SUPPORT'], [platformAdmin, 'PLATFORM_ADMIN'], [finance, 'FINANCE'], [superAdmin, 'SUPER_ADMIN']] as const) await prisma.user.update({ where: { id: u.id }, data: { platformRole: role } });
+    support = await createStaff(app, prisma, 'Support Sam', ['SUPPORT_HELPER']);
+    platformAdmin = await createStaff(app, prisma, 'Platform Pat', ['PLATFORM_ADMIN']);
+    finance = await createStaff(app, prisma, 'Finance Faith', ['FINANCE']);
+    superAdmin = await createStaff(app, prisma, 'Super Sue', ['OWNER']);
     ({ groupId: A, membershipIds: ids } = await createGroupWith(app, chair, [{ user: treasurer, role: 'TREASURER' }, { user: member, role: 'MEMBER' }], { name: 'Billing Chama' }));
     ({ groupId: B } = await createGroupWith(app, otherChair, [], { name: 'Other Chama' }));
   });
@@ -80,7 +79,7 @@ describe('Subscriptions and billing', () => {
       expect(t.providers.map((p: { code: string }) => p.code)).toEqual(expect.arrayContaining(['SANDBOX', 'MANUAL']));
       const plans = (await as(app, member).get(g(A, 'billing/plans')).expect(200)).body;
       expect(plans.map((p: { code: string }) => p.code)).toEqual(['FREE', 'STARTER', 'STANDARD', 'PREMIUM']);
-      expect(plans.find((p: { code: string }) => p.code === 'STARTER').prices).toEqual(expect.arrayContaining([{ interval: 'MONTH', currency: 'KES', amountMinor: 50000 }]));
+      expect(plans.find((p: { code: string }) => p.code === 'STARTER').prices).toEqual(expect.arrayContaining([{ interval: 'MONTH', currency: 'KES', amountMinor: 30000 }]));
       await as(app, member).get(g(B, 'billing')).expect(404);
     });
 
@@ -127,7 +126,7 @@ describe('Subscriptions and billing', () => {
       await as(app, member).post(g(A, 'billing/checkout'), body).expect(403);
       await as(app, otherChair).post(g(A, 'billing/checkout'), body).expect(404);
       const first = (await as(app, treasurer).post(g(A, 'billing/checkout'), body).expect(201)).body;
-      expect(first.payment).toMatchObject({ status: 'PENDING', amountMinor: 50000, currency: 'KES', provider: 'SANDBOX', livemode: false, purpose: 'NEW' });
+      expect(first.payment).toMatchObject({ status: 'PENDING', amountMinor: 30000, currency: 'KES', provider: 'SANDBOX', livemode: false, purpose: 'NEW' });
       expect(first.payment.reference).toMatch(/^CHB-[0-9A-F]{10}$/);
       const again = (await as(app, treasurer).post(g(A, 'billing/checkout'), body).expect(201)).body;
       expect(again.payment.id).toBe(first.payment.id);
@@ -180,13 +179,13 @@ describe('Subscriptions and billing', () => {
       const sub = await prisma.subscription.findUniqueOrThrow({ where: { groupId: A }, include: { plan: true } });
       expect(sub).toMatchObject({ status: 'ACTIVE', interval: 'MONTH', currency: 'KES' });
       expect(sub.plan.code).toBe('STARTER');
-      expect(Number(sub.amountMinor)).toBe(50000);
+      expect(Number(sub.amountMinor)).toBe(30000);
       expect(sub.currentPeriodEnd!.getTime() - sub.currentPeriodStart!.getTime()).toBeGreaterThan(27 * 86_400_000);
       // Starter unlocks loans but not the AI assistant.
       await as(app, member).post(g(A, 'loans'), { principalCents: 100_000, installments: 2, purpose: 'School fees' }).expect((x) => expect(x.status).not.toBe(402));
       await as(app, member).post(g(A, 'ai/chat'), { message: 'Hi' }).expect(402);
       const receipt = (await as(app, treasurer).get(g(A, `billing/payments/${p.id}/receipt`)).expect(200)).body;
-      expect(receipt).toMatchObject({ receiptNumber: p.receiptNumber, amountMinor: 50000, currency: 'KES', livemode: false });
+      expect(receipt).toMatchObject({ receiptNumber: p.receiptNumber, amountMinor: 30000, currency: 'KES', livemode: false });
       await as(app, member).get(g(A, `billing/payments/${p.id}/receipt`)).expect(403);
     });
 
@@ -213,9 +212,9 @@ describe('Subscriptions and billing', () => {
     it('credits unused time when upgrading', async () => {
       const r = (await as(app, treasurer).post(g(A, 'billing/checkout'), { planCode: 'PREMIUM', interval: 'MONTH', provider: 'SANDBOX', idempotencyKey: idem() }).expect(201)).body;
       expect(r.payment.purpose).toBe('UPGRADE');
-      expect(r.payment.creditMinor).toBeGreaterThan(40000);
-      expect(r.payment.creditMinor).toBeLessThanOrEqual(50000);
-      expect(r.payment.amountMinor).toBe(200000 - r.payment.creditMinor);
+      expect(r.payment.creditMinor).toBeGreaterThan(24000);
+      expect(r.payment.creditMinor).toBeLessThanOrEqual(30000);
+      expect(r.payment.amountMinor).toBe(150000 - r.payment.creditMinor);
       sandbox.settle(r.payment.reference, 'SUCCEEDED');
       await billing.reconcile(r.payment.id);
       expect((await prisma.subscription.findUniqueOrThrow({ where: { groupId: A }, include: { plan: true } })).plan.code).toBe('PREMIUM');
@@ -309,15 +308,15 @@ describe('Subscriptions and billing', () => {
     });
 
     it('applies least privilege across platform roles and never opens group finances', async () => {
-      await as(app, support).get('/v1/platform/billing/groups').expect(200);
+      await as(app, support).get('/v1/platform/billing/groups').expect(403); // helpers do not see billing
       await as(app, support).get('/v1/platform/revenue').expect(403);
       await as(app, support).put('/v1/platform/plans/STARTER', {}).expect(403);
       await as(app, platformAdmin).get('/v1/platform/revenue').expect(403);
       await as(app, platformAdmin).post('/v1/platform/finance/costs', { category: 'AI', description: 'x', currency: 'USD', amountMinor: 1, incurredOn: today }).expect(403);
       await as(app, finance).get('/v1/platform/revenue').expect(200);
       await as(app, finance).put('/v1/platform/regions/UG', { countryCode: 'UG', name: 'Uganda', defaultCurrency: 'UGX', defaultTimezone: 'Africa/Kampala', defaultLocale: 'en-UG', available: true, billingAvailable: false }).expect(403);
-      await as(app, member).get('/v1/platform/billing/groups').expect(403);
-      for (const staff of [support, platformAdmin, finance, superAdmin]) await as(app, staff).get(g(A, 'contributions/ledger')).expect(404);
+      await as(app, member).get('/v1/platform/billing/groups').expect(401); // member tokens never work on staff routes
+      for (const staff of [support, platformAdmin, finance, superAdmin]) await as(app, staff).get(g(A, 'contributions/ledger')).expect(401);
       const detail = (await as(app, platformAdmin).get(`/v1/platform/billing/groups/${A}`).expect(200)).body;
       expect(detail.events.length).toBeGreaterThan(5);
       expect(JSON.stringify(detail)).not.toMatch(/journal|ledger|contributionsCents|loanBalance/i);

@@ -2,11 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { platformRoleHas } from '@chamahub/shared';
 import { LoadingRows } from '@/components/ui/states';
 import { useMe, useMyGroups } from '@/lib/session';
 
-/** Sends officers to the first group they manage, platform staff to the platform overview, and members to their own home. */
+/** Sends officers to the first group they manage and members to their own home. (Platform staff use the separate portal at /platform.) */
 export default function Home() {
   const router = useRouter();
   const { data: me } = useMe();
@@ -16,8 +15,6 @@ export default function Home() {
     const managed = groups.find((g) => g.role !== 'MEMBER' || g.specialRoles.length > 0);
     if (managed) router.replace(`/g/${managed.groupId}/overview`);
     else if (groups.length) router.replace('/home');
-    else if (platformRoleHas(me.platformRole, 'platform.view_stats')) router.replace('/platform');
-    else if (platformRoleHas(me.platformRole, 'platform.support')) router.replace('/platform/support');
     else router.replace('/chamas');
   }, [me, groups, router]);
   return <LoadingRows rows={4} />;

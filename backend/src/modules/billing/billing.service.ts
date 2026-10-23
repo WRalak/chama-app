@@ -314,7 +314,7 @@ export class BillingService {
       });
       if (done) {
         this.entitlements.invalidate(p.groupId);
-        if (staff) await this.audit.log({ groupId: p.groupId, actorUserId: staff.userId, action: 'platform.billing_manual_confirmed', entityType: 'BillingPayment', entityId: p.id, reference: staff.providerRef ?? null, meta: staff.meta });
+        if (staff) await this.audit.log({ groupId: p.groupId, actorUserId: null, action: 'platform.billing_manual_confirmed', entityType: 'BillingPayment', entityId: p.id, reference: staff.providerRef ?? null, meta: staff.meta });
         await this.notifyOfficers(p.groupId, `Payment received: ChamaHub ${p.plan.name}`, `${formatMoney(n(p.amountMinor), p.currency)} received (receipt ${receipt}). Thank you.`, `billing:paid:${p.id}`);
       }
       return done ? 'SUCCEEDED' : 'ALREADY';
@@ -580,7 +580,7 @@ export class BillingService {
     if (endsAt.getTime() - Date.now() > 366 * 86_400_000) throw new UnprocessableEntityException('Promotional access can last at most a year.');
     const g = await this.prisma.promotionalGrant.create({ data: { groupId, planId: plan.id, reason: input.reason, endsAt, grantedById: staffId } });
     await this.event({ groupId, type: 'promotion_granted', toPlan: plan.code, actorUserId: staffId, reason: input.reason, meta: { endsAt: endsAt.toISOString() } });
-    await this.audit.log({ groupId, actorUserId: staffId, action: 'platform.promotion_granted', entityType: 'PromotionalGrant', entityId: g.id, after: { plan: plan.code, endsAt: endsAt.toISOString() }, reason: input.reason, meta });
+    await this.audit.log({ groupId, actorUserId: null, action: 'platform.promotion_granted', entityType: 'PromotionalGrant', entityId: g.id, after: { plan: plan.code, endsAt: endsAt.toISOString() }, reason: input.reason, meta });
     this.entitlements.invalidate(groupId);
     return { id: g.id };
   }
@@ -591,7 +591,7 @@ export class BillingService {
     if (g.revokedAt) throw new ConflictException('Already revoked');
     await this.prisma.promotionalGrant.update({ where: { id: g.id }, data: { revokedAt: new Date(), revokedById: staffId, revokeReason: reason } });
     await this.event({ groupId, type: 'promotion_revoked', fromPlan: g.plan.code, actorUserId: staffId, reason });
-    await this.audit.log({ groupId, actorUserId: staffId, action: 'platform.promotion_revoked', entityType: 'PromotionalGrant', entityId: g.id, reason, meta });
+    await this.audit.log({ groupId, actorUserId: null, action: 'platform.promotion_revoked', entityType: 'PromotionalGrant', entityId: g.id, reason, meta });
     this.entitlements.invalidate(groupId);
     return { ok: true };
   }
@@ -619,7 +619,7 @@ export class BillingService {
       if (outcome.status === 'FAILED') throw new ServiceUnavailableException('The provider refused the refund. Nothing was changed.');
     }
     const refund = await this.recordRefund(p.id, input.amountMinor, input.reason, outcome.providerRef, outcome.status, staffId);
-    await this.audit.log({ groupId: p.groupId, actorUserId: staffId, action: 'platform.billing_refund', entityType: 'BillingPayment', entityId: p.id, after: { amountMinor: input.amountMinor, currency: p.currency, status: outcome.status }, reason: input.reason, reference: p.reference, meta });
+    await this.audit.log({ groupId: p.groupId, actorUserId: null, action: 'platform.billing_refund', entityType: 'BillingPayment', entityId: p.id, after: { amountMinor: input.amountMinor, currency: p.currency, status: outcome.status }, reason: input.reason, reference: p.reference, meta });
     return refund;
   }
 

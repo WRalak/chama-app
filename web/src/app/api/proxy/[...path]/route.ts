@@ -24,6 +24,8 @@ async function refresh(refreshToken: string): Promise<AuthTokens | null> {
 async function handle(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   if (!sameOrigin(req)) return NextResponse.json({ message: 'Cross-site request blocked' }, { status: 403 });
   const { path } = await ctx.params;
+  // Staff routes have their own proxy and cookies (/api/platform/proxy); member tokens never go there.
+  if (path[0] === 'platform') return NextResponse.json({ message: 'Not found' }, { status: 404 });
   const target = path.map(encodeURIComponent).join('/');
   const jar = await cookies();
   const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await req.arrayBuffer();

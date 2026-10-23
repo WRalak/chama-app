@@ -19,11 +19,11 @@ import {
   revenueQuerySchema,
 } from '@chamahub/shared';
 import { z } from 'zod';
-import { AuditService } from '../../common/audit.service';
-import { CurrentUser, ReqMeta, RequirePlatform } from '../../common/decorators';
+import { CurrentStaff, PlatformApi, ReqMeta, RequirePlatform } from '../../common/decorators';
 import { big, n } from '../../common/money';
 import { paginate, skipTake } from '../../common/pagination';
-import { AuthContext, RequestMeta } from '../../common/request';
+import { RequestMeta, StaffContext } from '../../common/request';
+import { PlatformAuditService } from '../platform-auth/platform-audit.service';
 import { ZodPipe } from '../../common/zod.pipe';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BillingService, toPaymentRow } from './billing.service';
@@ -45,11 +45,12 @@ const paymentQuery = paginationSchema.extend({
  * payments, never a group's contributions, loans or ledger. Each area has its own permission:
  * viewing billing, managing it (promotions, cases), refunds, revenue, and finance records.
  */
+@PlatformApi()
 @Controller('platform')
 export class PlatformBillingController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
+    private readonly audit: PlatformAuditService,
     private readonly billing: BillingService,
     private readonly entitlements: EntitlementService,
     private readonly revenue: RevenueService,
@@ -108,15 +109,15 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_BILLING)
   @Post('billing/groups/:id/promotions')
-  grant(@Param('id') groupId: string, @Body(new ZodPipe(promoGrantSchema)) body: z.infer<typeof promoGrantSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    return this.billing.grantPromotion(groupId, body, user.id, meta);
+  grant(@Param('id') groupId: string, @Body(new ZodPipe(promoGrantSchema)) body: z.infer<typeof promoGrantSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    return this.audited(staff, meta, 'platform.promotion_granted', 'Group', groupId, body.reason, () => this.billing.grantPromotion(groupId, body, staff.accountId, meta), { plan: body.planCode, endsAt: body.endsAt });
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_BILLING)
   @HttpCode(200)
   @Post('billing/groups/:id/promotions/:promoId/revoke')
-  revoke(@Param('id') groupId: string, @Param('promoId') id: string, @Body(new ZodPipe(promoRevokeSchema)) body: z.infer<typeof promoRevokeSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    return this.billing.revokePromotion(groupId, id, body.reason, user.id, meta);
+  revoke(@Param('id') groupId: string, @Param('promoId') id: string, @Body(new ZodPipe(promoRevokeSchema)) body: z.infer<typeof promoRevokeSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    return this.audited(staff, meta, 'platform.promotion_revoked', 'PromotionalGrant', id, body.reason, () => this.billing.revokePromotion(groupId, id, body.reason, staff.accountId, meta));
   }
 
   /* ---------------- payments ---------------- */
@@ -146,24 +147,24 @@ export class PlatformBillingController {
   @RequirePlatform(PP.PLATFORM_MANAGE_BILLING)
   @HttpCode(200)
   @Post('billing/payments/:id/reconcile')
-  async reconcile(@Param('id') id: string, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async reconcile(@Param('id') id: string, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const status = await this.billing.reconcile(id);
-    await this.audit.log({ actorUserId: user.id, action: 'platform.billing_reconciled', entityType: 'BillingPayment', entityId: id, after: { status }, meta });
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.billing_reconciled', targetType: 'BillingPayment', targetId: id, after: { status }, meta });
     return this.billing.paymentRow(id);
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_FINANCE)
   @HttpCode(200)
   @Post('billing/payments/:id/confirm-manual')
-  async confirmManual(@Param('id') id: string, @Body(new ZodPipe(z.object({ bankReference: z.string().trim().min(4).max(60) }))) body: { bankReference: string }, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    await this.billing.confirmManual(id, body, user.id, meta);
+  async confirmManual(@Param('id') id: string, @Body(new ZodPipe(z.object({ bankReference: z.string().trim().min(4).max(60) }))) body: { bankReference: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    await this.audited(staff, meta, 'platform.billing_manual_confirmed', 'BillingPayment', id, null, () => this.billing.confirmManual(id, body, staff.accountId, meta), { bankReference: body.bankReference });
     return this.billing.paymentRow(id);
   }
 
   @RequirePlatform(PP.PLATFORM_REFUND)
   @Post('billing/payments/:id/refund')
-  refund(@Param('id') id: string, @Body(new ZodPipe(refundSchema)) body: z.infer<typeof refundSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    return this.billing.refund(id, body, user.id, meta);
+  refund(@Param('id') id: string, @Body(new ZodPipe(refundSchema)) body: z.infer<typeof refundSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    return this.audited(staff, meta, 'platform.billing_refund', 'BillingPayment', id, body.reason, () => this.billing.refund(id, body, staff.accountId, meta), { amountMinor: body.amountMinor });
   }
 
   @RequirePlatform(PP.PLATFORM_VIEW_BILLING)
@@ -209,11 +210,11 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_CONFIGURE)
   @Put('billing/providers/availability')
-  async availability(@Body(new ZodPipe(providerAvailabilitySchema)) body: z.infer<typeof providerAvailabilitySchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async availability(@Body(new ZodPipe(providerAvailabilitySchema)) body: z.infer<typeof providerAvailabilitySchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     if (!this.providers.get(body.provider)) throw new UnprocessableEntityException('Unknown provider');
     const before = await this.prisma.billingProviderAvailability.findUnique({ where: { provider_countryCode_currency: { provider: body.provider, countryCode: body.countryCode, currency: body.currency } } });
     const row = await this.prisma.billingProviderAvailability.upsert({ where: { provider_countryCode_currency: { provider: body.provider, countryCode: body.countryCode, currency: body.currency } }, create: body, update: body });
-    await this.audit.log({ actorUserId: user.id, action: 'platform.provider_availability_changed', entityType: 'BillingProviderAvailability', entityId: row.id, before, after: body, meta });
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.provider_availability_changed', targetType: 'BillingProviderAvailability', targetId: row.id, before, after: body, meta });
     return row;
   }
 
@@ -230,20 +231,20 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_VIEW_BILLING)
   @Post('billing/cases')
-  async createCase(@Body(new ZodPipe(billingCaseSchema)) body: z.infer<typeof billingCaseSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    const c = await this.billing.openCase(body, user.id);
-    await this.audit.log({ groupId: body.groupId ?? null, actorUserId: user.id, action: 'platform.billing_case_opened', entityType: 'BillingCase', entityId: c.id, after: { subject: body.subject }, meta });
+  async createCase(@Body(new ZodPipe(billingCaseSchema)) body: z.infer<typeof billingCaseSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    const c = await this.billing.openCase(body, staff.accountId);
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.billing_case_opened', targetType: 'BillingCase', targetId: c.id, after: { subject: body.subject }, meta });
     return { id: c.id };
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_BILLING)
   @Patch('billing/cases/:id')
-  async updateCase(@Param('id') id: string, @Body(new ZodPipe(billingCaseUpdateSchema)) body: z.infer<typeof billingCaseUpdateSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async updateCase(@Param('id') id: string, @Body(new ZodPipe(billingCaseUpdateSchema)) body: z.infer<typeof billingCaseUpdateSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const before = await this.prisma.billingCase.findUnique({ where: { id } });
     if (!before) throw new NotFoundException('Case not found');
     if (body.status === 'RESOLVED' && !(body.resolution ?? before.resolution)) throw new UnprocessableEntityException('Write how the case was resolved.');
-    const c = await this.prisma.billingCase.update({ where: { id }, data: { status: body.status, resolution: body.resolution ?? undefined, assignedToId: body.assignToMe ? user.id : undefined } });
-    await this.audit.log({ groupId: c.groupId, actorUserId: user.id, action: 'platform.billing_case_updated', entityType: 'BillingCase', entityId: id, before: { status: before.status }, after: { status: c.status, resolution: c.resolution }, meta });
+    const c = await this.prisma.billingCase.update({ where: { id }, data: { status: body.status, resolution: body.resolution ?? undefined, assignedToId: body.assignToMe ? staff.accountId : undefined } });
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.billing_case_updated', targetType: 'BillingCase', targetId: id, before: { status: before.status }, after: { status: c.status, resolution: c.resolution }, meta });
     return { ok: true };
   }
 
@@ -258,20 +259,20 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_PLANS)
   @Put('plans/:code')
-  async upsertPlan(@Param('code') code: string, @Body(new ZodPipe(planUpsertSchema)) body: z.infer<typeof planUpsertSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async upsertPlan(@Param('code') code: string, @Body(new ZodPipe(planUpsertSchema)) body: z.infer<typeof planUpsertSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     if (body.code !== code.toUpperCase()) throw new UnprocessableEntityException('The plan code in the URL and body differ.');
     if (body.code === 'FREE' && (!body.active || body.tier !== 0)) throw new UnprocessableEntityException('The Free plan must stay active at tier 0: groups fall back to it.');
     const before = await this.prisma.plan.findUnique({ where: { code: body.code } });
     const data = { name: body.name, description: body.description ?? null, tier: body.tier, entitlements: body.entitlements as unknown as Prisma.InputJsonValue, active: body.active, isPublic: body.isPublic };
     const p = await this.prisma.plan.upsert({ where: { code: body.code }, create: { code: body.code, ...data }, update: data });
-    await this.audit.log({ actorUserId: user.id, action: before ? 'platform.plan_updated' : 'platform.plan_created', entityType: 'Plan', entityId: p.id, before, after: body, meta });
+    await this.audit.log({ actorAccountId: staff.accountId, action: before ? 'platform.plan_updated' : 'platform.plan_created', targetType: 'Plan', targetId: p.id, before, after: body, meta });
     this.entitlements.invalidate();
     return { id: p.id };
   }
 
   @RequirePlatform(PP.PLATFORM_MANAGE_PLANS)
   @Put('plan-prices')
-  async upsertPrice(@Body(new ZodPipe(planPriceSchema)) body: z.infer<typeof planPriceSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async upsertPrice(@Body(new ZodPipe(planPriceSchema)) body: z.infer<typeof planPriceSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     const plan = await this.prisma.plan.findUnique({ where: { code: body.planCode } });
     if (!plan) throw new NotFoundException('Plan not found');
     if (plan.tier === 0 && body.amountMinor > 0) throw new UnprocessableEntityException('The Free plan has no price.');
@@ -279,7 +280,7 @@ export class PlatformBillingController {
     const before = await this.prisma.planPrice.findUnique({ where: key });
     // Existing subscriptions keep the price they paid (stored on the subscription); new checkouts use this one.
     const row = await this.prisma.planPrice.upsert({ where: key, create: { planId: plan.id, countryCode: body.countryCode, currency: body.currency, interval: body.interval, amountMinor: big(body.amountMinor), active: body.active }, update: { amountMinor: big(body.amountMinor), active: body.active } });
-    await this.audit.log({ actorUserId: user.id, action: 'platform.price_changed', entityType: 'PlanPrice', entityId: row.id, before: before ? { amountMinor: n(before.amountMinor), active: before.active } : null, after: body, meta });
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.price_changed', targetType: 'PlanPrice', targetId: row.id, before: before ? { amountMinor: n(before.amountMinor), active: before.active } : null, after: body, meta });
     return { id: row.id };
   }
 
@@ -295,7 +296,7 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_CONFIGURE)
   @Put('regions/:countryCode')
-  async upsertRegion(@Param('countryCode') countryCode: string, @Body(new ZodPipe(regionSchema)) body: z.infer<typeof regionSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async upsertRegion(@Param('countryCode') countryCode: string, @Body(new ZodPipe(regionSchema)) body: z.infer<typeof regionSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     if (body.countryCode !== countryCode.toUpperCase()) throw new UnprocessableEntityException('The country in the URL and body differ.');
     if ((body.available || body.billingAvailable) && !LAUNCH_READY_CURRENCIES.includes(body.defaultCurrency)) {
       throw new ConflictException(`${body.defaultCurrency} is not launch-ready: notifications, PDFs and AI answers still format amounts in KES. Finish that work before opening ${body.name}.`);
@@ -305,7 +306,7 @@ export class PlatformBillingController {
     }
     const before = await this.prisma.region.findUnique({ where: { countryCode: body.countryCode } });
     const row = await this.prisma.region.upsert({ where: { countryCode: body.countryCode }, create: { ...body, notes: body.notes ?? null }, update: { ...body, notes: body.notes ?? null } });
-    await this.audit.log({ actorUserId: user.id, action: 'platform.region_changed', entityType: 'Region', entityId: row.countryCode, before, after: body, meta });
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.region_changed', targetType: 'Region', targetId: row.countryCode, before, after: body, meta });
     return row;
   }
 
@@ -327,10 +328,10 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_FINANCE)
   @Post('finance/exchange-rates')
-  async addRate(@Body(new ZodPipe(exchangeRateSchema)) body: z.infer<typeof exchangeRateSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
+  async addRate(@Body(new ZodPipe(exchangeRateSchema)) body: z.infer<typeof exchangeRateSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
     try {
-      const r = await this.prisma.exchangeRate.create({ data: { baseCurrency: body.baseCurrency, quoteCurrency: body.quoteCurrency, rate: new Prisma.Decimal(body.rate), asOf: new Date(`${body.asOf}T00:00:00Z`), source: body.source, createdById: user.id } });
-      await this.audit.log({ actorUserId: user.id, action: 'platform.exchange_rate_recorded', entityType: 'ExchangeRate', entityId: r.id, after: body, meta });
+      const r = await this.prisma.exchangeRate.create({ data: { baseCurrency: body.baseCurrency, quoteCurrency: body.quoteCurrency, rate: new Prisma.Decimal(body.rate), asOf: new Date(`${body.asOf}T00:00:00Z`), source: body.source, createdById: staff.accountId } });
+      await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.exchange_rate_recorded', targetType: 'ExchangeRate', targetId: r.id, after: body, meta });
       return { id: r.id };
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') throw new ConflictException('A rate for this pair and date is already recorded. Rates are never edited; record the next date instead.');
@@ -348,9 +349,9 @@ export class PlatformBillingController {
 
   @RequirePlatform(PP.PLATFORM_MANAGE_FINANCE)
   @Post('finance/costs')
-  async addCost(@Body(new ZodPipe(operatingCostSchema)) body: z.infer<typeof operatingCostSchema>, @CurrentUser() user: AuthContext, @ReqMeta() meta: RequestMeta) {
-    const c = await this.prisma.operatingCost.create({ data: { category: body.category, description: body.description, currency: body.currency, amountMinor: big(body.amountMinor), incurredOn: new Date(`${body.incurredOn}T00:00:00Z`), source: body.source ?? null, recordedById: user.id } });
-    await this.audit.log({ actorUserId: user.id, action: 'platform.cost_recorded', entityType: 'OperatingCost', entityId: c.id, after: body, meta });
+  async addCost(@Body(new ZodPipe(operatingCostSchema)) body: z.infer<typeof operatingCostSchema>, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    const c = await this.prisma.operatingCost.create({ data: { category: body.category, description: body.description, currency: body.currency, amountMinor: big(body.amountMinor), incurredOn: new Date(`${body.incurredOn}T00:00:00Z`), source: body.source ?? null, recordedById: staff.accountId } });
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.cost_recorded', targetType: 'OperatingCost', targetId: c.id, after: body, meta });
     return { id: c.id };
   }
 
@@ -380,10 +381,27 @@ export class PlatformBillingController {
     };
   }
 
+  /** Staff (platform accounts) or, for checkout events, the group officer who paid. */
   private async names(ids: (string | null | undefined)[]) {
     const unique = [...new Set(ids.filter((x): x is string => !!x && x !== 'system' && x !== 'provider'))];
-    const users = unique.length ? await this.prisma.user.findMany({ where: { id: { in: unique } }, select: { id: true, fullName: true } }) : [];
-    return new Map(users.map((u) => [u.id, u.fullName]));
+    if (!unique.length) return new Map<string, string>();
+    const [staff, users] = await Promise.all([
+      this.prisma.platformAccount.findMany({ where: { id: { in: unique } }, select: { id: true, fullName: true } }),
+      this.prisma.user.findMany({ where: { id: { in: unique } }, select: { id: true, fullName: true } }),
+    ]);
+    return new Map([...users, ...staff].map((u) => [u.id, u.fullName]));
+  }
+
+  /** Runs a staff action and records it in the platform audit trail, including when it fails. */
+  private async audited<T>(staff: StaffContext, meta: RequestMeta, action: string, targetType: string, targetId: string, reason: string | null, run: () => Promise<T>, after?: Record<string, unknown>): Promise<T> {
+    try {
+      const out = await run();
+      await this.audit.log({ actorAccountId: staff.accountId, action, targetType, targetId, reason, after, meta });
+      return out;
+    } catch (err) {
+      await this.audit.log({ actorAccountId: staff.accountId, action, targetType, targetId, reason, after, outcome: 'FAILURE', meta });
+      throw err;
+    }
   }
 }
 

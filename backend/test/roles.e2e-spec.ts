@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { todayInNairobi } from '@chamahub/shared';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { testOtpOutbox } from '../src/modules/auth/otp.service';
-import { as, createGroupWith, createTestApp, idem, registerUser, resetDatabase, TestUser } from './helpers';
+import { as, createGroupWith, createStaff, createTestApp, idem, registerUser, resetDatabase, TestUser } from './helpers';
 
 describe('Roles: platform vs Chama, multi-group, configurable within safeguards', () => {
   let app: INestApplication;
@@ -135,40 +135,36 @@ describe('Roles: platform vs Chama, multi-group, configurable within safeguards'
     expect(list[0]).toMatchObject({ status: 'RESOLVED', respondedByName: 'Mary Wanjiku', canRespond: false });
   });
 
-  it('scopes platform roles: support agent, platform admin, super admin', async () => {
-    const supportAgent = await registerUser(app, 'Support Sam');
-    const platformAdmin = await registerUser(app, 'Ops Olive');
-    const superAdmin = await registerUser(app, 'Root Rose');
-    await prisma.user.update({ where: { id: superAdmin.id }, data: { platformRole: 'SUPER_ADMIN' } });
-    // Only a super admin can appoint platform staff (role change signs the user out).
-    await as(app, superAdmin).patch(`/v1/platform/users/${supportAgent.id}/platform-role`, { platformRole: 'SUPPORT', reason: 'Hired as support agent' }).expect(200);
-    await as(app, superAdmin).patch(`/v1/platform/users/${platformAdmin.id}/platform-role`, { platformRole: 'PLATFORM_ADMIN', reason: 'Operations lead' }).expect(200);
-    await as(app, superAdmin).patch(`/v1/platform/users/${superAdmin.id}/platform-role`, { platformRole: 'USER', reason: 'Cannot change own role' }).expect(403);
-    const relog = async (u: TestUser) => {
-      const r = await (await import('supertest')).default(app.getHttpServer()).post('/v1/auth/login').send({ phone: u.phone, password: 'Passw0rd!' }).expect(200);
-      u.token = r.body.tokens.accessToken;
-    };
-    await relog(supportAgent);
-    await relog(platformAdmin);
+  it('scopes platform staff roles; Chama roles never grant portal access', async () => {
+    const helper = await createStaff(app, prisma, 'Support Sam', ['SUPPORT_HELPER']);
+    const platformAdmin = await createStaff(app, prisma, 'Ops Olive', ['PLATFORM_ADMIN']);
+    const owner = await createStaff(app, prisma, 'Root Rose', ['OWNER']);
 
-    // Support agent: tickets and account help, no stats, no plans, no finances.
-    await as(app, supportAgent).get('/v1/platform/support-tickets').expect(200);
-    await as(app, supportAgent).get('/v1/platform/overview').expect(403);
-    await as(app, supportAgent).put('/v1/platform/plans/X1', { code: 'X1', name: 'X', tier: 5, entitlements: { features: [], limits: { maxMembers: 5 } }, active: true, isPublic: false }).expect(403);
-    await as(app, supportAgent).get(`/v1/groups/${A.groupId}/contributions/ledger`).expect(404);
-    await as(app, supportAgent).post(`/v1/platform/users/${member.id}/send-reset-code`, { reason: 'Member lost access to phone PIN' }).expect(200);
+    // A chairperson's member token is not a staff token.
+    await as(app, chairA).get('/v1/platform/dashboard').expect(401);
+    await as(app, chairA).get('/v1/platform/users').expect(401);
+    // …and a staff token is not a member token.
+    await as(app, owner).get(`/v1/groups/${A.groupId}/contributions/ledger`).expect(401);
+
+    // Support helper: own cases and requesting access, no stats, no plans, no account actions.
+    await as(app, helper).get('/v1/platform/support/cases').expect(200);
+    await as(app, helper).get('/v1/platform/dashboard').expect(403);
+    await as(app, helper).get('/v1/platform/users').expect(403);
+    await as(app, helper).put('/v1/platform/plans/X1', { code: 'X1', name: 'X', tier: 5, entitlements: { features: [], limits: { maxMembers: 5 } }, active: true, isPublic: false }).expect(403);
+    await as(app, helper).post(`/v1/platform/users/${member.id}/send-reset-code`, { reason: 'Member lost access to phone PIN' }).expect(403);
+
+    // Platform admin: operations and account help, but not staff admins, settings or revenue.
+    await as(app, platformAdmin).get('/v1/platform/dashboard').expect(200);
+    await as(app, platformAdmin).post(`/v1/platform/users/${member.id}/send-reset-code`, { reason: 'Member lost access to phone PIN' }).expect(200);
     expect(testOtpOutbox.get(`${member.phone}:RESET_PASSWORD`)).toMatch(/^\d{6}$/);
+    await as(app, platformAdmin).patch('/v1/platform/settings', { smsEnabled: false }).expect(403);
+    await as(app, platformAdmin).post(`/v1/platform/staff/${owner.id}/suspend`, { reason: 'Cannot suspend an owner' }).expect(403);
+    expect((await as(app, platformAdmin).get('/v1/platform/dashboard').expect(200)).body.revenue).toBeNull();
 
-    // Platform admin: operations, but not staff management or platform configuration.
-    await as(app, platformAdmin).get('/v1/platform/overview').expect(200);
-    await as(app, platformAdmin).get('/v1/platform/staff').expect(403);
-    await as(app, platformAdmin).patch('/v1/platform/settings', { smsEnabled: false, whatsappEnabled: true, emailEnabled: true, maxSupportAccessHours: 4, trialDays: 14, maintenanceNotice: null }).expect(403);
-    await as(app, platformAdmin).post(`/v1/platform/users/${superAdmin.id}/status`, { disabled: true, reason: 'Cannot suspend a super admin' }).expect(403);
-
-    // Super admin: configuration, still no implicit access to group finances.
-    await as(app, superAdmin).patch('/v1/platform/settings', { smsEnabled: true, whatsappEnabled: true, emailEnabled: true, maxSupportAccessHours: 4, trialDays: 14, maintenanceNotice: null }).expect(200);
-    await as(app, superAdmin).get(`/v1/groups/${A.groupId}/contributions/ledger`).expect(404);
-    await as(app, supportAgent).post('/v1/platform/support-access', { groupId: A.groupId, purpose: 'Investigate reported issue', hours: 24 }).expect(403); // over the 4h policy
+    // Owner: configuration, still no implicit access to group finances.
+    await as(app, owner).patch('/v1/platform/settings', { maxSupportAccessHours: 4 }).expect(200);
+    expect((await as(app, owner).get('/v1/platform/dashboard').expect(200)).body.revenue).not.toBeNull();
+    await as(app, owner).post('/v1/platform/support-access', { groupId: A.groupId, purpose: 'Investigate reported issue', hours: 24 }).expect(403); // over the 4h policy
   });
 
   it('lets import approvers open batches they must review, without letting them upload', async () => {

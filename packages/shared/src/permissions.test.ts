@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { platformRoleHas, resolvePermissions, ROLE_PERMISSIONS, sanitizeRolePermissions } from './permissions';
+import { PRIVILEGED_PLATFORM_PERMISSIONS, resolvePermissions, SYSTEM_PLATFORM_ROLES, ROLE_PERMISSIONS, sanitizeRolePermissions } from './permissions';
 
 describe('Chama role matrix', () => {
   it('follows the separation-of-duties defaults', () => {
@@ -32,11 +32,19 @@ describe('Chama role matrix', () => {
 });
 
 describe('platform roles', () => {
-  it('scopes each platform role', () => {
-    expect(platformRoleHas('SUPPORT', 'platform.support')).toBe(true);
-    expect(platformRoleHas('SUPPORT', 'platform.view_stats')).toBe(false);
-    expect(platformRoleHas('PLATFORM_ADMIN', 'platform.manage_plans')).toBe(true);
-    expect(platformRoleHas('PLATFORM_ADMIN', 'platform.manage_admins')).toBe(false);
-    expect(platformRoleHas('SUPER_ADMIN', 'platform.manage_admins')).toBe(true);
+  const role = (code: string) => SYSTEM_PLATFORM_ROLES.find((r) => r.code === code)!.permissions;
+  it('gives helpers and analysts least privilege', () => {
+    expect(role('SUPPORT_HELPER')).toEqual(['platform.support', 'platform.request_group_access']);
+    expect(role('ANALYST')).toEqual(['platform.view_stats']);
+    for (const p of PRIVILEGED_PLATFORM_PERMISSIONS) {
+      expect(role('SUPPORT_HELPER')).not.toContain(p);
+      // Platform admins manage helpers (which makes their own accounts administrator-class) but hold nothing else privileged.
+      if (p !== 'platform.manage_helpers') expect(role('PLATFORM_ADMIN')).not.toContain(p);
+    }
+    expect(PRIVILEGED_PLATFORM_PERMISSIONS).toContain('platform.manage_helpers');
+    expect(role('PLATFORM_ADMIN')).not.toContain('platform.manage_admins');
+  });
+  it('gives the owner everything', () => {
+    expect(role('OWNER')).toEqual(expect.arrayContaining([...PRIVILEGED_PLATFORM_PERMISSIONS, 'platform.manage_helpers', 'platform.view_audit']));
   });
 });

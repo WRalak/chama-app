@@ -18,14 +18,6 @@ datasource db {
 
 // ───────────────────────────── enums ─────────────────────────────
 
-enum PlatformRole {
-  USER
-  SUPPORT
-  PLATFORM_ADMIN
-  FINANCE
-  SUPER_ADMIN
-}
-
 enum SpecialRole {
   LOAN_COMMITTEE
   PAYOUT_APPROVER
@@ -75,6 +67,8 @@ enum GroupType {
 enum GroupStatus {
   ACTIVE
   ARCHIVED
+  /// Stopped by ChamaHub staff (e.g. suspected fraud); reversible, audited.
+  SUSPENDED
 }
 
 enum GroupRole {
@@ -394,6 +388,7 @@ enum NotificationType {
   ROTATION_UPDATED
   DESTINATION_CHANGED
   BILLING
+  SUPPORT
 }
 
 enum NotificationChannel {
@@ -520,24 +515,23 @@ enum JobStatus {
 // ───────────────────────────── identity ─────────────────────────────
 
 model User {
-  id                  String       @id @default(cuid())
+  id                  String    @id @default(cuid())
   fullName            String
-  phone               String       @unique
-  email               String?      @unique
+  phone               String    @unique
+  email               String?   @unique
   passwordHash        String
   phoneVerifiedAt     DateTime?
-  platformRole        PlatformRole @default(USER)
-  preferences         Json         @default("{}")
+  preferences         Json      @default("{}")
   /// App language (en, sw, …).
-  locale              String       @default("en")
+  locale              String    @default("en")
   nationalIdLast4     String?
-  failedLoginCount    Int          @default(0)
+  failedLoginCount    Int       @default(0)
   lockedUntil         DateTime?
   deletionRequestedAt DateTime?
   deletionReason      String?
   disabledAt          DateTime?
-  createdAt           DateTime     @default(now())
-  updatedAt           DateTime     @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   sessions        Session[]
   pushDevices     PushDevice[]
@@ -546,6 +540,7 @@ model User {
   invitationsSent Invitation[]   @relation("InvitedBy")
   groupsCreated   Group[]        @relation("GroupCreatedBy")
   auditEvents     AuditEvent[]
+  supportCases    SupportCase[]
 
   @@map("users")
 }
@@ -630,6 +625,7 @@ model Group {
   subscription     Subscription?
   promotions       PromotionalGrant[]
   billingPayments  BillingPayment[]
+  supportCases     SupportCase[]
   approvals        Approval[]
   unmatched        UnmatchedPayment[]
   supportGrants    SupportAccessGrant[]
@@ -700,7 +696,11 @@ model Invitation {
 model SupportAccessGrant {
   id                    String             @id @default(cuid())
   groupId               String
-  requestedByUserId     String
+  /// Legacy: staff used to be member accounts.
+  requestedByUserId     String?
+  /// The platform staff account that asked.
+  requestedByAccountId  String?
+  requestedByAccount    PlatformAccount?   @relation(fields: [requestedByAccountId], references: [id], onDelete: Restrict)
   purpose               String
   hours                 Int
   status                SupportGrantStatus @default(PENDING)
@@ -712,6 +712,7 @@ model SupportAccessGrant {
   group Group @relation(fields: [groupId], references: [id])
 
   @@index([requestedByUserId, groupId])
+  @@index([requestedByAccountId, groupId])
   @@map("support_access_grants")
 }
 
@@ -1758,18 +1759,6 @@ model Dispute {
   @@map("disputes")
 }
 
-model SupportTicket {
-  id        String   @id @default(cuid())
-  userId    String?
-  groupId   String?
-  subject   String
-  body      String
-  status    String   @default("OPEN")
-  createdAt DateTime @default(now())
-
-  @@map("support_tickets")
-}
-
 model JobRun {
   id         String    @id @default(cuid())
   name       String
@@ -2120,4 +2109,289 @@ model OfficerHandover {
 
   @@index([groupId, createdAt])
   @@map("officer_handovers")
+}
+
+// ───────────────────────────── platform administration portal ─────────────────────────────
+// Staff identities are separate from Chama members: a treasurer in a Chama is never a platform
+// administrator because of that membership. Staff sign in with e-mail and password (scrypt), have
+// database-backed roles and permissions, and every sensitive action is in platform_audit_log.
+
+enum PlatformAccountStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+model PlatformAccount {
+  id                String                @id @default(cuid())
+  /// Stored lower-case.
+  email             String                @unique
+  fullName          String
+  /// scrypt$N$r$p$salt$hash; null until the invitation is accepted. Never returned by the API.
+  passwordHash      String?
+  status            PlatformAccountStatus @default(INVITED)
+  team              String?
+  /// TOTP secret, encrypted (AES-256-GCM) with a key derived from the platform token secret.
+  mfaSecret         String?
+  mfaEnabled        Boolean               @default(false)
+  failedLoginCount  Int                   @default(0)
+  lockedUntil       DateTime?
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  /// Temporary helpers stop working after this time.
+  expiresAt         DateTime?
+  createdById       String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  roles          PlatformAccountRole[]
+  permissions    PlatformAccountPermission[]
+  sessions       PlatformSession[]
+  invitations    PlatformInvitation[]
+  passwordResets PlatformPasswordReset[]
+  assignedCases  SupportCase[]
+  supportGrants  SupportAccessGrant[]
+
+  @@index([status])
+  @@map("platform_accounts")
+}
+
+model PlatformStaffRole {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  /// Built-in roles cannot be deleted; the owner role's permissions cannot be reduced.
+  system      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions PlatformRolePermission[]
+  accounts    PlatformAccountRole[]
+
+  @@map("platform_roles")
+}
+
+model PlatformRolePermission {
+  roleId     String
+  permission String
+
+  role PlatformStaffRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permission])
+  @@map("platform_role_permissions")
+}
+
+model PlatformAccountRole {
+  accountId   String
+  roleId      String
+  grantedById String?
+  createdAt   DateTime @default(now())
+
+  account PlatformAccount   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  role    PlatformStaffRole @relation(fields: [roleId], references: [id])
+
+  @@id([accountId, roleId])
+  @@map("platform_account_roles")
+}
+
+/// Individual permissions granted on top of an account's roles.
+model PlatformAccountPermission {
+  accountId   String
+  permission  String
+  grantedById String?
+  createdAt   DateTime @default(now())
+
+  account PlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@id([accountId, permission])
+  @@map("platform_account_permissions")
+}
+
+/// Single-use invitation: only the SHA-256 of the token is stored.
+model PlatformInvitation {
+  id          String    @id @default(cuid())
+  accountId   String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+
+  account PlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("platform_invitations")
+}
+
+model PlatformPasswordReset {
+  id        String    @id @default(cuid())
+  accountId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  account PlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("platform_password_resets")
+}
+
+model PlatformSession {
+  id               String    @id @default(cuid())
+  accountId        String
+  refreshTokenHash String    @unique
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  lastUsedAt       DateTime  @default(now())
+  /// Absolute end of the session.
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?
+
+  account PlatformAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, revokedAt])
+  @@map("platform_sessions")
+}
+
+enum PlatformAuditOutcome {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+/// Append-only (database trigger). No passwords, tokens or payment credentials are ever written.
+model PlatformAuditLog {
+  id             String               @id @default(cuid())
+  actorAccountId String?
+  /// For actions without an account (failed login): the e-mail tried, or "system".
+  actorLabel     String?
+  action         String
+  targetType     String?
+  targetId       String?
+  outcome        PlatformAuditOutcome @default(SUCCESS)
+  reason         String?
+  requestId      String?
+  ipAddress      String?
+  userAgent      String?
+  before         Json?
+  after          Json?
+  createdAt      DateTime             @default(now())
+
+  @@index([createdAt])
+  @@index([actorAccountId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
+  @@map("platform_audit_log")
+}
+
+enum SupportCategory {
+  ACCOUNT_ACCESS
+  CONTRIBUTIONS_PAYMENTS
+  PAYOUT_ROTATION
+  LOANS_REPAYMENTS
+  SUBSCRIPTION_BILLING
+  TECHNICAL
+  FEATURE_REQUEST
+  SECURITY
+  OTHER
+}
+
+enum SupportStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_FOR_USER
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+enum SupportPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model SupportCase {
+  id               String          @id @default(cuid())
+  /// Human-friendly: CH-001234.
+  number           String          @unique
+  requesterUserId  String
+  groupId          String?
+  subject          String
+  category         SupportCategory
+  description      String
+  priority         SupportPriority @default(NORMAL)
+  status           SupportStatus   @default(OPEN)
+  assignedToId     String?
+  resolution       String?
+  escalationReason String?
+  escalatedAt      DateTime?
+  firstResponseAt  DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  requester   User                  @relation(fields: [requesterUserId], references: [id])
+  group       Group?                @relation(fields: [groupId], references: [id])
+  assignedTo  PlatformAccount?      @relation(fields: [assignedToId], references: [id])
+  messages    SupportMessage[]
+  notes       SupportInternalNote[]
+  assignments SupportAssignment[]
+
+  @@index([status, priority])
+  @@index([assignedToId, status])
+  @@index([requesterUserId, createdAt])
+  @@map("support_cases")
+}
+
+/// The conversation the user sees. Append-only.
+model SupportMessage {
+  id              String   @id @default(cuid())
+  caseId          String
+  authorUserId    String?
+  authorAccountId String?
+  body            String
+  createdAt       DateTime @default(now())
+
+  case SupportCase @relation(fields: [caseId], references: [id])
+
+  @@index([caseId, createdAt])
+  @@map("support_messages")
+}
+
+/// Staff-only notes, in their own table so no user-facing query can include them. Append-only.
+model SupportInternalNote {
+  id              String   @id @default(cuid())
+  caseId          String
+  authorAccountId String
+  body            String
+  createdAt       DateTime @default(now())
+
+  case SupportCase @relation(fields: [caseId], references: [id])
+
+  @@index([caseId, createdAt])
+  @@map("support_internal_notes")
+}
+
+/// Assignment history. Append-only.
+model SupportAssignment {
+  id           String   @id @default(cuid())
+  caseId       String
+  assignedToId String?
+  assignedById String?
+  createdAt    DateTime @default(now())
+
+  case SupportCase @relation(fields: [caseId], references: [id])
+
+  @@index([caseId, createdAt])
+  @@map("support_assignments")
 }

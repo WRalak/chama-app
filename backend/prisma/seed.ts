@@ -6,7 +6,9 @@
  * through the real services (recording → verification → ledger).
  *
  * Demo sign-in: phone 0700 000 001, password Demo1234 (all demo users share it).
- * Platform admin: phone 0700 000 099.
+ * Platform staff are NOT seeded with a known password. Either run the owner bootstrap
+ * (npm run platform:bootstrap) or set SEED_PLATFORM_PASSWORD (12+ characters, your own choice)
+ * to create demo staff accounts in development.
  */
 import 'reflect-metadata';
 process.env.DISABLE_JOBS = 'true';
@@ -16,6 +18,9 @@ import * as bcrypt from 'bcryptjs';
 import { addDays, defaultLoanPolicy, GroupRole, resolvePermissions, todayInNairobi } from '@chamahub/shared';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { hashStaffPassword } from '../src/modules/platform-auth/staff-crypto';
+import { ensureSystemRoles } from '../src/modules/platform-auth/staff-roles';
+import { SupportService } from '../src/modules/platform/support.service';
 import { MembershipContext } from '../src/common/request';
 import { ContributionsService } from '../src/modules/contributions/contributions.service';
 import { LoansService } from '../src/modules/loans/loans.service';
@@ -72,13 +77,23 @@ async function main() {
     const u = await prisma.user.create({ data: { fullName, phone, passwordHash, phoneVerifiedAt: new Date(), preferences: DEFAULT_PREFERENCES } });
     users[fullName.split(' ')[0]] = u.id;
   }
-  for (const [fullName, phone, platformRole] of [
-    ['ChamaHub Super Admin', '+254700000099', 'SUPER_ADMIN'],
-    ['ChamaHub Platform Admin', '+254700000098', 'PLATFORM_ADMIN'],
-    ['ChamaHub Support Agent', '+254700000097', 'SUPPORT'],
-    ['ChamaHub Finance', '+254700000096', 'FINANCE'],
-  ] as const) {
-    await prisma.user.create({ data: { fullName, phone, passwordHash, phoneVerifiedAt: new Date(), platformRole, preferences: DEFAULT_PREFERENCES } });
+  // Demo platform staff: only with an operator-chosen password, never a default one, never in production.
+  const staffPassword = process.env.SEED_PLATFORM_PASSWORD;
+  const staffSeeded = !!staffPassword && process.env.NODE_ENV !== 'production';
+  if (staffPassword && staffPassword.length < 12) throw new Error('SEED_PLATFORM_PASSWORD must be at least 12 characters');
+  if (staffSeeded) {
+    await ensureSystemRoles(prisma);
+    const hash = await hashStaffPassword(staffPassword!);
+    for (const [fullName, email, role] of [
+      ['Demo Owner', 'owner@staff.chamahub.test', 'OWNER'],
+      ['Demo Platform Admin', 'admin@staff.chamahub.test', 'PLATFORM_ADMIN'],
+      ['Demo Support Helper', 'helper@staff.chamahub.test', 'SUPPORT_HELPER'],
+      ['Demo Analyst', 'analyst@staff.chamahub.test', 'ANALYST'],
+      ['Demo Finance', 'finance@staff.chamahub.test', 'FINANCE'],
+    ] as const) {
+      const r = await prisma.platformStaffRole.findUniqueOrThrow({ where: { code: role } });
+      await prisma.platformAccount.create({ data: { fullName, email, passwordHash: hash, status: 'ACTIVE', passwordChangedAt: new Date(), roles: { create: { roleId: r.id } } } });
+    }
   }
   /**
    * DEMO billing: a subscription paid through the SANDBOX provider (test mode), so it never
@@ -235,12 +250,17 @@ async function main() {
   await prisma.proposal.create({ data: { groupId: mi.id, title: 'Buy the Kilifi plot', description: 'Use up to KES 300,000 from the investment fund for a deposit on the Kilifi plot, subject to valuation.', quorumPercent: 60, passPercent: 60, eligibleCount: 5, createdById: users.Amina, closesAt: new Date(Date.now() + 5 * 86_400_000) } });
   await prisma.auditFinding.create({ data: { groupId: mi.id, raisedByMembershipId: mi.ctx.Lucy.id, title: 'Venue receipt missing', details: 'The AGM venue expense has an M-Pesa code but no receipt from the hall.', severity: 'LOW' } });
 
+  // Demo help requests, opened through the same service the apps use.
+  const support = app.get(SupportService);
+  await support.open(users.Daniel, { subject: 'My March contribution shows as pending', category: 'CONTRIBUTIONS_PAYMENTS', description: 'I paid KES 2,000 by M-Pesa on 3 March but the app still shows it as pending verification.', groupId: up.id }, meta);
+  await support.open(users.Amina, { subject: 'How do I download our annual statement?', category: 'TECHNICAL', description: 'We need the statement for our AGM next week. Where do I find the PDF?', groupId: mi.id }, meta);
+
   console.log('Demo data seeded. Password for all demo users: Demo1234');
   console.log('  0700 000 001  Amina — treasurer / chairperson / member in different Chamas');
   console.log('  Upendo: 002 Peter (chair) · 003 Joyce (treasurer) · 005 Mercy (payout approver) · 004 Daniel (member)');
   console.log('  Try statement import as Joyce with docs/samples/upendo-paybill-statement-demo.csv');
   console.log('  Mombasa: 009 Lucy (secretary) · 006 Samuel (auditor) · 004 Daniel (joint signatory)');
-  console.log('  0700 000 099  Super Admin · 0700 000 098 Platform Admin · 0700 000 097 Support Agent · 0700 000 096 Finance');
+  console.log(staffSeeded ? '  Staff portal (/platform/login): owner@, admin@, helper@, analyst@, finance@staff.chamahub.test with SEED_PLATFORM_PASSWORD' : '  Staff portal: no staff seeded. Run npm run platform:bootstrap (or reseed with SEED_PLATFORM_PASSWORD set).');
   console.log('  Plans: Jitegemee Premium (paid, test mode) · Mombasa Standard annual · Upendo Premium trial · Family Welfare Free');
   await app.close();
 }

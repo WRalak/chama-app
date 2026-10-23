@@ -26,7 +26,6 @@ import type {
   PaymentMethod,
   PaymentPurpose,
   PayoutStatus,
-  PlatformRole,
   ReconciliationStatus,
   TransactionStatus,
 } from './enums';
@@ -59,7 +58,6 @@ export interface AuthUser {
   phone: string;
   email: string | null;
   phoneVerified: boolean;
-  platformRole: PlatformRole;
   /** App language: en, sw, … */
   locale: string;
   createdAt: string;
@@ -750,14 +748,6 @@ export interface FindingRow {
   createdAt: string;
   resolvedAt: string | null;
   canRespond: boolean;
-}
-
-export interface PlatformStaffRow {
-  id: string;
-  fullName: string;
-  phone: string;
-  platformRole: PlatformRole;
-  createdAt: string;
 }
 
 /* ---------- group management dashboard (mobile + web) ---------- */

@@ -7,7 +7,7 @@ ChamaHub manages multiple Chamas (savings groups) for the Kenyan market. It has 
 | Part | Path | Stack | For |
 | --- | --- | --- | --- |
 | Mobile app | `mobile` | Expo SDK 57, React Native 0.86, Expo Router, TanStack Query, React Hook Form + Zod | Members and every group officer: day-to-day management runs fully on the phone |
-| Admin dashboard | `web` | Next.js 15 App Router, Tailwind, Radix/shadcn-style UI, TanStack Table/Query, Recharts | Chama officers and platform staff |
+| Web app + staff portal | `web` | Next.js 15 App Router, Tailwind, Radix/shadcn-style UI, TanStack Table/Query, Recharts | Members and officers (`/`); ChamaHub staff (`/platform`, separate sign-in) |
 | API | `backend` | NestJS 11, Prisma 6, PostgreSQL 16 | Shared backend: all money rules and authorization |
 | Shared | `packages/shared` | TypeScript + Zod | Contracts, enums, permission matrix, integer-cent finance math |
 
@@ -44,7 +44,9 @@ npm run dev:mobile         # Expo: press w for the browser, or scan the QR code 
 | Groups | Accept invitations, join with a group code, create a Chama |
 | Notifications · Profile | Inbox; personal details, password and signed-in devices, notification channels, privacy and account deletion, support |
 
-Officers get their sections (contributions, reconciliation, statement import, payouts, loans, expenses, reports, audit, meetings, settings) in the same sidebar, filtered by their role in the selected Chama. Platform staff get **Platform administration**, separate from group management. Tables turn into cards on phones.
+Officers get their sections (contributions, reconciliation, statement import, payouts, loans, expenses, reports, audit, meetings, settings) in the same sidebar, filtered by their role in the selected Chama. Tables turn into cards on phones. Help (Profile › Help) lets members open support cases and follow the conversation; the same help centre is in the mobile app.
+
+**Staff portal** (`/platform/login`): a separate area for ChamaHub staff with its own e-mail + password sign-in, optional two-step sign-in, database-backed roles (Owner, Platform administrator, Support helper, Operations analyst, Finance, plus custom roles), helper invitations, the support inbox, users, groups, subscriptions, plans, billing, revenue, countries, integrations, feature settings, audit logs and security events. Chama roles never grant portal access. See [`docs/PLATFORM_ADMIN.md`](docs/PLATFORM_ADMIN.md).
 
 The mobile app finds the API on the computer running the Expo dev server, so a phone on the same Wi-Fi needs no configuration (allow Node through the Windows firewall when asked). Set `EXPO_PUBLIC_API_URL` only for a deployed API.
 
@@ -63,9 +65,7 @@ The mobile app finds the API on the computer running the Expo dev server, so a p
   | Secretary | `0700 000 009` (Lucy) | Mombasa Investment Chama |
   | Auditor | `0700 000 006` (Samuel) | Mombasa Investment Chama |
   | Loan committee (optional role) | `0700 000 002` (Peter) | Jitegemee Table Banking |
-- `0700 000 099` / `Demo1234` — platform super admin.
-- `0700 000 098` / `Demo1234` — platform admin.
-- `0700 000 097` / `Demo1234` — support agent (no access to group finances without a chair-approved grant).
+- Staff portal: no staff account is seeded with a known password. Either bootstrap the owner (`npm run platform:bootstrap -w @chamahub/api -- --confirm`, see `docs/PLATFORM_ADMIN.md`) or seed with `SEED_PLATFORM_PASSWORD` set to a password of your choice (12+ characters) to get `owner@`, `admin@`, `helper@`, `analyst@` and `finance@staff.chamahub.test`.
 
 Roles are per group. See `docs/ARCHITECTURE.md` → *Identity, roles and multi-Chama access* for the permission matrix, optional roles and the safeguards that bound what a group can configure.
 

@@ -34,19 +34,6 @@ export const GroupRole = {
 export type GroupRole = (typeof GroupRole)[keyof typeof GroupRole];
 export const GROUP_ROLES = values(GroupRole);
 
-export const PlatformRole = {
-  USER: 'USER',
-  /** Support Agent: tickets and account assistance, no financial records. */
-  SUPPORT: 'SUPPORT',
-  /** Platform Admin: groups, subscriptions, accounts and operations. */
-  PLATFORM_ADMIN: 'PLATFORM_ADMIN',
-  /** Finance: revenue, refunds, costs and exchange rates. No group finances, no accounts. */
-  FINANCE: 'FINANCE',
-  /** Super Admin: platform configuration, administrators and security. */
-  SUPER_ADMIN: 'SUPER_ADMIN',
-} as const;
-export type PlatformRole = (typeof PlatformRole)[keyof typeof PlatformRole];
-export const PLATFORM_ROLES = values(PlatformRole);
 
 export const MembershipStatus = {
   ACTIVE: 'ACTIVE',
@@ -290,6 +277,7 @@ export const NotificationType = {
   ROTATION_UPDATED: 'ROTATION_UPDATED',
   DESTINATION_CHANGED: 'DESTINATION_CHANGED',
   BILLING: 'BILLING',
+  SUPPORT: 'SUPPORT',
 } as const;
 export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
 
@@ -370,13 +358,6 @@ export const LABELS = {
     FAMILY: 'Family savings',
     OTHER: 'Other',
   } satisfies Record<GroupType, string>,
-  platformRole: {
-    USER: 'User',
-    SUPPORT: 'Support Agent',
-    PLATFORM_ADMIN: 'Platform Admin',
-    FINANCE: 'Finance',
-    SUPER_ADMIN: 'Super Admin',
-  } satisfies Record<PlatformRole, string>,
   groupRole: {
     CHAIRPERSON: 'Chairperson',
     VICE_CHAIRPERSON: 'Vice Chairperson',

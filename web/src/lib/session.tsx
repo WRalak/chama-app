@@ -2,8 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import type { GroupDetail, GroupMembershipSummary, MeResponse, Permission, PlatformPermission } from '@chamahub/shared';
-import { platformRoleHas } from '@chamahub/shared';
+import type { GroupDetail, GroupMembershipSummary, MeResponse, Permission } from '@chamahub/shared';
 import { api } from './api';
 
 export function useMe() {
@@ -29,9 +28,4 @@ export function useCan() {
   const { data } = useGroup();
   const perms = data?.myMembership.permissions ?? [];
   return (p: Permission) => perms.includes(p);
-}
-
-export function usePlatformCan() {
-  const { data } = useMe();
-  return (p: PlatformPermission) => (data ? platformRoleHas(data.platformRole, p) : false);
 }

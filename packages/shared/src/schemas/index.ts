@@ -506,6 +506,8 @@ export const supportAccessRequestSchema = z.object({
   groupId: z.string(),
   purpose: reasonSchema,
   hours: z.number().int().min(1).max(72),
+  /** The support case this access is for, when there is one. */
+  caseId: z.string().optional(),
 });
 export const disputeSchema = z.object({
   paymentId: z.string().optional(),
@@ -553,7 +555,6 @@ export const respondFindingSchema = z.object({ status: z.enum(['ACKNOWLEDGED', '
 
 /* ---------- platform administration ---------- */
 
-export const platformRoleSchema = z.object({ platformRole: z.enum(['USER', 'SUPPORT', 'PLATFORM_ADMIN', 'FINANCE', 'SUPER_ADMIN']), reason: reasonSchema });
 
 export const platformSettingsSchema = z.object({
   /** Kill switches for outbound channels (e.g. if a provider misbehaves). */

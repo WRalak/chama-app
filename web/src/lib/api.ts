@@ -20,16 +20,21 @@ export function qs(query?: Query) {
   return s ? `?${s}` : '';
 }
 
-/** All browser calls go through the same-origin BFF proxy, which holds the tokens. */
+/** Staff portal calls (platform/…) use the portal's own proxy and cookies; member calls use the member proxy. */
+const isStaffPath = (path: string) => path.replace(/^\//, '').startsWith('platform/');
+const proxyBase = (path: string) => (isStaffPath(path) ? '/api/platform/proxy/' : '/api/proxy/');
+
+/** All browser calls go through a same-origin BFF proxy, which holds the tokens. */
 export async function api<T>(path: string, opts: { method?: string; body?: unknown; query?: Query } = {}): Promise<T> {
-  const res = await fetch(`/api/proxy/${path.replace(/^\//, '')}${qs(opts.query)}`, {
+  const res = await fetch(`${proxyBase(path)}${path.replace(/^\//, '')}${qs(opts.query)}`, {
     method: opts.method ?? (opts.body ? 'POST' : 'GET'),
     headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
     credentials: 'same-origin',
   });
-  if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('auth/')) {
-    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+  if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('auth/') && !path.startsWith('platform/auth/')) {
+    const login = isStaffPath(path) ? '/platform/login' : '/login';
+    window.location.href = `${login}?next=${encodeURIComponent(window.location.pathname)}`;
   }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as ApiErrorBody | null;
@@ -41,7 +46,7 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
 }
 
 /** URL for file downloads (CSV/PDF) served through the proxy. */
-export const fileUrl = (path: string, query?: Query) => `/api/proxy/${path.replace(/^\//, '')}${qs(query)}`;
+export const fileUrl = (path: string, query?: Query) => `${proxyBase(path)}${path.replace(/^\//, '')}${qs(query)}`;
 
 export function errorMessage(err: unknown) {
   return err instanceof Error ? err.message : 'Something went wrong';

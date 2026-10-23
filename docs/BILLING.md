@@ -24,14 +24,14 @@ ChamaHub charges groups for the software through plans. This is completely separ
 
 ## Plans and entitlements
 
-| Plan | Members | Paid features | Kenya price (placeholder) |
+| Plan | Members | Paid features | Kenya price (illustrative) |
 | --- | --- | --- | --- |
 | Free | 15 | none: core records, statements, rotations, meetings | — |
-| Starter | 30 | new loans, contribution reminders, WhatsApp summaries | KSh 500 / month, 5,000 / year |
-| Standard | 100 | + statement import, bulk import | KSh 1,000 / month, 10,000 / year |
-| Premium | 500 | + AI assistant, priority support | KSh 2,000 / month, 20,000 / year |
+| Starter | 30 | new loans, contribution reminders, WhatsApp summaries | KSh 300 / month, 3,000 / year |
+| Standard | 100 | + statement import, bulk import | KSh 700 / month, 7,000 / year |
+| Premium | 500 | + AI assistant, priority support | KSh 1,500 / month, 15,000 / year |
 
-**These prices are placeholders seeded by the migration.** Replace them with the approved prices in Platform › Plans & pricing before taking payments.
+**These are the illustrative prices from the product brief (migration `20261028010000_kenya_illustrative_prices`): hypotheses to validate, not established market prices.** Confirm or change them in the staff portal under Plans & Pricing before taking payments. A year costs ten months.
 
 **Where the rules live**
 
@@ -97,12 +97,14 @@ upgrade ──► immediate; unused time credited (prorationCreditMinor)
 
 ## Platform roles
 
+Staff roles live in the database and can be adjusted in the portal (see `docs/PLATFORM_ADMIN.md`). Built-in defaults:
+
 | Role | Can |
 | --- | --- |
-| SUPPORT | Support tickets; view billing status and payments (no revenue, no refunds) |
-| PLATFORM_ADMIN | Groups, accounts, plans and prices, promotions, billing cases; no revenue figures, no refunds |
-| FINANCE | Revenue, refunds, manual payment confirmation, costs, exchange rates; no accounts |
-| SUPER_ADMIN | Everything, including regions and provider availability |
+| Support helper | Assigned support cases only; no billing, revenue or refunds |
+| Platform administrator | Groups, accounts, billing view, promotions, billing cases; no revenue, refunds, prices or settings |
+| Finance | Revenue, refunds, manual payment confirmation, costs, exchange rates; no accounts |
+| Owner | Everything, including prices, regions and provider availability |
 
 None of them can read a group's ledger. That still needs the chairperson's time-boxed support grant.
 
@@ -127,7 +129,7 @@ These go in `backend/.env.example`: `BILLING_CALLBACK_BASE_URL`, `BILLING_WEBHOO
 
 ## Before charging real customers
 
-- [ ] Approved prices entered; placeholder prices replaced.
+- [ ] Illustrative prices validated with customers and confirmed (or changed) in Plans & Pricing.
 - [ ] Daraja: production shortcode for ChamaHub, go-live approval, callback URL reachable over HTTPS, one real payment confirmed end to end.
 - [ ] Or Paystack: live key, webhook URL registered, a test and a live payment confirmed, a refund tested.
 - [ ] `BILLING_SELLER_*` and the tax position for each market checked with an accountant (VAT and Digital Service Tax in Kenya; e-invoicing requirements).

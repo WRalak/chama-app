@@ -18,10 +18,8 @@ export class GroupSupportGrantsController {
   @RequirePermission(Permission.GROUP_CONFIGURE)
   @Get()
   async list(@Param('groupId') groupId: string) {
-    const rows = await this.prisma.supportAccessGrant.findMany({ where: { groupId }, orderBy: { createdAt: 'desc' } });
-    const users = await this.prisma.user.findMany({ where: { id: { in: rows.map((r) => r.requestedByUserId) } }, select: { id: true, fullName: true } });
-    const name = new Map(users.map((u) => [u.id, u.fullName]));
-    return rows.map((g) => ({ id: g.id, requestedBy: name.get(g.requestedByUserId) ?? 'ChamaHub support', purpose: g.purpose, hours: g.hours, status: g.status, expiresAt: g.expiresAt?.toISOString() ?? null, createdAt: g.createdAt.toISOString() }));
+    const rows = await this.prisma.supportAccessGrant.findMany({ where: { groupId }, include: { requestedByAccount: { select: { fullName: true } } }, orderBy: { createdAt: 'desc' } });
+    return rows.map((g) => ({ id: g.id, requestedBy: g.requestedByAccount ? `${g.requestedByAccount.fullName} (ChamaHub support)` : 'ChamaHub support', purpose: g.purpose, hours: g.hours, status: g.status, expiresAt: g.expiresAt?.toISOString() ?? null, createdAt: g.createdAt.toISOString() }));
   }
 
   @RequirePermission(Permission.GROUP_CONFIGURE)

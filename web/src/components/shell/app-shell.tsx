@@ -48,7 +48,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { LABELS, MessageKey, Permission, PlatformPermission, t } from '@chamahub/shared';
 import { cn, setDisplayCurrency } from '@/lib/utils';
-import { useCan, useGroup, useGroupId, useMe, useMyGroups, usePlatformCan } from '@/lib/session';
+import { useCan, useGroup, useGroupId, useMe, useMyGroups } from '@/lib/session';
 import { EmptyState, LoadingRows } from '@/components/ui/states';
 import { Brand } from './brand';
 
@@ -113,20 +113,6 @@ const GROUP_NAV: NavItem[] = GROUP_SECTIONS.flatMap((sec) => sec.items);
 
 const allowed = (can: (p: Permission) => boolean, p?: Permission | Permission[]) => !p || (Array.isArray(p) ? p.some(can) : can(p));
 
-const PLATFORM_NAV: (Omit<NavItem, 'permission'> & { permission: PlatformPermission })[] = [
-  { href: '/platform', label: 'Platform overview', icon: Shield, permission: PlatformPermission.PLATFORM_VIEW_STATS },
-  { href: '/platform/groups', label: 'All Chamas', icon: Building2, permission: PlatformPermission.PLATFORM_VIEW_STATS },
-  { href: '/platform/users', label: 'Accounts', icon: Users, permission: PlatformPermission.PLATFORM_SUPPORT },
-  { href: '/platform/staff', label: 'Platform staff', icon: UserCog, permission: PlatformPermission.PLATFORM_MANAGE_ADMINS },
-  { href: '/platform/settings', label: 'Platform settings', icon: SlidersHorizontal, permission: PlatformPermission.PLATFORM_CONFIGURE },
-  { href: '/platform/revenue', label: 'Revenue', icon: BarChart3, permission: PlatformPermission.PLATFORM_VIEW_REVENUE },
-  { href: '/platform/billing', label: 'Billing & subscriptions', icon: CreditCard, permission: PlatformPermission.PLATFORM_VIEW_BILLING },
-  { href: '/platform/plans', label: 'Plans & pricing', icon: Receipt, permission: PlatformPermission.PLATFORM_VIEW_BILLING },
-  { href: '/platform/regions', label: 'Regions & providers', icon: Landmark, permission: PlatformPermission.PLATFORM_VIEW_BILLING },
-  { href: '/platform/finance', label: 'Costs & exchange rates', icon: Wallet, permission: PlatformPermission.PLATFORM_VIEW_REVENUE },
-  { href: '/platform/security', label: 'Security events', icon: BookOpenCheck, permission: PlatformPermission.PLATFORM_VIEW_SECURITY },
-  { href: '/platform/support', label: 'Support', icon: LifeBuoy, permission: PlatformPermission.PLATFORM_SUPPORT },
-];
 
 /** Navigation labels that have a translation; anything else shows as written. */
 const NAV_KEYS: Record<string, MessageKey> = {
@@ -210,10 +196,8 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const groupId = useGroupId();
   const pathname = usePathname();
   const can = useCan();
-  const platformCan = usePlatformCan();
   const { data: groups } = useMyGroups();
   const { data: me } = useMe();
-  const platformItems = PLATFORM_NAV.filter((i) => platformCan(i.permission));
   return (
     <nav className="flex h-full flex-col gap-4 overflow-y-auto bg-plum px-3 py-4" aria-label="Main">
       <div className="px-1 [&_p:first-child]:text-white [&_p:last-child]:text-white/60">
@@ -242,14 +226,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             );
           })}
       </div>
-      {platformItems.length > 0 && (
-        <div className="space-y-0.5">
-          <p className="px-2.5 pb-1 text-2xs font-semibold uppercase tracking-wider text-white/55">{t(me?.locale, 'nav.platform')}</p>
-          {platformItems.map((i) => (
-            <NavLink key={i.href} href={i.href} label={i.label} icon={i.icon} active={i.href === '/platform' ? pathname === '/platform' : pathname.startsWith(i.href)} onClick={onNavigate} />
-          ))}
-        </div>
-      )}
       <p className="mt-auto px-2.5 pt-2 text-2xs text-white/55">
         <Link href="/privacy" className="hover:text-white hover:underline">Privacy</Link> · <Link href="/terms" className="hover:text-white hover:underline">Terms</Link>
       </p>
@@ -292,7 +268,6 @@ function UserMenu() {
           <div className="px-2 py-1.5">
             <p className="text-sm font-medium text-plum">{me?.fullName}</p>
             <p className="text-xs text-muted">{me?.phone}</p>
-            {me && me.platformRole !== 'USER' && <p className="mt-1 text-2xs font-medium uppercase tracking-wide text-berry">{LABELS.platformRole[me.platformRole]}</p>}
           </div>
           <DM.Separator className="my-1 h-px bg-line" />
           <DM.Item onSelect={() => router.push('/profile')} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-plum outline-none data-[highlighted]:bg-canvas">

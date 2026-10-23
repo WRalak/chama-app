@@ -1,11 +1,21 @@
 import type { Request } from 'express';
-import type { GroupRole, Permission, PlatformRole } from '@chamahub/shared';
+import type { GroupRole, Permission, PlatformPermission } from '@chamahub/shared';
 
 export interface AuthContext {
   id: string;
   sessionId: string;
-  platformRole: PlatformRole;
   phoneVerified: boolean;
+}
+
+/** A signed-in platform staff member. Loaded from the database on every request; never from the token alone. */
+export interface StaffContext {
+  accountId: string;
+  sessionId: string;
+  fullName: string;
+  email: string;
+  roleCodes: string[];
+  permissions: readonly PlatformPermission[];
+  isOwner: boolean;
 }
 
 export interface MembershipContext {
@@ -20,6 +30,7 @@ export interface MembershipContext {
 
 export interface AppRequest extends Request {
   user?: AuthContext;
+  staff?: StaffContext;
   membership?: MembershipContext;
   requestId?: string;
 }

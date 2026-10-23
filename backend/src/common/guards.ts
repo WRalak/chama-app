@@ -9,27 +9,17 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import {
-  Feature,
-  GroupRole,
-  Permission,
-  PlatformPermission,
-  PlatformRole,
-  platformRoleHas,
-  resolvePermissions,
-  RolePolicy,
-  SpecialRole,
-} from '@chamahub/shared';
+import { Feature, GroupRole, Permission, PlatformPermission, resolvePermissions, RolePolicy, SpecialRole } from '@chamahub/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuditService } from './audit.service';
-import { ALLOW_UNVERIFIED, ANY_PERMISSION, IS_PUBLIC, REQUIRED_FEATURE, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
+import { ALLOW_UNVERIFIED, ANY_PERMISSION, ANY_PLATFORM_PERMISSION, IS_PUBLIC, PLATFORM_API, REQUIRED_FEATURE, REQUIRED_PERMISSION, REQUIRED_PLATFORM_PERMISSION } from './decorators';
 import { EntitlementService } from '../modules/billing/entitlements.service';
+import { PlatformAuthService } from '../modules/platform-auth/platform-auth.service';
+import { PlatformAuditService } from '../modules/platform-auth/platform-audit.service';
 import { AppRequest, metaFrom } from './request';
 
 export interface AccessTokenPayload {
   sub: string;
   sid: string;
-  role: PlatformRole;
 }
 
 @Injectable()
@@ -38,6 +28,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly staffAuth: PlatformAuthService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -46,6 +37,11 @@ export class JwtAuthGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<AppRequest>();
     const header = req.headers.authorization;
     if (!header?.startsWith('Bearer ')) throw new UnauthorizedException('Sign in to continue');
+    // Staff and members are different identities signed with different keys: neither token works on the other's routes.
+    if (this.reflector.getAllAndOverride<boolean>(PLATFORM_API, targets)) {
+      req.staff = await this.staffAuth.authenticate(header.slice(7));
+      return true;
+    }
     let payload: AccessTokenPayload;
     try {
       payload = await this.jwt.verifyAsync<AccessTokenPayload>(header.slice(7));
@@ -56,7 +52,7 @@ export class JwtAuthGuard implements CanActivate {
     // and account suspension take effect immediately.
     const session = await this.prisma.session.findUnique({
       where: { id: payload.sid },
-      select: { revokedAt: true, expiresAt: true, user: { select: { id: true, platformRole: true, disabledAt: true, phoneVerifiedAt: true } } },
+      select: { revokedAt: true, expiresAt: true, user: { select: { id: true, disabledAt: true, phoneVerifiedAt: true } } },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date() || session.user.id !== payload.sub) {
       throw new UnauthorizedException('Your session has ended. Sign in again.');
@@ -65,7 +61,6 @@ export class JwtAuthGuard implements CanActivate {
     req.user = {
       id: session.user.id,
       sessionId: payload.sid,
-      platformRole: session.user.platformRole,
       phoneVerified: !!session.user.phoneVerifiedAt,
     };
     if (!req.user.phoneVerified && !this.reflector.getAllAndOverride<boolean>(ALLOW_UNVERIFIED, targets)) {
@@ -74,21 +69,6 @@ export class JwtAuthGuard implements CanActivate {
     return true;
   }
 }
-
-/** Permissions granted to an approved, time-boxed platform support session: read-only, no member contact data. */
-const SUPPORT_PERMISSIONS: readonly Permission[] = [
-  Permission.GROUP_VIEW,
-  Permission.MEMBERS_VIEW,
-  Permission.CONTRIBUTIONS_VIEW_ALL,
-  Permission.LOANS_VIEW_ALL,
-  Permission.REPORTS_VIEW,
-  Permission.AUDIT_VIEW,
-  Permission.STATEMENTS_VIEW,
-  Permission.ROTATIONS_VIEW,
-  Permission.MEETINGS_VIEW,
-  Permission.EXPENSES_VIEW,
-  Permission.FINES_VIEW_ALL,
-];
 
 /**
  * Resolves the caller's membership for any route with a `:groupId` param
@@ -99,7 +79,6 @@ export class GroupAccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly prisma: PrismaService,
-    private readonly audit: AuditService,
     private readonly entitlements: EntitlementService,
   ) {}
 
@@ -121,6 +100,10 @@ export class GroupAccessGuard implements CanActivate {
     });
 
     if (membership && membership.status !== 'EXITED') {
+      // Suspended by ChamaHub staff: records stay readable, nothing can change until reactivated.
+      if (membership.group.status === 'SUSPENDED' && req.method !== 'GET') {
+        throw new ForbiddenException({ message: 'This group is paused by ChamaHub. Records stay readable; contact support from the Help screen.', details: { code: 'GROUP_SUSPENDED' } });
+      }
       if (membership.status === 'SUSPENDED' && req.method !== 'GET') {
         throw new ForbiddenException('Your membership in this group is suspended.');
       }
@@ -136,9 +119,8 @@ export class GroupAccessGuard implements CanActivate {
             : resolvePermissions(membership.role as GroupRole, membership.group.rolePolicy as RolePolicy | null, membership.specialRoles as SpecialRole[]),
       };
     } else {
-      const grant = await this.supportGrant(req, groupId);
-      if (!grant) throw new NotFoundException('Group not found');
-      req.membership = { id: '', groupId, userId: req.user.id, role: 'AUDITOR', permissions: SUPPORT_PERMISSIONS, supportGrantId: grant };
+      // Platform staff never pass this guard: approved support access goes through the portal's own read-only endpoints.
+      throw new NotFoundException('Group not found');
     }
 
     if (required?.length) {
@@ -155,42 +137,29 @@ export class GroupAccessGuard implements CanActivate {
     if (feature) await this.entitlements.assertFeature(groupId, feature);
     return true;
   }
-
-  /** Platform support may read a group only with an approved, unexpired grant; every use is audited. */
-  private async supportGrant(req: AppRequest, groupId: string): Promise<string | null> {
-    if (!req.user || req.method !== 'GET' || !platformRoleHas(req.user.platformRole, 'platform.support')) return null;
-    const grant = await this.prisma.supportAccessGrant.findFirst({
-      where: { groupId, requestedByUserId: req.user.id, status: 'APPROVED', expiresAt: { gt: new Date() } },
-      select: { id: true, purpose: true },
-    });
-    if (!grant) return null;
-    await this.audit.log({
-      groupId,
-      actorUserId: req.user.id,
-      action: 'support.access',
-      entityType: 'SupportAccessGrant',
-      entityId: grant.id,
-      reason: grant.purpose,
-      after: { path: req.originalUrl },
-      meta: metaFrom(req),
-    });
-    return grant.id;
-  }
 }
 
+/** Enforces @RequirePlatform / @RequireAnyPlatform against the permissions loaded from the database; denials are audited. */
 @Injectable()
 export class PlatformGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly audit: PlatformAuditService,
+  ) {}
 
-  canActivate(ctx: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<PlatformPermission>(REQUIRED_PLATFORM_PERMISSION, [
-      ctx.getHandler(),
-      ctx.getClass(),
-    ]);
-    if (!required) return true;
+  async canActivate(ctx: ExecutionContext): Promise<boolean> {
+    const targets = [ctx.getHandler(), ctx.getClass()];
+    const all = this.reflector.getAllAndOverride<PlatformPermission[]>(REQUIRED_PLATFORM_PERMISSION, targets);
+    const any = this.reflector.getAllAndOverride<PlatformPermission[]>(ANY_PLATFORM_PERMISSION, targets);
+    if (!all?.length && !any?.length) return true;
     const req = ctx.switchToHttp().getRequest<AppRequest>();
-    if (!req.user || !platformRoleHas(req.user.platformRole, required)) {
-      throw new ForbiddenException('Platform administrator access required.');
+    const staff = req.staff;
+    const allowed = !!staff && (!all?.length || all.every((p) => staff.permissions.includes(p))) && (!any?.length || any.some((p) => staff.permissions.includes(p)));
+    if (!allowed) {
+      if (staff) {
+        await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.permission_denied', outcome: 'DENIED', targetType: 'Route', targetId: `${req.method} ${req.route?.path ?? req.path}`.slice(0, 200), reason: [...(all ?? []), ...(any ?? [])].join(','), meta: metaFrom(req) });
+      }
+      throw new ForbiddenException('You do not have permission to do this.');
     }
     return true;
   }
