@@ -15,6 +15,8 @@ const COMMON = [
   'arsenal', 'chelsea', 'manchester', 'liverpool', 'barcelona', 'madrid', 'gormahia', 'afcleopards', 'michael', 'john', 'james', 'peter', 'paul', 'mary', 'grace',
   'joseph', 'david', 'daniel', 'kevin', 'brian', 'faith', 'mercy', 'joy', 'wanjiku', 'kamau', 'otieno', 'ochieng', 'njeri', 'akinyi', 'mwangi', 'kipchoge',
   'starwars', 'pokemon', 'naruto', 'matrix', 'killer', 'hunter', 'ranger', 'buster', 'tigger', 'charlie', 'jordan', 'michelle', 'jennifer', 'thomas', 'robert',
+  // The example the error message itself suggests.
+  'mangotaxiriver',
   'access', 'flower', 'summer', 'winter', 'spring', 'autumn', 'monday', 'friday', 'january', 'december', 'qazwsx', 'qweasd', 'zaq', 'zaqxsw', 'mustang', 'ferrari',
 ];
 const COMMON_SET = new Set(COMMON);

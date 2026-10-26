@@ -21,6 +21,11 @@ describe('password strength', () => {
     expect(passwordWeakness('janewanjiru-9!', { email: 'janewanjiru@example.com' })).toMatch(/name|e-mail/);
   });
 
+  it('refuses the example passphrase shown in its own error message', () => {
+    expect(passwordWeakness('mango-taxi-river-42')).toMatch(/too common/);
+    expect(passwordWeakness('Mango-Taxi-River-2026!')).toMatch(/too common/);
+  });
+
   it('accepts passphrases and strong random passwords, including long ones', () => {
     // Generated at run time: no password-like literals in the repository.
     const random = () => `${randomBytes(6).toString('base64url')}-${randomBytes(3).toString('hex')}7`;
