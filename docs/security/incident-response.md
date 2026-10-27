@@ -33,7 +33,7 @@ One person may hold several roles in a small team. The lead must hold an OWNER s
 
 | Situation | Lever |
 |---|---|
-| Compromised member account | Portal → Users → suspend; *send reset code*; *unlock*. All member sessions are revoked when the password changes. |
+| Compromised member account | Portal → Users → **Sign out everywhere** (keeps the account open), or **Suspend**; *send reset code*; *unlock*. All member sessions are also revoked when the password changes. |
 | Compromised group or officer | Portal → Groups → suspend: the group becomes read-only and no money actions are possible. |
 | Compromised staff account | Another OWNER: Helpers → suspend or deactivate (sessions revoked at once); *reset two-step sign-in*; *password reset*. |
 | Destination diverted | The change needed approval. Find it in the group audit log, then reject or replace it via a new approved change. Members were notified (`DESTINATION_CHANGED`). |
@@ -82,6 +82,23 @@ One person may hold several roles in a small team. The lead must hold an OWNER s
    - Under the **Kenya Data Protection Act 2019** a personal-data breach must be reported to the ODPC **within 72 hours** of becoming aware of it, and affected people informed. Legal counsel confirms what applies.
    - Payment-provider and partner contracts may have their own deadlines.
 8. **Review.** Within 5 business days, hold a blameless post-incident review. Update `threat-model.md`, `security-checklist.md` and this runbook.
+
+## Playbooks
+
+Each playbook follows the general procedure above. The lines below are what is specific to each scenario.
+
+| Scenario | Detect | Triage | Contain | Revoke | Preserve | Reconcile | Recover | Notify | Root cause and verify |
+|---|---|---|---|---|---|---|---|---|---|
+| **Account takeover (member)** | Member report; SECURITY notices (new device, token reuse); `credential_stuffing` alert | Which groups and roles? Any approvals or destination changes since? | Portal: *Sign out everywhere*; suspend if the attacker is still active | Sessions (done by the above); send reset code | `audit_events` for the user since the first suspicious login | Review approvals they gave; reverse wrong postings through the ledger | Member resets password; reactivate | Member; group officers if their actions were affected | How did they get the password? Was there a weak password, or a phished OTP? |
+| **Compromised staff account** | Staff security e-mails (new device, MFA change); `platform.*` audit anomalies | What permissions? Any support grants, refunds, suspensions? | Another owner: suspend the helper (sessions end at once) | Reset MFA; password reset; revoke grants | `platform_audit_logs` export | Undo plan, price and promotion changes; refunds | Re-invite after review | Affected groups if grants were used | Phishing? Prioritise WebAuthn |
+| **Exposed secret** | gitleaks/GitGuardian; vendor notice | Which secret, which environment, since when? | Rotate at the provider **first** | Per the rotation table in `security-operations.md` | Note where it was exposed (commit, log, chat) | — | Redeploy; confirm the old value fails | Provider if their terms require it | Remove from history after rotating |
+| **Unauthorized financial change** | Member dispute; statement mismatch; unusual adjustment | Which entries and who? (the journal is append-only, so the history is intact) | Suspend the group (read-only) or the officer | Officer sessions | Export the group's journal and audit trail | **Reversal entries with reasons, through maker-checker; never edit rows** | Lift the suspension | All group members | Which approval rule failed? Add a test |
+| **Payment-provider compromise or forged callbacks** | `payment_callback_forgery` alert; payments FAILED with "did not confirm" | Was the callback token leaked? Any confirmed payments without a provider receipt? | Rotate `MPESA_CALLBACK_TOKEN`; allow only Safaricom IPs at the edge | Daraja consumer key and secret if suspected | `mpesa_requests.rawCallback`, provider statements | Match against the M-Pesa statement through statement import | — | Safaricom | Verify the STK query is enforced (`payments-integrity` test) |
+| **Database compromise** | Provider alert; unexpected DDL; data on the internet | Read only, or write? Which credentials? | Rotate the DB passwords (owner and `chamahub_app`); restrict network access | All app secrets (assume env leaked) | Provider logs; snapshot | Compare with the last verified backup | `backup-and-recovery.md` if integrity is in doubt | ODPC within 72 h if personal data was exposed; members | Least-privilege role active? Network exposure? |
+| **Data leakage (cross-tenant or export)** | `cross_tenant_probing` alert; `export.downloaded` anomalies; report | Which records and groups? Use the request ids | Fix or disable the route (feature flag or deploy); suspend the actor | The actor's sessions | Audit and export records | — | Deploy the fix with a regression test in `tenant-isolation` | Affected groups; ODPC if personal data | Add the route to the sweep |
+| **AI data exposure** | Report of an answer with another group's or member's data | Which conversation? The tool calls are recorded | `AI_PROVIDER=disabled` | — | `ai_conversations` and usage records | — | Fix the tool's permission or scope; re-enable | Affected members | Add a test to `ai.e2e-spec.ts` |
+| **Malicious upload** | Report; CodeQL/AV (if added) | Which file, which payment? | Remove the evidence file (soft delete, if one exists; otherwise ask engineering to quarantine it) | Uploader's sessions if hostile | The file's SHA-256 and audit row | — | — | Officers who opened it | Magic-byte and type rules; consider AV scanning |
+| **Ransomware / backup recovery** | Provider alert; database unreachable or encrypted | Scope; last good point in time | Stop the API; isolate credentials | All secrets | Snapshot what is left | Gap: M-Pesa statements for the missing period | `backup-and-recovery.md` restore procedure, verified with `verify-restore.sh` | Members; ODPC if personal data | How did they get access? Off-site backup intact? |
 
 ## Contacts (fill in before launch)
 

@@ -1,98 +1,93 @@
 # Security test results
 
-Run on 2026-10-23 in a development container (Node 22, PostgreSQL 16). **These are internal automated results, not an independent assessment or penetration test.** A green build alone is not evidence of security: see the limitations below and the remaining risks in `security-checklist.md`.
+Run on **2026-10-27** in a development container (Node 22, PostgreSQL 16), from a clean `npm ci` of the committed lockfile.
+
+**These are internal automated results, not an independent assessment or penetration test.** A green build alone is not evidence of security: see the limitations in §7 and the remaining risks in `security-checklist.md` §D.
 
 ## 1. Full verification run
-
-Command, from a clean `npm ci` of the committed lockfile:
 
 ```
 npm ci && npm run build -w @chamahub/shared && npm run test -w @chamahub/shared \
  && npm run typecheck -w @chamahub/api && npm run typecheck -w @chamahub/admin && npm run typecheck -w @chamahub/mobile \
  && npm run test -w @chamahub/api -- --runInBand && npm run build -w @chamahub/admin \
+ && SOURCE_URL=…/chamahub_test SCRATCH_URL=…/restore_check_ci bash backend/scripts/verify-restore.sh \
  && npm audit --json > audit.json; node scripts/audit-gate.mjs audit.json
 ```
 
 | Step | Result |
 |---|---|
-| `npm ci` | 1432 packages installed from the lockfile |
-| Shared unit tests (vitest) | **87 / 87 passed** (7 files) |
+| `npm ci` | 1429 packages from the lockfile |
+| Shared unit tests (vitest) | **92 / 92 passed** (8 files) |
 | Typecheck: api, web, mobile | passed |
-| API tests (jest, 17 suites) | **172 / 172 passed** |
+| API tests (jest) | **194 / 194 passed** (22 suites) |
 | Web production build | passed |
-| Dependency gate | passed (all remaining advisories on the allowlist) |
+| Restore verification (test database) | **PASS:** 15 migrations, ledger balanced, append-only triggers present, RLS on |
+| Dependency gate | passed (4 advisories on the allowlist, each with an expiry) |
 
-## 2. Security-specific tests
+## 2. Tests added in this round
 
-| Test | What it proves | Result |
+| Suite | What it proves | Result |
 |---|---|---|
-| `backend/test/tenant-isolation.e2e-spec.ts` | Group A's chairperson calls every group GET route with more than one path param, using every id stored against group B (ids harvested from every table with a `groupId` column). No 2xx response contains group B data (>500 calls). No cross-group write is accepted, and a snapshot shows group B unchanged. A non-member gets 403/404. | Pass (4 tests) |
-| Mutation check of the above | Removing the `groupId` filter from `evidence.service.ts` made the read sweep **fail**. The change was then reverted. | Sensitive to a real regression |
-| `backend/src/common/spreadsheet.spec.ts` | A valid xlsx is read and formulas are not evaluated. Rejected: a 60 MB-of-zeros zip bomb (<200 KB file), lying declared sizes, encrypted entries, >500 entries, non-zip input. | Pass (4) |
-| `packages/shared/src/password-strength.test.ts` | Common, leet and padded passwords, keyboard and number runs, and personal details are refused; strong passphrases are accepted. | Pass (5) |
-| `auth-groups.e2e-spec.ts` | Common or personal passwords are refused at register, reset and change. Refresh rotation with reuse detection. Lockout. SECURITY notices contain no 6-digit code or URL. | Pass |
-| `platform-portal.e2e-spec.ts` | Staff auth: mandatory MFA; TOTP replay refused; recovery codes; reauth required for sensitive routes (`REAUTH_REQUIRED`, then success after `POST auth/reauth`); forged and member tokens refused on every portal route; privilege-escalation rules; at least one owner kept; append-only audit without secrets; reset e-mails without a token or link. | Pass |
-| `src/config/env.spec.ts` | In production, CORS `*`, http, path and wildcard origins are refused; exact https origins are accepted. | Pass (2) |
-| `src/modules/notifications/push-text.spec.ts` | Financial and security push text has no amounts, phone numbers, references or names. | Pass (2) |
-| `security.e2e-spec.ts` | RLS on every table; security headers; CORS allowlist; errors without stack traces. | Pass |
-| `finance`, `governance`, `roles`, `rotation`, `collections`, `billing` | Maker-checker (nobody approves their own payment, loan or payout); the ledger is append-only at DB level; forged webhooks rejected; fake evidence files rejected; destination changes need approval. | Pass |
+| `payments-integrity` | **Forged callback:** a "success" callback that Safaricom's STK query does not confirm never posts, and is audited. **Provider unreachable:** the callback is held; the retry posts once. **Duplicates:** the same callback ×10 at once posts once. **Receipts and amounts:** a receipt reused by another payment is refused; a manipulated amount → DISPUTED. **STK caps:** the 6th prompt to one phone in an hour is refused (429). **Keys:** another member's idempotency key → 409 | 5 / 5 |
+| Mutation check of the above | Bypassing the STK query made the forged-callback test **fail**; the code was restored | sensitive |
+| `concurrency` (extended) | Two full repayments of one loan confirmed at the same moment: exactly one posts, and the loan is not overpaid | 3 / 3 |
+| `rotation` (extended) | Payout approval ×5 at once → one; disbursement requests ×5 with different keys → one attempt; recipient confirmation ×5 → one ledger posting; no 5xx | 13 / 13 |
+| `sessions-identity` | New hashes are scrypt; old bcrypt hashes upgrade at sign-in; **every character of a >72-byte passphrase counts**; a suspended account loses access at once (token 403, refresh 401) and wrong passwords get the generic 401; expired and logged-out sessions are dead for both tokens; a reset code works once; staff "sign out everywhere" needs the permission (Analyst 403, member token 401) and is audited; exports are audited before sending, `no-store`, and not recorded when refused (403) | 7 / 7 |
+| `rate-limits` | With the database store, two instances share counters, which reset after the window; a burst of 25 at once is counted exactly (10 allowed); `otp/request` returns 429 after 5, and the counters are in Postgres; client IPs are not stored readably | 3 / 3 |
+| `security-monitoring` | 26 probes of another group's records by one member → exactly one `cross_tenant_probing` alert; events carry the route template and no URL ids; 50 forged tokens from one IP → one `credential_stuffing` alert, and the token text is never logged; one-time codes are never logged when SMS is not configured | 3 / 3 |
+| `body-limits` | A 540 KB body on an ordinary route → 413 JSON without internals; malformed JSON → 400; a 2.3 MB import is accepted by the upload route | 3 / 3 |
+| `packages/shared/src/web-security.test.ts` | Open-redirect payloads (`//host`, `/\host`, `\\host`, `javascript:`, tab, absolute URLs) are refused; the CSRF check refuses cross-site writes (`Origin`, `Sec-Fetch-Site`, `null` origin, look-alike hosts) and allows reads, same-origin writes and non-browser clients | 4 / 4 |
+| `password-strength.test.ts` | The example passphrase shown in the error message is itself refused | 6 / 6 |
 
-## 3. Least-privilege database role
+**Live checks against the built web app (`next start`):**
 
-`backend/scripts/db-roles.sql` was applied to a scratch database migrated to head. The results as `chamahub_app`:
-
-| Statement | Result |
+| Request | Result |
 |---|---|
-| `SELECT count(*) FROM users` | allowed |
-| `INSERT` / `DELETE` on `_prisma_migrations` | `permission denied` |
-| `CREATE TABLE` | `permission denied for schema public` |
-| `DROP TABLE users`, `ALTER TABLE users ...` | `must be owner of table users` |
-| `TRUNCATE users` | `permission denied` |
-| `rolsuper` | `f` |
-| Re-running the script | idempotent |
-| API started with `DATABASE_URL` as `chamahub_app` | started (migration check passed); `POST /v1/auth/register` succeeded |
+| POST `/api/auth/login` with `Origin: https://evil.example` | 403 "This request did not come from ChamaHub." |
+| POST with `Sec-Fetch-Site: cross-site` | 403 |
+| Same-origin POST | passed the check (500 only because the API was not running) |
+| Cross-site GET | 200 |
 
-**Issue found and fixed during this test:** the first version of the script left the app role unable to see any rows. Every table has RLS on with no policies, from the Supabase lockdown migration. The script now adds a per-table policy for `chamahub_app` only.
+## 3. Earlier security suites (still passing)
 
-The same checks run in CI (`ci.yml`, step "Least-privilege database role"). The full e2e suite still runs as the owner, because its reset helper uses TRUNCATE.
+`tenant-isolation` (every group GET route × every id from another group, >500 calls, plus a write sweep), `platform-portal`, `auth-groups`, `security`, `finance`, `governance`, `roles`, `collections`, `billing`, `ai`, `mobile-officers`, `spreadsheet.spec`, `env.spec`, `push-text.spec`. Details are in the 2026-10-23 run (git history of this file).
 
-## 4. Secret scanning
+## 4. Restore verification
 
-gitleaks 8.24.2 with `.gitleaks.toml`:
+| Run | Result |
+|---|---|
+| Local development database (86 tables) | PASS in 3 s, counts identical |
+| Test database (CI-equivalent run) | PASS in 1 s |
+| **Negative:** append-only trigger dropped in the restored copy | invariant check **FAILED** as intended (`append-only triggers missing: journal_lines_append_only`) |
+| Guards | Refuses a scratch database not named `restore_check_*` (exit 2) and a non-empty one (exit 2) |
+| Production backups | **Not yet verified (External)** |
 
-- Full history, 42 commits: **no leaks**.
-- Committed and untracked working tree, excluding gitignored files: **no leaks**.
+## 5. Dependencies (`npm audit`, 2026-10-27)
 
-The config relaxes only the generic-key rule, and only in `backend/test/`, which holds throwaway e2e passwords. A planted AWS-style key in `backend/test/` and a generic key in `backend/src/` were both still detected.
+| Scope | 2026-10-23 | Today, before fixes | After fixes |
+|---|---|---|---|
+| Full tree | 52 (0 critical) | 13 | **10** (7 high, 3 moderate, 0 critical) |
+| Production tree (`--omit=dev`) | 17 | 10 | **7** (4 high, 3 moderate, 0 critical) |
 
-Locally, the gitignored `web/.next` build output contains Next.js preview keys. They are generated per build and never committed.
+New advisories published this week were caught by the gate:
 
-## 5. Dependencies
-
-| Scope | Before this work | After |
+| Package | Advisory | Action |
 |---|---|---|
-| Production dependency tree (`npm audit --omit=dev`) | 22 (16 high) | 17 (14 high, 3 moderate, 0 critical) |
-| Full tree | 62 | 52 (0 critical) |
+| body-parser 2.3.0 (Express, in the request path) | DoS: trailing bytes after a compressed body | Override to **2.4.0** (official patch release, same major) |
+| multer 2.4.0 (Nest Express adapter) | DoS: pending fileFilter after teardown | Override to **2.5.0** (same major) |
+| zod 3.25 (every request schema) | Memory exhaustion validating oversized collections; fixed only in **4.6.6+**, a breaking major | **Not auto-upgraded.** Mitigated: JSON bodies capped at 256 KB except four upload routes (8 MB), whose schemas have no unbounded collections. Measured with a 200-item `max()` array schema: **286 ms / 76 MB** at 4.8 MB, **24 ms / 7 MB** at the new cap. Allowlisted until **2026-12-15** (owner: backend lead) |
 
-Fixes made:
+- **Still allowlisted:** node-forge and decode-uri-component (Expo tooling) and deepmerge-ts (Prisma CLI). All have owners and expiry dates.
+- **No longer reported:** braces and postcss-selector-parser; their allowlist entries were removed.
 
-- Removed `xlsx` (SheetJS) from the web app; it has unpatched prototype-pollution and ReDoS advisories. Uploads are now parsed by the server with the zip-bomb guard.
-- Overrides: `postcss` 8.5.31, `uuid` 11.1.1.
-- Upgraded `fflate`, `vitest` 4.1.12 and Prisma 6.19.3.
+## 6. Secret scanning
 
-All remaining advisories trace to five packages. Each is on the allowlist with a reason, owner and expiry:
+- gitleaks over the staged changes: **no leaks**.
+- One finding during this round: a JWT-shaped *fake* token in a new test. It is now generated at run time instead, so no token-like literal is committed.
 
-- `braces`, `node-forge`, `decode-uri-component`: Expo/Metro mobile toolchain;
-- `deepmerge-ts`: prisma CLI config;
-- `postcss-selector-parser`: tailwind 3 build.
+## 7. Limitations
 
-None of them is in the API request path. No breaking upgrades were applied automatically.
-
-## 6. Limitations of these results
-
-- **Write sweep:** in the tenant write sweep, many writes are rejected by body validation before the record lookup runs. The write sweep therefore proves only that no cross-group write succeeded, not that every lookup is scoped. Per-feature cross-group tests exist in `mobile-officers`, `rotation`, `collections`, `ai` and `auth-groups`.
-- **Mobile:**
-  - deep-link validation and `allowBackup=false` are implemented but not covered by an automated test (there is no mobile test runner);
-  - no MASTG testing has been performed.
-- **Not run here:** CodeQL and the GitHub gitleaks action run only on GitHub; their first results are not yet available.
-- **Not performed:** load or DoS testing, TLS configuration testing (External) and a penetration test.
+- **M-Pesa:** the STK query is tested against a scripted Daraja client. It has **not** been verified against a live shortcode; do that in the Daraja sandbox before go-live.
+- **Not performed:** load or DoS testing, TLS configuration testing (External), a mobile MASTG assessment, and a penetration test.
+- **Alerting:** alert thresholds are tuned by judgement, not production data. Review them after the first weeks of real traffic.
+- **CI:** CodeQL, dependency review and the GitHub gitleaks action run only on GitHub; check their results in the repository's Security tab.

@@ -6,6 +6,12 @@ import { env } from '../config/env';
 import { AppRequest } from './request';
 import { SecurityEventsService } from './security-events';
 
+/** http-errors raised by body-parser before the request reaches a controller. */
+function isClientHttpError(e: unknown): e is { status: number; type?: string } {
+  const x = e as { status?: unknown; expose?: unknown };
+  return typeof x?.status === 'number' && x.status >= 400 && x.status < 500 && x.expose === true;
+}
+
 /** Converts every error into the shared ApiErrorBody shape without leaking internals. */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -30,6 +36,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = Array.isArray(b.message) ? b.message.join('; ') : (b.message ?? exception.message);
         details = b.details;
       }
+    } else if (isClientHttpError(exception)) {
+      // Request-body errors from the JSON parser (too large, malformed JSON, bad encoding).
+      status = exception.status;
+      message = exception.type === 'entity.too.large' ? 'This request is too large.' : exception.type === 'entity.parse.failed' ? 'The request body is not valid JSON.' : 'The request could not be read.';
     } else if (exception instanceof MoneyError) {
       status = HttpStatus.UNPROCESSABLE_ENTITY;
       message = exception.message;

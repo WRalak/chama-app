@@ -1,10 +1,33 @@
 {
   "_comment": "Advisories accepted for a limited time. Each needs a reason, an owner and an expiry (YYYY-MM-DD). scripts/audit-gate.mjs fails CI on any high/critical advisory not listed here, and on any listed entry past its expiry. Review at every release.",
   "advisories": [
-    { "id": "GHSA-vfj7-8cjw-p6xm", "package": "braces", "reason": "Only reachable through the Expo/Metro mobile build toolchain (micromatch) on developer and CI machines; patterns come from project config, not users. No fixed release in the 3.x line used by micromatch.", "owner": "mobile lead", "expires": "2027-01-31" },
-    { "id": "GHSA-86w9-cpqp-85rv", "package": "node-forge", "reason": "Pulled in by Expo CLI tooling for local dev certificates; not shipped in the app bundle or the API, and not used to verify signatures. No fixed release published yet.", "owner": "mobile lead", "expires": "2026-12-31" },
-    { "id": "GHSA-vcc3-ghjq-m6fr", "package": "decode-uri-component", "reason": "Moderate. Via query-string in expo-router; the fixed release is ESM-only and breaks the CommonJS query-string the router needs. Revisit on the next Expo SDK.", "owner": "mobile lead", "expires": "2027-01-31" },
-    { "id": "GHSA-ggr8-5vv4-36mx", "package": "deepmerge-ts", "reason": "Dev-only: used by the prisma CLI to merge its own config file. Not in the API runtime.", "owner": "backend lead", "expires": "2026-12-31" },
-    { "id": "GHSA-rj75-hqrm-r3gf", "package": "postcss-selector-parser", "reason": "Moderate, dev/build-only via tailwindcss 3 on the project's own CSS. Fix requires tailwind 4 migration.", "owner": "web lead", "expires": "2027-01-31" }
+    {
+      "id": "GHSA-86w9-cpqp-85rv",
+      "package": "node-forge",
+      "reason": "Pulled in by Expo CLI tooling for local dev certificates; not shipped in the app bundle or the API, and not used to verify signatures. No fixed release published yet.",
+      "owner": "mobile lead",
+      "expires": "2026-12-31"
+    },
+    {
+      "id": "GHSA-vcc3-ghjq-m6fr",
+      "package": "decode-uri-component",
+      "reason": "Moderate. Via query-string in expo-router; the fixed release is ESM-only and breaks the CommonJS query-string the router needs. Revisit on the next Expo SDK.",
+      "owner": "mobile lead",
+      "expires": "2027-01-31"
+    },
+    {
+      "id": "GHSA-ggr8-5vv4-36mx",
+      "package": "deepmerge-ts",
+      "reason": "Dev-only: used by the prisma CLI to merge its own config file. Not in the API runtime.",
+      "owner": "backend lead",
+      "expires": "2026-12-31"
+    },
+    {
+      "id": "GHSA-mrhx-c7xc-m3w5",
+      "package": "zod",
+      "reason": "Fixed only in zod 4.6.6+, a breaking major upgrade for every shared schema (API, web, mobile). Mitigated: JSON bodies are capped at 256 KB on all routes except the four upload routes (8 MB), whose schemas have no unbounded collections; measured worst case at the cap ~24 ms / 7 MB per request, plus per-route rate limits. Migrate to zod 4 on a branch with the full test suite.",
+      "owner": "backend lead",
+      "expires": "2026-12-15"
+    }
   ]
 }

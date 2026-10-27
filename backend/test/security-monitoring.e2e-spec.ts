@@ -14,7 +14,7 @@ describe('Security monitoring', () => {
     ({ app, prisma } = await createTestApp());
     await resetDatabase(prisma);
     for (const level of ['log', 'warn'] as const) {
-      jest.spyOn(Logger.prototype, level).mockImplementation(function (this: Logger, message: unknown) {
+      jest.spyOn(Logger.prototype, level).mockImplementation(function (this: Logger, message: unknown, ..._rest: unknown[]) {
         lines.push(String(message));
       });
     }

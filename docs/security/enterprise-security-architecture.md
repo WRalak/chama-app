@@ -94,7 +94,11 @@ Authorization is deny-by-default: a route is public only with `@Public()`.
 ## 5. API and application security
 
 - **Validation:** shared zod schemas on every body and query. Unknown keys are stripped, which prevents mass assignment.
-- **Limits:** 6 MB body limit; server timeouts (headers 20 s, request 60 s); pagination caps.
+- **Limits:**
+  - JSON bodies are capped at **256 KB**, except four upload routes at 8 MB: member imports, statement imports and their preview, and payment evidence (`setup-app.ts`). This bounds the cost of validation; see the zod advisory in `security-test-results.md`.
+  - Oversized or malformed bodies get a clean 413/400 JSON error, not a 500.
+  - Server timeouts: headers 20 s, request 60 s.
+  - Pagination is capped at 200.
 - **Rate limits per endpoint:**
   - sign-in and recovery: 5–10 per minute;
   - staff re-authentication: 5 per minute;

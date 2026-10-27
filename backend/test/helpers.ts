@@ -27,7 +27,7 @@ export function uniquePhone() {
 
 export async function createTestApp() {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = moduleRef.createNestApplication({ rawBody: true });
+  const app = moduleRef.createNestApplication({ bodyParser: false });
   configureApp(app);
   await app.init();
   return { app, prisma: app.get(PrismaService) };
