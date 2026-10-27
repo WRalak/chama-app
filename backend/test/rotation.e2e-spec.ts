@@ -185,7 +185,10 @@ describe('Rotation engine', () => {
       expect(early.body.details.checks.find((c: { key: string }) => c.key === 'DATE').status).toBe('FAIL');
       await as(app, chair).patch(`/v1/groups/${groupId}`, { settings: { allowEarlyPayout: true } }).expect(200);
       await as(app, chair).post(step(rounds[1], 'prepare'), {}).expect(200);
-      await as(app, pat).post(step(rounds[1], 'approve'), {}).expect(200);
+      // Five simultaneous approvals by the same approver count once.
+      const approvals = await Promise.all(Array.from({ length: 5 }, () => as(app, pat).post(step(rounds[1], 'approve'), {})));
+      expect(approvals.filter((r) => r.status === 200)).toHaveLength(1);
+      expect(approvals.every((r) => r.status === 200 || (r.status >= 400 && r.status < 500))).toBe(true);
       await as(app, treasurer).post(step(rounds[1], 'disburse'), { ...body, idempotencyKey: idem() }).expect(409);
     });
 
@@ -197,10 +200,17 @@ describe('Rotation engine', () => {
       const failed = await as(app, chair).post(step(r2, 'fail'), { reason: 'M-Pesa reversed the transfer: wrong number' }).expect(200);
       expect(failed.body.rounds[1]).toMatchObject({ status: 'FAILED', failureReason: 'M-Pesa reversed the transfer: wrong number', attempts: 1 });
       expect(await cash()).toBe(before);
-      await as(app, treasurer).post(step(r2, 'disburse'), { method: 'MPESA', reference: 'RKT2OK0002', sentAt: today, idempotencyKey: idem() }).expect(200);
+      // Five different disbursement requests at once (different keys): only one attempt is recorded.
+      const sends = await Promise.all(Array.from({ length: 5 }, (_, i) => as(app, treasurer).post(step(r2, 'disburse'), { method: 'MPESA', reference: `RKT2OK000${i}`, sentAt: today, idempotencyKey: idem() })));
+      expect(sends.filter((r) => r.status === 200)).toHaveLength(1);
+      expect(sends.some((r) => r.status >= 500)).toBe(false);
+      expect(await prisma.payoutDisbursement.count({ where: { roundId: r2.id, status: { not: 'FAILED' } } })).toBe(1);
       await as(app, bob).post(step(r2, 'problem'), { details: 'Nothing has arrived on my line yet' }).expect(200);
       await as(app, pat).post(step(r2, 'confirm'), {}).expect(422); // disputed: officers cannot confirm over the recipient
-      const done = await as(app, bob).post(step(r2, 'confirm'), { note: 'Arrived late, all good' }).expect(200);
+      const confirms = await Promise.all(Array.from({ length: 5 }, () => as(app, bob).post(step(r2, 'confirm'), { note: 'Arrived late, all good' })));
+      expect(confirms.filter((r) => r.status === 200)).toHaveLength(1);
+      expect(confirms.some((r) => r.status >= 500)).toBe(false);
+      const done = confirms.find((r) => r.status === 200)!;
       expect(done.body.rounds[1]).toMatchObject({ status: 'COMPLETED', attempts: 2, confirmation: { kind: 'RECIPIENT' } });
       expect(await cash()).toBe(before - 400_000n);
       const attempts = await prisma.payoutDisbursement.findMany({ where: { roundId: r2.id }, orderBy: { attempt: 'asc' } });

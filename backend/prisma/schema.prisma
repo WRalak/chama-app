@@ -2416,3 +2416,13 @@ model SupportAssignment {
   @@index([caseId, createdAt])
   @@map("support_assignments")
 }
+
+/// Shared request counters for rate limiting across API instances (RATE_LIMIT_STORE=database).
+model RateLimitBucket {
+  key       String   @id
+  hits      Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}

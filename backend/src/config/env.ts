@@ -13,6 +13,8 @@ const envSchema = z.object({
   OTP_SECRET: z.string().min(32, 'OTP_SECRET must be at least 32 characters'),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(30),
+  /** 'database' shares rate-limit counters between API instances (needed with more than one). */
+  RATE_LIMIT_STORE: z.enum(['memory', 'database']).default('memory'),
   CORS_ORIGINS: z.string().default('http://localhost:3000,http://localhost:8081'),
   DEV_LOG_OTP: bool,
   // ---- Platform administration portal (staff accounts; separate from member sign-in) ----
@@ -57,6 +59,8 @@ const envSchema = z.object({
   BILLING_SELLER_ADDRESS: z.string().optional(),
   BILLING_SELLER_EMAIL: z.string().optional(),
   BILLING_SELLER_TAX_ID: z.string().optional(),
+  /** Where security alerts are posted (chat or paging webhook). Falls back to ERROR_WEBHOOK_URL. */
+  SECURITY_WEBHOOK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   ERROR_WEBHOOK_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   AT_USERNAME: z.string().optional(),
   AT_API_KEY: z.string().optional(),

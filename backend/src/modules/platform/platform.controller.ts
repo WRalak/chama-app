@@ -35,7 +35,7 @@ const auditQuery = paginationSchema.extend({
   from: z.string().date().optional(),
   to: z.string().date().optional(),
 });
-const SECURITY_ACTIONS = ['platform.login', 'platform.account_locked', 'platform.permission_denied', 'platform.password_', 'platform.mfa_', 'platform.staff_sessions_revoked', 'platform.staff_suspended', 'platform.staff_access_changed', 'platform.owner_bootstrap', 'platform.support_access'];
+const SECURITY_ACTIONS = ['platform.login', 'platform.account_locked', 'platform.permission_denied', 'platform.password_', 'platform.mfa_', 'platform.staff_sessions_revoked', 'platform.user_sessions_revoked', 'platform.staff_suspended', 'platform.staff_access_changed', 'platform.owner_bootstrap', 'platform.support_access', 'security.alert'];
 const MEMBER_SECURITY_ACTIONS = ['auth.login_failed', 'auth.refresh_reuse_detected', 'auth.password_reset'];
 
 /**
@@ -174,6 +174,19 @@ export class PlatformController {
     ]);
     await this.audit.log({ actorAccountId: staff.accountId, action: body.disabled ? 'platform.user_suspended' : 'platform.user_reactivated', targetType: 'User', targetId: id, reason: body.reason, before: { disabled: !!target.disabledAt }, after: { disabled: body.disabled }, meta });
     return { ok: true };
+  }
+
+  /** Signs a member out of every device (suspected account takeover). Their password is unchanged. */
+  @RequirePlatform(PP.PLATFORM_MANAGE_ACCOUNTS)
+  @HttpCode(200)
+  @RequireRecentAuth()
+  @Post('users/:id/revoke-sessions')
+  async revokeUserSessions(@Param('id') id: string, @Body(new ZodPipe(reasonBody)) body: { reason: string }, @CurrentStaff() staff: StaffContext, @ReqMeta() meta: RequestMeta) {
+    const target = await this.prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!target) throw new NotFoundException('User not found');
+    const r = await this.prisma.session.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: 'revoked_by_support' } });
+    await this.audit.log({ actorAccountId: staff.accountId, action: 'platform.user_sessions_revoked', targetType: 'User', targetId: id, reason: body.reason, after: { sessions: r.count }, meta });
+    return { ok: true, revoked: r.count };
   }
 
   /** Sends a reset code to the user's own phone. Staff never see the code. */

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { phoneSchema } from '@chamahub/shared';
+import { phoneSchema, safeRedirectPath } from '@chamahub/shared';
 import { BrandMark } from '@/components/shell/brand';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
@@ -29,7 +29,7 @@ function LoginForm() {
       router.replace('/verify');
       return;
     }
-    router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/');
+    router.replace(safeRedirectPath(next, '/'));
     router.refresh();
   });
 

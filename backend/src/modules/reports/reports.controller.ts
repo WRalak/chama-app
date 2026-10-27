@@ -8,6 +8,7 @@ import { today } from '../../common/dates';
 import { MembershipContext } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { ReportName, REPORTS, ReportsService } from './reports.service';
+import { AuditedExport } from '../../common/export-audit';
 
 const query = z.object({ from: isoDateSchema.optional(), to: isoDateSchema.optional(), memberId: z.string().optional(), format: z.enum(['json', 'csv']).default('json') });
 
@@ -22,6 +23,7 @@ export class ReportsController {
   }
 
   @RequirePermission(Permission.REPORTS_VIEW)
+  @AuditedExport('report', (req) => (req.query as { format?: string }).format === 'csv')
   @Get(':name')
   async get(@Param('groupId') groupId: string, @Param('name') name: string, @Query(new ZodPipe(query)) q: z.infer<typeof query>, @CurrentMembership() m: MembershipContext, @Res() res: Response) {
     if (!REPORTS.includes(name as ReportName)) throw new NotFoundException('Unknown report');

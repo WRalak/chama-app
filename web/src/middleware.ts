@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isAllowedCookieRequest } from '@chamahub/shared';
 
 const PUBLIC = ['/login', '/forgot-password', '/sign-up', '/privacy', '/terms'];
 /** Staff portal pages anyone may open (sign-in, invitation, password reset). */
@@ -8,7 +9,15 @@ const PUBLIC_FILES = /^\/(robots\.txt|sitemap\.xml|icon\.png|apple-icon\.png|ope
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname === '/favicon.ico' || PUBLIC_FILES.test(pathname)) return NextResponse.next();
+  // CSRF: the /api routes act with the session cookies, so writes must come from this site's pages.
+  if (pathname.startsWith('/api/')) {
+    const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host');
+    if (!isAllowedCookieRequest({ method: req.method, origin: req.headers.get('origin'), secFetchSite: req.headers.get('sec-fetch-site'), host })) {
+      return NextResponse.json({ statusCode: 403, error: 'Forbidden', message: 'This request did not come from ChamaHub.' }, { status: 403 });
+    }
+    return NextResponse.next();
+  }
+  if (pathname.startsWith('/_next') || pathname === '/favicon.ico' || PUBLIC_FILES.test(pathname)) return NextResponse.next();
   // The staff portal is a separate area with its own sign-in; a member session never opens it.
   if (pathname === '/platform' || pathname.startsWith('/platform/')) {
     if (STAFF_PUBLIC.includes(pathname) || req.cookies.has('chp_session')) return noIndex(NextResponse.next());

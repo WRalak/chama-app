@@ -8,6 +8,7 @@ import { AuthContext, MembershipContext, RequestMeta } from '../../common/reques
 import { ZodPipe } from '../../common/zod.pipe';
 import { PdfService } from './pdf.service';
 import { StatementsService } from './statements.service';
+import { AuditedExport } from '../../common/export-audit';
 
 const required = z.object({ from: isoDateSchema, to: isoDateSchema });
 function range(q: { from?: string; to?: string }) {
@@ -31,6 +32,7 @@ export class GroupStatementsController {
   }
 
   @RequirePermission(Permission.REPORTS_VIEW)
+  @AuditedExport('live-statement')
   @Get('live.pdf')
   async livePdf(@Param('groupId') groupId: string, @Query(new ZodPipe(dateRangeSchema)) q: z.infer<typeof dateRangeSchema>, @Res() res: Response) {
     const r = range(q);
@@ -57,6 +59,7 @@ export class GroupStatementsController {
   }
 
   @RequirePermission(Permission.STATEMENTS_VIEW)
+  @AuditedExport('published-statement')
   @Get(':id/pdf')
   async onePdf(@Param('groupId') groupId: string, @Param('id') id: string, @CurrentMembership() m: MembershipContext, @Res() res: Response) {
     const s = await this.svc.publishedOne(groupId, id, m);
@@ -84,6 +87,7 @@ export class PersonalStatementController {
     return this.svc.personal(user.id, r.from, r.to);
   }
 
+  @AuditedExport('personal-statement')
   @Get('pdf')
   async pdfOut(@CurrentUser() user: AuthContext, @Query(new ZodPipe(dateRangeSchema)) q: z.infer<typeof dateRangeSchema>, @Res() res: Response) {
     const r = range(q);

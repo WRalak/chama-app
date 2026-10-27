@@ -18,6 +18,7 @@ import { CurrentMembership, ReqMeta, RequirePermission } from '../../common/deco
 import { MembershipContext, RequestMeta } from '../../common/request';
 import { ZodPipe } from '../../common/zod.pipe';
 import { ContributionsService } from './contributions.service';
+import { AuditedExport } from '../../common/export-audit';
 
 const ledgerQuery = paginationSchema.extend({
   from: isoDateSchema.optional(),
@@ -95,6 +96,7 @@ export class ContributionsController {
   @RequirePermission(Permission.CONTRIBUTIONS_VIEW_ALL)
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="contributions-ledger.csv"')
+  @AuditedExport('contributions-ledger')
   @Get('contributions/ledger.csv')
   async ledgerCsv(@Param('groupId') groupId: string, @Query(new ZodPipe(ledgerQuery)) q: z.infer<typeof ledgerQuery>) {
     const page = await this.svc.ledger(groupId, { ...q, page: 1, pageSize: 100000 });

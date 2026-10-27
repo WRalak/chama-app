@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { RECOVERY_CODE_PATTERN } from '@chamahub/shared';
+import { RECOVERY_CODE_PATTERN, safeRedirectPath } from '@chamahub/shared';
 import { AuthCard, FormError } from '@/components/platform/auth-card';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/input';
 
-const safeNext = (next: string | null) => (next && next.startsWith('/platform/') && !next.startsWith('//') ? next : '/platform');
+const safeNext = (next: string | null) => safeRedirectPath(next, '/platform', '/platform/');
 
 function LoginForm() {
   const router = useRouter();

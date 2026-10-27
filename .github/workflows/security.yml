@@ -24,6 +24,16 @@ jobs:
       - name: Gate on high/critical advisories not in security/audit-allowlist.json
         run: node scripts/audit-gate.mjs audit.json
 
+  dependency-review:
+    name: New dependencies in this pull request
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
   secrets:
     name: Secret scan (full history)
     runs-on: ubuntu-latest

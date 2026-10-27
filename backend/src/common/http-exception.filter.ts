@@ -4,11 +4,14 @@ import type { Response } from 'express';
 import { MoneyError } from '@chamahub/shared';
 import { env } from '../config/env';
 import { AppRequest } from './request';
+import { SecurityEventsService } from './security-events';
 
 /** Converts every error into the shared ApiErrorBody shape without leaking internals. */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('Errors');
+
+  constructor(private readonly security: SecurityEventsService) {}
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -53,6 +56,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
 
     if (status >= 500) this.report(exception, req, status);
+    this.securityEvent(status, req);
 
     res.status(status).json({
       statusCode: status,
@@ -61,6 +65,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       details,
       requestId: req.requestId,
     });
+  }
+
+  /** Denials and rate limiting feed the security monitor (route template only, never ids from the URL or bodies). */
+  private securityEvent(status: number, req: AppRequest) {
+    const params = (req.params ?? {}) as Record<string, string>;
+    const type = status === 401 ? 'auth.denied' : status === 403 ? 'authz.denied' : status === 429 ? 'rate_limited' : status === 404 && params.groupId && (req.user || req.staff) ? 'authz.not_found' : null;
+    if (!type) return;
+    const route = (req.route as { path?: string } | undefined)?.path ?? 'unmatched';
+    this.security.record({ type, userId: req.user?.id ?? null, staffId: req.staff?.accountId ?? null, groupId: params.groupId ?? null, ip: req.ip ?? null, method: req.method, route, requestId: req.requestId });
   }
 
   /**

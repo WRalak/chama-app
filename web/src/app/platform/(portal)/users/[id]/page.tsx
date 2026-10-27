@@ -29,6 +29,7 @@ export default function UserDetailPage() {
   const inv = [['platform-user', id], ['platform-users']];
   const setStatus = useAction((v: { disabled: boolean; reason: string }) => api(`platform/users/${id}/status`, { body: v }), { success: (_r) => 'Account updated', invalidate: inv });
   const resetCode = useAction((reason: string) => api<{ message: string }>(`platform/users/${id}/send-reset-code`, { body: { reason } }), { success: (r) => r.message });
+  const signOut = useAction((reason: string) => api<{ revoked: number }>(`platform/users/${id}/revoke-sessions`, { body: { reason } }), { success: (r) => `Signed out of ${r.revoked} device${r.revoked === 1 ? '' : 's'}`, invalidate: inv });
   const unlock = useAction((reason: string) => api(`platform/users/${id}/unlock`, { body: { reason } }), { success: 'Unlocked', invalidate: inv });
   if (u.error) return <Panel><ErrorState error={u.error} onRetry={() => u.refetch()} /></Panel>;
   if (!u.data) return <Panel><LoadingRows rows={6} /></Panel>;
@@ -52,6 +53,7 @@ export default function UserDetailPage() {
           <Panel title="Account recovery">
             <div className="flex flex-col gap-2">
               <ConfirmAction trigger={(open) => <Button variant="secondary" onClick={open}>Send reset code by SMS</Button>} title="Send a reset code?" description="A code goes by SMS to the account holder's own phone. You never see it. Confirm the person's identity first." confirmLabel="Send code" busy={resetCode.isPending} onConfirm={(r) => resetCode.mutateAsync(r)} />
+              <ConfirmAction trigger={(open) => <Button variant="secondary" onClick={open}>Sign out everywhere</Button>} title="Sign this person out of every device?" description="Use when an account may be in someone else's hands. Their password is unchanged; send a reset code too if it may be known." confirmLabel="Sign out everywhere" busy={signOut.isPending} onConfirm={(r) => signOut.mutateAsync(r)} />
               {d.status === 'LOCKED' && <ConfirmAction trigger={(open) => <Button variant="secondary" onClick={open}>Unlock sign-in</Button>} title="Unlock this account?" description="Clears the lock from repeated failed sign-ins." confirmLabel="Unlock" busy={unlock.isPending} onConfirm={(r) => unlock.mutateAsync(r)} />}
               {d.status === 'DISABLED' ? (
                 <ConfirmAction trigger={(open) => <Button onClick={open}>Reactivate</Button>} title="Reactivate this account?" description="They can sign in again." confirmLabel="Reactivate" busy={setStatus.isPending} onConfirm={(reason) => setStatus.mutateAsync({ disabled: false, reason })} />

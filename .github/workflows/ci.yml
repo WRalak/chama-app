@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -52,6 +55,12 @@ jobs:
           npm run typecheck -w @chamahub/mobile
       - name: API e2e tests (auth, authorization, ledger, idempotency)
         run: npm run test -w @chamahub/api
+      - name: Backup restore verification (dump, restore, ledger and security invariants)
+        run: |
+          PGPASSWORD=chamahub psql -h localhost -U chamahub -d postgres -c 'CREATE DATABASE restore_check_ci'
+          SOURCE_URL=postgresql://chamahub:chamahub@localhost:5432/chamahub_test \
+          SCRATCH_URL=postgresql://chamahub:chamahub@localhost:5432/restore_check_ci \
+            bash backend/scripts/verify-restore.sh
       - name: Build admin
         run: npm run build -w @chamahub/admin
         env:

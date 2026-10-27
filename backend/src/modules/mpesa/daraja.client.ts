@@ -30,12 +30,43 @@ export class DarajaClient {
     return this.token.value;
   }
 
+  private stkPassword() {
+    const e = env();
+    const timestamp = new Date(Date.now() + 3 * 3600_000).toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+    return { timestamp, password: Buffer.from(`${e.MPESA_SHORTCODE}${e.MPESA_PASSKEY}${timestamp}`).toString('base64') };
+  }
+
+  /**
+   * Asks Safaricom for the outcome of an STK push (Lipa na M-Pesa Online query). Callbacks are not
+   * signed, so a payment is only posted once this authoritative answer agrees with the callback.
+   * Returns PENDING when Safaricom is still processing or cannot be reached.
+   */
+  async stkQuery(checkoutRequestId: string): Promise<{ state: 'SUCCESS' | 'FAILED' | 'PENDING'; resultCode: string | null; resultDesc: string | null }> {
+    if (!this.configured) return { state: 'PENDING', resultCode: null, resultDesc: 'M-Pesa is not configured' };
+    const e = env();
+    const { timestamp, password } = this.stkPassword();
+    try {
+      const res = await fetch(`${this.base()}/mpesa/stkpushquery/v1/query`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await this.accessToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ BusinessShortCode: e.MPESA_SHORTCODE, Password: password, Timestamp: timestamp, CheckoutRequestID: checkoutRequestId }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ResponseCode?: string; ResultCode?: string | number; ResultDesc?: string; errorMessage?: string };
+      if (json.ResultCode === undefined || json.ResultCode === null) return { state: 'PENDING', resultCode: null, resultDesc: json.errorMessage ?? `HTTP ${res.status}` };
+      const code = String(json.ResultCode);
+      return { state: code === '0' ? 'SUCCESS' : 'FAILED', resultCode: code, resultDesc: json.ResultDesc ?? null };
+    } catch (err) {
+      this.logger.warn(`STK query failed: ${(err as Error).message}`);
+      return { state: 'PENDING', resultCode: null, resultDesc: 'M-Pesa could not be reached' };
+    }
+  }
+
   async stkPush(input: { phone: string; amountCents: number; accountReference: string; description: string }) {
     if (!this.configured) throw new ServiceUnavailableException('M-Pesa payments are not enabled yet.');
     if (input.amountCents % 100 !== 0) throw new ServiceUnavailableException('M-Pesa only accepts whole shillings.');
     const e = env();
-    const timestamp = new Date(Date.now() + 3 * 3600_000).toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
-    const password = Buffer.from(`${e.MPESA_SHORTCODE}${e.MPESA_PASSKEY}${timestamp}`).toString('base64');
+    const { timestamp, password } = this.stkPassword();
     const callback = `${e.MPESA_CALLBACK_URL}${e.MPESA_CALLBACK_URL!.includes('?') ? '&' : '?'}token=${encodeURIComponent(e.MPESA_CALLBACK_TOKEN!)}`;
     const res = await fetch(`${this.base()}/mpesa/stkpush/v1/processrequest`, {
       method: 'POST',

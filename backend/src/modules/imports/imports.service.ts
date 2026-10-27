@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { ImportKind, Prisma } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
+import { hashPassword } from '../../common/passwords';
 import Papa from 'papaparse';
 import { readXlsxGrid } from '../../common/spreadsheet';
 import { randomBytes } from 'node:crypto';
@@ -293,7 +293,7 @@ export class ImportsService {
         let user = await tx.user.findUnique({ where: { phone } });
         if (!user) {
           // The person claims the account later via "Forgot password" (SMS code to this phone).
-          user = await tx.user.create({ data: { fullName: d.full_name, phone, passwordHash: await bcrypt.hash(randomBytes(24).toString('hex'), 10), preferences: DEFAULT_PREFERENCES } });
+          user = await tx.user.create({ data: { fullName: d.full_name, phone, passwordHash: await hashPassword(randomBytes(24).toString('hex')), preferences: DEFAULT_PREFERENCES } });
         }
         const existing = await tx.membership.findUnique({ where: { groupId_userId: { groupId, userId: user.id } } });
         if (existing && existing.status !== 'EXITED') return false;

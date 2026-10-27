@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, UnauthorizedException, UnprocessableEntityException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
-import * as bcrypt from 'bcryptjs';
+import { hashPassword, needsRehash, verifyPassword } from '../../common/passwords';
 import { createHash, randomBytes } from 'node:crypto';
 import { passwordWeakness, type AuthResponse, type AuthUser, type LoginInput, type RegisterInput, type SessionInfo } from '@chamahub/shared';
 import { env } from '../../config/env';
@@ -13,7 +13,6 @@ import { OtpService } from './otp.service';
 
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
-const BCRYPT_ROUNDS = 11;
 
 const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
 
@@ -71,7 +70,7 @@ export class AuthService {
         fullName: input.fullName,
         phone: input.phone,
         email: input.email?.toLowerCase() ?? null,
-        passwordHash: await bcrypt.hash(input.password, BCRYPT_ROUNDS),
+        passwordHash: await hashPassword(input.password),
         preferences: DEFAULT_PREFERENCES,
       },
     });
@@ -84,14 +83,13 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { phone: input.phone } });
     const invalid = new UnauthorizedException('Phone number or password is incorrect.');
     if (!user) {
-      await bcrypt.compare(input.password, '$2a$11$invalidinvalidinvalidinvalidinvalidinvalidinvalidinva');
+      await verifyPassword(input.password, null);
       throw invalid;
     }
-    if (user.disabledAt) throw new ForbiddenException('This account has been disabled. Contact support.');
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       throw new ForbiddenException('Too many failed attempts. Try again in 15 minutes or reset your password.');
     }
-    if (!(await bcrypt.compare(input.password, user.passwordHash))) {
+    if (!(await verifyPassword(input.password, user.passwordHash))) {
       const failed = user.failedLoginCount + 1;
       await this.prisma.user.update({
         where: { id: user.id },
@@ -104,7 +102,10 @@ export class AuthService {
       if (failed >= MAX_FAILED_LOGINS) await this.securityNotice(user.id, 'Sign-in paused for 15 minutes', 'Someone entered the wrong password for your ChamaHub account 5 times.');
       throw invalid;
     }
-    await this.prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
+    // Only someone who knows the password learns that an account is disabled.
+    if (user.disabledAt) throw new ForbiddenException('This account has been disabled. Contact support.');
+    const upgrade = needsRehash(user.passwordHash) ? { passwordHash: await hashPassword(input.password) } : {};
+    await this.prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null, ...upgrade } });
     await this.audit.log({ actorUserId: user.id, action: 'auth.login', entityType: 'User', entityId: user.id, meta });
     await this.noticeIfNewDevice(user.id, meta, input.deviceName);
     return { user: toAuthUser(user), tokens: await this.createSession(user, { ...meta }, input.deviceName) };
@@ -205,7 +206,7 @@ export class AuthService {
       this.prisma.user.update({
         where: { id: user.id },
         // Receiving the SMS code also proves ownership of the phone.
-        data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_ROUNDS), failedLoginCount: 0, lockedUntil: null, phoneVerifiedAt: user.phoneVerifiedAt ?? new Date() },
+        data: { passwordHash: await hashPassword(newPassword), failedLoginCount: 0, lockedUntil: null, phoneVerifiedAt: user.phoneVerifiedAt ?? new Date() },
       }),
       this.prisma.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date(), revokedReason: 'password_reset' } }),
     ]);
@@ -216,10 +217,10 @@ export class AuthService {
 
   async changePassword(userId: string, sessionId: string, current: string, next: string, meta: RequestMeta) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    if (!(await bcrypt.compare(current, user.passwordHash))) throw new UnauthorizedException('Current password is incorrect.');
+    if (!(await verifyPassword(current, user.passwordHash))) throw new UnauthorizedException('Current password is incorrect.');
     assertNotPersonal(next, { name: user.fullName, phone: user.phone, email: user.email });
     await this.prisma.$transaction([
-      this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(next, BCRYPT_ROUNDS) } }),
+      this.prisma.user.update({ where: { id: userId }, data: { passwordHash: await hashPassword(next) } }),
       this.prisma.session.updateMany({
         where: { userId, revokedAt: null, id: { not: sessionId } },
         data: { revokedAt: new Date(), revokedReason: 'password_changed' },

@@ -13,6 +13,9 @@ export interface ChannelResult {
  * sent; in development it is written to the log so flows can be exercised.
  * This integration has not been verified against a production account.
  */
+/** Hides one-time codes (4–8 digits) in text that is about to be logged. */
+export const maskCodes = (text: string) => text.replace(/\b\d{4,8}\b/g, '••••••');
+
 @Injectable()
 export class SmsChannel {
   private readonly logger = new Logger('SMS');
@@ -24,7 +27,8 @@ export class SmsChannel {
   async send(phone: string, message: string): Promise<ChannelResult> {
     const e = env();
     if (!this.configured) {
-      if (e.NODE_ENV !== 'production') this.logger.log(`[dev, not sent] to ${phone}: ${message}`);
+      // Codes in messages (sign-in, reset) are masked unless DEV_LOG_OTP is deliberately on.
+      if (e.NODE_ENV !== 'production') this.logger.log(`[dev, not sent] to ${phone}: ${e.DEV_LOG_OTP ? message : maskCodes(message)}`);
       return { ok: false, skipped: true, provider: 'none', error: 'SMS provider not configured' };
     }
     const base = e.AT_USERNAME === 'sandbox' ? 'https://api.sandbox.africastalking.com' : 'https://api.africastalking.com';

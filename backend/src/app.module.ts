@@ -8,7 +8,9 @@ import { AuditModule } from './common/audit.service';
 import { GroupAccessGuard, JwtAuthGuard, PlatformGuard } from './common/guards';
 import { AllExceptionsFilter } from './common/http-exception.filter';
 import { requestIdMiddleware } from './common/request-id.middleware';
-import { PrismaModule } from './prisma/prisma.service';
+import { PrismaModule, PrismaService } from './prisma/prisma.service';
+import { DatabaseThrottlerStorage } from './common/rate-limit-store';
+import { SecurityEventsModule } from './common/security-events';
 import { LedgerModule } from './modules/ledger/ledger.service';
 import { FinanceModule } from './modules/finance/finance.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -71,6 +73,7 @@ const featureModules = [
 @Module({
   imports: [
     PrismaModule,
+    SecurityEventsModule,
     AuditModule,
     PlatformAuthModule,
     LedgerModule,
@@ -82,7 +85,15 @@ const featureModules = [
       global: true,
       useFactory: () => ({ secret: env().JWT_ACCESS_SECRET, signOptions: { expiresIn: env().ACCESS_TOKEN_TTL_SECONDS } }),
     }),
-    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 300 }], skipIf: () => process.env.DISABLE_THROTTLE === 'true' && process.env.NODE_ENV !== 'production' }),
+    ThrottlerModule.forRootAsync({
+      inject: [PrismaService],
+      useFactory: (prisma: PrismaService) => ({
+        throttlers: [{ ttl: 60_000, limit: 300 }],
+        skipIf: () => process.env.DISABLE_THROTTLE === 'true' && process.env.NODE_ENV !== 'production',
+        // Shared counters when several API instances run; in-memory otherwise.
+        storage: env().RATE_LIMIT_STORE === 'database' ? new DatabaseThrottlerStorage(prisma) : undefined,
+      }),
+    }),
     ScheduleModule.forRoot(),
     ...featureModules,
   ],

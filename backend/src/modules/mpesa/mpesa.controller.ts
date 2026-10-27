@@ -1,3 +1,4 @@
+import { Throttle } from '@nestjs/throttler';
 import { Body, Controller, ForbiddenException, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { IntegrationStatus, mpesaStkSchema, Permission } from '@chamahub/shared';
 import { z } from 'zod';
@@ -23,6 +24,7 @@ export class MpesaController {
   }
 
   @RequirePermission(Permission.GROUP_VIEW)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   @Post('groups/:groupId/payments/mpesa/stk')
   stk(@Param('groupId') groupId: string, @Body(new ZodPipe(mpesaStkSchema)) body: z.infer<typeof mpesaStkSchema>, @CurrentMembership() m: MembershipContext, @ReqMeta() meta: RequestMeta) {
     return this.mpesa.initiate(groupId, body, m, meta);
