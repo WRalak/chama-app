@@ -3,15 +3,20 @@
 //   npm run env:check            report what is missing or unknown
 //   npm run env:check -- --fix   also append missing variables with the example's default
 //                                (existing lines are never changed or removed)
+//   npm run env:check -- --sync  rewrite each file in the example's order and comments, keeping
+//                                YOUR value for every variable you have; variables the example
+//                                lacks are kept at the end. The old file is saved first as
+//                                <file>.backup-<date>.
 //
 // Files: backend/.env ← backend/.env.example, web/.env.local ← web/.env.example,
 //        mobile/.env ← mobile/.env.example
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const fix = process.argv.includes('--fix');
+const sync = process.argv.includes('--sync');
+const fix = sync || process.argv.includes('--fix');
 const apps = [
   { name: 'API', file: 'backend/.env', example: 'backend/.env.example' },
   { name: 'Web', file: 'web/.env.local', example: 'web/.env.example' },
@@ -38,6 +43,26 @@ function parse(text) {
   return { active, optional };
 }
 
+/** Example layout, with the user's own value substituted for every variable they already set. */
+function syncFile(filePath, exampleText, mine) {
+  const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+  const backup = `${filePath}.backup-${stamp}`;
+  copyFileSync(filePath, backup);
+  const used = new Set();
+  const out = exampleText.split(/\r?\n/).map((line) => {
+    const m = line.match(/^(\s*#?\s*)([A-Z][A-Z0-9_]*)(\s*=)/);
+    if (!m || !mine.active.has(m[2])) return line;
+    used.add(m[2]);
+    return mine.active.get(m[2]).line; // your line, uncommented, exactly as you had it
+  });
+  const extra = [...mine.active.keys()].filter((k) => !used.has(k));
+  if (extra.length) out.push('', '# ---- kept from your previous file (not in the example) ----', ...extra.map((k) => mine.active.get(k).line));
+  writeFileSync(filePath, `${out.join('\n').replace(/\n+$/, '')}\n`);
+  const fromExample = [...parse(exampleText).active.keys()].filter((k) => !mine.active.has(k));
+  console.log(`  rewritten in the example's order. Your values kept: ${used.size}; example defaults added: ${fromExample.length}${fromExample.length ? ` (${fromExample.join(', ')})` : ''}; extra kept at the end: ${extra.length}.`);
+  console.log(`  previous file saved as ${backup.slice(root.length + 1)}`);
+}
+
 let problems = 0;
 for (const app of apps) {
   const examplePath = join(root, app.example);
@@ -56,6 +81,10 @@ for (const app of apps) {
     continue;
   }
   const mine = parse(readFileSync(filePath, 'utf8'));
+  if (sync) {
+    syncFile(filePath, readFileSync(examplePath, 'utf8'), mine);
+    continue;
+  }
   const missing = [...example.active.keys()].filter((k) => !mine.active.has(k) && !mine.optional.has(k));
   const unknown = [...mine.active.keys()].filter((k) => !example.active.has(k) && !example.optional.has(k));
   if (!missing.length && !unknown.length) {

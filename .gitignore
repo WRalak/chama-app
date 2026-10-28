@@ -14,3 +14,8 @@ storage/
 next-env.d.ts
 expo-env.d.ts
 dist-android/
+
+# Backups written by npm run env:check -- --sync (contain secrets)
+*.env.backup-*
+.env.backup-*
+.env.local.backup-*
