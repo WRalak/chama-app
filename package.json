@@ -19,7 +19,8 @@
     "db:seed": "npm run seed -w @chamahub/api",
     "dev:setup": "npm run build:shared && npm exec -w @chamahub/api -- prisma migrate deploy && npm run db:seed",
     "postinstall": "npm run build:shared",
-    "fonts:satoshi": "node scripts/fetch-satoshi.mjs"
+    "fonts:satoshi": "node scripts/fetch-satoshi.mjs",
+    "env:check": "node scripts/env-check.mjs"
   },
   "workspaces": [
     "packages/*",

@@ -22,6 +22,8 @@ npm install
 cp backend/.env.example backend/.env          # set DATABASE_URL and two 32+ char secrets
 cp web/.env.example web/.env.local
 # Windows PowerShell: use `copy` instead of `cp`, with backslashes in the paths.
+npm run env:check          # after every pull: lists variables your env files lack (names only)
+npm run env:check -- --fix # appends the missing ones with the example defaults; never changes existing lines
 
 npm run dev:setup          # build shared, apply migrations, load DEMO data
 npm run dev                # backend :4000, web dashboard :3000 and the Expo dev server, together
